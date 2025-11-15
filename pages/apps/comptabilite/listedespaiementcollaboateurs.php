@@ -1,0 +1,129 @@
+<?php
+include('../PUBLIC/connect.php');
+session_start();
+
+$errors=0;
+
+function collaborateur($nom){
+include('../PUBLIC/connect.php');
+$reponse1 = $bdd->prepare('SELECT * FROM collaborateurs WHERE id_collaborateur=?');
+$reponse1 -> execute(array($nom));
+$collaborateur=" ";
+while ($donnees1 = $reponse1->fetch())
+    {
+    $collaborateur=$donnees1['nom_collaborateur'];
+
+    }
+    return $collaborateur;
+
+}
+
+function compte($nom){
+include('../PUBLIC/connect.php');
+$reponse1 = $bdd->prepare('SELECT * FROM comptes WHERE id_compte=?');
+$reponse1 -> execute(array($nom));
+$compte=" ";
+while ($donnees1 = $reponse1->fetch())
+    {
+    $compte=$donnees1['nom_compte'];
+
+    }
+    return $compte;
+}
+
+  if (isset($_POST['annuler'])) {
+    $reponse = $bdd->prepare('UPDATE affectations SET status=1 WHERE id_affectation=?');
+    $reponse ->execute(array($_POST['annuler']));
+    $errors=3;
+  }                   
+  
+  include('../PUBLIC/header.php');
+	?>
+	<body>
+		<section class="body">
+
+			<?php require('../PUBLIC/navbarmenu.php'); ?>
+
+			<div class="inner-wrapper">
+				<section role="main" class="content-body">
+					<header class="page-header">
+						<h2>Liste des rembourrsement éffectués.</h2>
+
+						<div class="right-wrapper text-end">
+							<ol class="breadcrumbs">
+								<li>
+									<a href="#">
+										<i class="bx bx-home-alt"></i>
+									</a>
+								</li>
+
+								<li><span>Acceuil</span></li>
+
+							</ol>
+
+							<a class="sidebar-right-toggle" data-open="sidebar-right"></a>
+						</div>
+					</header>
+
+					<!-- start: page -->
+                        <div class="col-md-12">
+						<div class="row">
+							<div class="col">
+								<section class="card">
+									<header class="card-header">
+										<h2 class="card-title">Liste des paiements collaborateurs éffectués
+										</h2>
+									</header>
+									<div class="card-body">
+									<?php
+                                            if ($errors==3) {
+                                            echo '
+                                                <div class="alert alert-success">
+                                                <strong>Succès !</strong> <br/>  
+                                                <li>Annulation du remboursement effectué avec succès.</li>
+                                                <li>Le dossier du patient à été transmis au service concerné. Merci de rediriger le patient vers le service traitant.</li>
+                                                </div>
+                                                ';
+                                                    }
+                                        ?>
+										<table class="table table-bordered table-striped mb-0" id="datatable-default">
+											<thead>
+												<tr>
+                                                    <th>N°</th>
+                                                    <th>DATE</th>
+													<th>COLLABORATEUR</th>
+													<th>MOTIF</th>
+													<th>MONTANT PAYE</th>
+                                                    <th>PAYER PAR</th>
+													<th>STATUS</th>
+												</tr>
+											</thead>
+											<tbody>
+											    <?php
+												$reponse1 = $bdd->prepare('SELECT * FROM paiements_collaborateurs ORDER BY id_paie DESC LIMIT 0, 20');
+												$reponse1 -> execute();
+												while ($donnees1 = $reponse1->fetch())
+												{  
+													echo' <tr>
+													<td>PAIE'.$donnees1['id_paie'].'</td>
+                                                    <td>'.$donnees1['date_ajout'].'</td>
+													<td>'.collaborateur($donnees1['id_collaborateur']).'</td>
+													<td>'.$donnees1['motif'].'</td>
+													<td>'.number_format($donnees1['montant_paye']).' '.$devise.'</td>
+                                                    <td>'.compte($donnees1['compte']).'</td>
+													<td>
+                                                    <a href="bondepaiementcollaborateur.php?paiement='.$donnees1['id_paie'].'" target="_blank" class="btn btn-sm btn-info"> voir le bon</a>
+                                                    </td>';
+                                                    }
+												?>
+											</tbody>
+										</table>
+									</div>
+								</section>
+							</div>
+						</div>
+				    </section>
+			    </div>
+                
+					
+            <?php include('../PUBLIC/footer.php');?>

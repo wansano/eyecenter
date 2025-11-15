@@ -1,0 +1,38 @@
+/* Add here all your CSS customizations */
+
+/* Taille fixe pour les cartes de prestations et espacement entre elles */
+.card.fixed-size {
+    min-height: 120px;
+    max-height: 120px;
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin-bottom: 16px;
+    margin-right: 12px;
+}
+.card.fixed-size .card-body {
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.card.fixed-size .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
+
+/* Ajoute un espace entre les colonnes sur toutes tailles d'écran */
+.col-md-2 {
+    padding-left: 8px;
+    padding-right: 8px;
+    box-sizing: border-box;
+}
+
+.row {
+    margin-left: -8px;
+    margin-right: -8px;
+}
