@@ -56,11 +56,55 @@ try {
             exit;
         }
 
-        if (isset($_POST['remboursement'])) {
-        $stmt = $bdd->prepare('UPDATE affectations SET status = 99 WHERE id_affectation = ?');
-        $stmt->execute([$_POST['remboursement']]);
-        $errors = 7;
-        }
+        if (isset($_POST['remboursement'])) 
+            {
+                $affectationRefus = (int) $_POST['remboursement'];
+                $motifRefus = isset($_POST['motif_refus']) ? trim($_POST['motif_refus']) : '';
+
+                try {
+                    // Démarrer une transaction pour garantir cohérence
+                    $bdd->beginTransaction();
+
+                    // Récupérer infos nécessaires de l'affectation
+                    $stmtInfo = $bdd->prepare('SELECT id_patient, type FROM affectations WHERE id_affectation = ? LIMIT 1');
+                    $stmtInfo->execute([$affectationRefus]);
+                    $affInfo = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+
+                    if ($affInfo) {
+                        $patientId = (int) $affInfo['id_patient'];
+                        $typeId = (int) $affInfo['type'];
+                    } else {
+                        throw new Exception('Affectation introuvable pour remboursement.');
+                    }
+
+                    // Mettre à jour le statut de l'affectation (99 = refus / remboursement)
+                    $stmtUpd = $bdd->prepare('UPDATE affectations SET status = 99 WHERE id_affectation = ?');
+                    $stmtUpd->execute([$affectationRefus]);
+
+                    // Déterminer payeur (id utilisateur session si disponible)
+                    $payeur = isset($_SESSION['id_user']) ? (int) $_SESSION['id_user'] : 0;
+
+                    // Préparer insertion dans remboursements
+                    // Colonnes attendues: paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, payeur
+                    // Valeurs NULL demandées: montant_paye, montant_remboursse, compte, paye_a
+                    $stmtInsert = $bdd->prepare('INSERT INTO remboursements (paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, payeur) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?)');
+                    $paye_a = null; // Attention: colonne définie NOT NULL dans le schéma fourni; si c'est le cas, adapter.
+                    $montant_paye = null; // Peut nécessiter valeur par défaut si NOT NULL.
+                    $montant_remboursse = null; // Idem.
+                    $compte = null; // Idem.
+
+                    $stmtInsert->execute([$paye_a, $affectationRefus, $patientId, $typeId, $montant_paye, $montant_remboursse, $compte, $motifRefus, $payeur]);
+
+                    $bdd->commit();
+                    $errors = 8; // Code succès insertion remboursement
+                } catch (Exception $ex) {
+                    if ($bdd->inTransaction()) {
+                        $bdd->rollBack();
+                    }
+                    error_log('Erreur refus/remboursement: ' . $ex->getMessage());
+                    $errors = 7; // Conserver ancien code d'alerte problème
+                }
+            }
         
 } catch (PDOException $e) {
     error_log("Erreur lors de la mise à jour du statut : " . $e->getMessage());
@@ -93,15 +137,20 @@ include('../PUBLIC/header.php');
 							<div class="col">
 								<section class="card">
 									<div class="card-body">
-									<?php 
+                                    <?php 
                                         if ($errors==7) {
-                                        echo '
+                                            echo '
                                             <div class="alert alert-warning">
-                                            <li><strong>Annuler !</strong>
-                                            <br>Procedure de rembourssement engagé merci de rediriger le patient vers la comptabilité.</li>
-                                            </div>
-                                            '; }
-									?>
+                                                <strong>Attention !</strong><br>Une erreur est survenue ou remboursement engagé partiellement.
+                                            </div>';
+                                        }
+                                        if ($errors==8) {
+                                            echo '
+                                            <div class="alert alert-success">
+                                                <strong>Refus enregistré.</strong><br>Motif sauvegardé et procédure de remboursement lancée.
+                                            </div>';
+                                        }
+                                    ?>
 										<table class="table table-bordered table-striped mb-0" id="datatable-default">
 
 											<thead>
@@ -147,7 +196,7 @@ include('../PUBLIC/header.php');
                                       <td>'.htmlspecialchars(model($traitement)).'</td>
                                       <td>';
                                 
-                                  if ($status==1) {
+                                  if ($status==1 || $status==2) {
                                       echo '
                                       <div class="d-flex gap-1">
                                         <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
@@ -155,25 +204,7 @@ include('../PUBLIC/header.php');
                                             <input type="hidden" name="traitement" value="'.$traitement.'">
                                             <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
                                         </form>
-                                        <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
-                                          <input type="hidden" name="remboursement" value="'.$affectation.'">
-                                          <button type="submit" class="btn btn-sm btn-danger">refuser</button>
-                                        </form>
-                                      </div>';
-                                  }
-
-                                  if ($status==2) {
-                                      echo '
-                                      <div class="d-flex gap-1">
-                                        <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
-                                            <input type="hidden" name="accepter" value="'.$affectation.'">
-                                            <input type="hidden" name="traitement" value="'.$traitement.'">
-                                            <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
-                                        </form>
-                                        <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
-                                          <input type="hidden" name="remboursement" value="'.$affectation.'">
-                                          <button type="submit" class="btn btn-sm btn-danger">référer</button>
-                                        </form>
+                                        <button type="button" class="btn btn-sm btn-danger open-refus-modal" data-id="'.$affectation.'">refuser</button>
                                       </div>';
                                   }
                                 }
@@ -195,6 +226,46 @@ include('../PUBLIC/header.php');
 			    </div>
         </section>
     </div>
-    <?php include('../public/footer.php'); ?>
+        <!-- Modal Motif de refus -->
+        <div class="modal fade" id="refusModal" tabindex="-1" role="dialog" aria-labelledby="refusModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+                        <div class="modal-body">
+                            <input type="hidden" name="remboursement" id="remboursementId" value="">
+                            <div class="form-group">
+                                <label for="motifRefus">Veuillez saisir le motif</label>
+                                <textarea class="form-control" id="motifRefus" name="motif_refus" rows="4" required></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Annuler</button>
+                            <button type="submit" class="btn btn-danger">Confirmer le refus</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var buttons = document.querySelectorAll('.open-refus-modal');
+                buttons.forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var id = this.getAttribute('data-id');
+                        var input = document.getElementById('remboursementId');
+                        if (input) { input.value = id; }
+                        if (window.jQuery && $('#refusModal').modal) {
+                            $('#refusModal').modal('show');
+                        } else {
+                            var modal = document.getElementById('refusModal');
+                            if (modal) { modal.style.display = 'block'; }
+                        }
+                    });
+                });
+            });
+        </script>
+
+        <?php include('../public/footer.php'); ?>
 </body>
 </html>

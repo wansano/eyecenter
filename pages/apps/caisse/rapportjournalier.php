@@ -1,6 +1,6 @@
 <?php
-include('../PUBLIC/connect.php');
-require_once('../PUBLIC/fonction.php');
+include('../public/connect.php');
+require_once('../public/fonction.php');
 session_start();
 
 // Règle d'affichage: seulement du lundi au samedi à partir de 16h30
@@ -104,15 +104,11 @@ if (isset($_POST['ajouter'])) {
     }
 }
 
-function getFormValue($field, $default = '') {
-    global $formData;
-    return isset($formData[$field]) ? htmlspecialchars($formData[$field]) : $default;
-}
 ?>
-<?php include '../PUBLIC/header.php'; ?>
+<?php include '../public/header.php'; ?>
 <body>
     <section class="body">
-        <?php require '../PUBLIC/navbarmenu.php'; ?>
+        <?php require '../public/navbarmenu.php'; ?>
         <div class="inner-wrapper">
             <section role="main" class="content-body">
                 <header class="page-header">
@@ -226,7 +222,7 @@ function getFormValue($field, $default = '') {
                 <!-- end: page -->
             </section>
         </div>
-        <?php include('../PUBLIC/footer.php'); ?>
+        <?php include('../public/footer.php'); ?>
         <script>
             
         document.addEventListener('DOMContentLoaded', function() {
