@@ -22,6 +22,21 @@ class Cache {
 }
 
 /**
+ * Convertit une chaîne UTF-8 vers un encodage compatible FPDF (Windows-1252)
+ * en évitant l'usage de utf8_decode() (déprécié en PHP 8.2).
+ */
+function pdf_text($str) {
+    if ($str === null) return '';
+    // Tentative via iconv avec translit
+    $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', (string)$str);
+    if ($converted === false) {
+        // Fallback via mb_convert_encoding
+        $converted = mb_convert_encoding((string)$str, 'Windows-1252', 'UTF-8');
+    }
+    return $converted;
+}
+
+/**
  * Récupère les informations d'une ville
  * @param int $id_ville Identifiant de la ville
  * @return string Adresse formatée de la ville
@@ -36,12 +51,12 @@ class Cache {
 function genererEntete($pdf, $data, $yPosition = 12) {
     $pdf->Image(realpath('../img/logo.jpg'), 152, $yPosition, 50, 25);
     $pdf->SetFont('CenturyGothic','B',11);
-    $pdf->Cell(0, 5, utf8_decode(strtoupper($data['denomination'])), 0, 1, 'L');
+    $pdf->Cell(0, 5, pdf_text(strtoupper($data['denomination'])), 0, 1, 'L');
     $pdf->SetFont('CenturyGothic','',11);
-    $pdf->Cell(0, 5, utf8_decode($data['adresse']), 0, 1, 'L');
-    $pdf->Cell(0, 5, utf8_decode($data['phone'] . ' | ' . $data['email']), 0, 1, 'L');
-    $pdf->Cell(0, 5, utf8_decode('Agrément de création n° ' . $data['arrete']), 0, 1, 'L');
-    $pdf->Cell(0, 5, utf8_decode('Agrément d\'exploitation n° ' . $data['exploitation']), 0, 1, 'L');
+    $pdf->Cell(0, 5, pdf_text($data['adresse']), 0, 1, 'L');
+    $pdf->Cell(0, 5, pdf_text($data['phone'] . ' | ' . $data['email']), 0, 1, 'L');
+    $pdf->Cell(0, 5, pdf_text('Agrément de création n° ' . $data['arrete']), 0, 1, 'L');
+    $pdf->Cell(0, 5, pdf_text('Agrément d\'exploitation n° ' . $data['exploitation']), 0, 1, 'L');
     $pdf->Cell(0, 2, str_repeat("_", 98), 0, 0, 'L');
     $pdf->Ln(10);
 }
@@ -49,12 +64,12 @@ function genererEntete($pdf, $data, $yPosition = 12) {
 function genererEnteteDossier($pdf, $data, $yPosition = 6) {
     $pdf->Image(realpath('../img/logo.jpg'), 100, $yPosition, 50, 25);
     $pdf->SetFont('CenturyGothic','B',8);
-    $pdf->Cell(0, 4, utf8_decode(strtoupper($data['denomination'])), 0, 1, 'L');
+    $pdf->Cell(0, 4, pdf_text(strtoupper($data['denomination'])), 0, 1, 'L');
     $pdf->SetFont('CenturyGothic','',8);
-    $pdf->Cell(0, 4, utf8_decode($data['adresse']), 0, 1, 'L');
-    $pdf->Cell(0, 4, utf8_decode($data['phone'] . ' | ' . $data['email']), 0, 1, 'L');
-    $pdf->Cell(0, 4, utf8_decode('Agrément de création n° ' . $data['arrete']), 0, 1, 'L');
-    $pdf->Cell(0, 4, utf8_decode('Agrément d\'exploitation n° ' . $data['exploitation']), 0, 1, 'L');
+    $pdf->Cell(0, 4, pdf_text($data['adresse']), 0, 1, 'L');
+    $pdf->Cell(0, 4, pdf_text($data['phone'] . ' | ' . $data['email']), 0, 1, 'L');
+    $pdf->Cell(0, 4, pdf_text('Agrément de création n° ' . $data['arrete']), 0, 1, 'L');
+    $pdf->Cell(0, 4, pdf_text('Agrément d\'exploitation n° ' . $data['exploitation']), 0, 1, 'L');
     $pdf->Cell(0, 0, str_repeat("_", 104), 0, 0, 'L');
     $pdf->Ln(4);
 }
@@ -1027,19 +1042,26 @@ function dateEnFrancais($date) {
 }
 */
 function dateEnFrancais($date) {
-    // Crée un objet DateTime à partir de la date
-    $dt = new DateTime($date);
-
-    // Définit le formatteur avec la locale française
-    $fmt = new IntlDateFormatter(
-        'fr_FR',                // Locale
-        IntlDateFormatter::LONG, // Format de date
-        IntlDateFormatter::NONE, // Pas d'heure
-        'Europe/Paris',         // Fuseau horaire
-        IntlDateFormatter::GREGORIAN
-    );
-
-    return $fmt->format($dt);
+    try {
+        $dt = new DateTime($date);
+    } catch (Exception $e) {
+        return (string)$date;
+    }
+    if (class_exists('IntlDateFormatter')) {
+        $fmt = new IntlDateFormatter(
+            'fr_FR',
+            IntlDateFormatter::LONG,
+            IntlDateFormatter::NONE,
+            'Europe/Paris',
+            IntlDateFormatter::GREGORIAN
+        );
+        return $fmt->format($dt);
+    }
+    $mois = [1=>'janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    $j = (int)$dt->format('j');
+    $m = (int)$dt->format('n');
+    $y = $dt->format('Y');
+    return $j.' '.$mois[$m].' '.$y;
 }
 
 

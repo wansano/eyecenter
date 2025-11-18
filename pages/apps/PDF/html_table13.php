@@ -37,9 +37,20 @@ protected $B;
 protected $I;
 protected $U;
 protected $HREF;
-protected $fontList;
+// Utiliser une seule propriété cohérente (minuscules) pour éviter les dynamic properties
+protected $fontlist;
 protected $issetfont;
 protected $issetcolor;
+
+// Déclarations pour éviter les propriétés dynamiques (PHP 8.2)
+protected $tableborder;
+protected $tdbegin;
+protected $tdwidth;
+protected $tdheight;
+protected $tdalign;
+protected $tdbgcolor;
+protected $oldx;
+protected $oldy;
 
 
 function __construct($orientation='P', $unit='mm', $format='A4')

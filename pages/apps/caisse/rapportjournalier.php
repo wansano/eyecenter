@@ -8,7 +8,7 @@ session_start();
 $now = new DateTime();
 $dayOfWeek = (int)$now->format('N'); // 1=lundi .. 7=dimanche
 $timeNow = $now->format('H:i');
-$canShowForm = ($dayOfWeek >= 1 && $dayOfWeek <= 6) && ($timeNow >= '15:00');
+$canShowForm = ($dayOfWeek >= 1 && $dayOfWeek <= 6) && ($timeNow >= '08:00');
 
 // Fonction pour nettoyer les entrées
 function cleanInput($data) {
@@ -147,17 +147,40 @@ if (isset($_POST['ajouter'])) {
                                     </div>
                                     <div class="col-md-2">
                                         <label class="col-form-label" for="formGroupExampleInput"> Choisir le mode reglement </label>
-                                        <select class="form-control" name="compte" value="<?php echo getFormValue('compte') ;?>" required>
-                                            <option>----- Choisir -----</option>
+                                        <?php 
+                                            // Récupérer les comptes disponibles en excluant ceux déjà utilisés aujourd'hui par cet utilisateur
+                                            $type = $bdd->prepare('
+                                                SELECT c.*
+                                                FROM comptes c
+                                                WHERE c.defaut = ? AND c.compte_pour = ? AND c.status = ?
+                                                AND NOT EXISTS (
+                                                    SELECT 1 FROM preuvedecaisse p
+                                                    WHERE p.date_rapportement = ?
+                                                      AND p.id_user = ?
+                                                      AND p.compte = c.id_compte
+                                                )
+                                            ');
+                                            $type->execute([1, 1, 1, date('Y-m-d'), $_SESSION['auth']]);
+                                            $comptesDisponibles = $type->fetchAll(PDO::FETCH_ASSOC);
+                                            $noComptes = empty($comptesDisponibles);
+                                        ?>
+                                        <select class="form-control" name="compte" value="<?php echo getFormValue('compte') ;?>" required <?php echo $noComptes ? 'disabled' : '';?>>
+                                            <option value=""><?php echo $noComptes ? 'Aucun compte disponible' : '----- Choisir -----'; ?></option>
                                             <?php 
-                                                $type = $bdd->prepare('SELECT * FROM comptes WHERE defaut = ? AND compte_pour =? AND status =?');
-                                                $type -> execute([1, 1, 1]);
-                                                while ($type_paiement = $type->fetch(PDO::FETCH_ASSOC))
-                                                {
-                                                    echo '<option value="'.$type_paiement['id_compte'].'">'.$type_paiement['nom_compte'].'</option>';
-                                                } 
+                                                foreach ($comptesDisponibles as $type_paiement) {
+                                                    $selected = (isset($formData['compte']) && $formData['compte'] == $type_paiement['id_compte']) ? ' selected' : '';
+                                                    echo '<option value="'.$type_paiement['id_compte'].'"'.$selected.'>'.$type_paiement['nom_compte'].'</option>';
+                                                }
                                             ?>
                                         </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <?php if ($noComptes): ?>
+                                            <div class="alert alert-info mt-2">
+                                                <strong>Information :</strong> <br>
+                                                Toutes les preuves de caisse ont été effectuées pour tous les comptes aujourd'hui. Aucun compte disponible.
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <div class="row form-group pb-3">
@@ -207,7 +230,7 @@ if (isset($_POST['ajouter'])) {
                                     </div>
                                 </div> 
                                 <footer class="card-footer text-end">
-                                    <button class="btn btn-primary" type="submit">valider le proof de caisse</button>
+                                    <button class="btn btn-primary" type="submit" <?php echo isset($noComptes) && $noComptes ? 'disabled' : ''; ?>>valider le proof de caisse</button>
                                 </footer>
                             </form>
                             <?php else: ?>

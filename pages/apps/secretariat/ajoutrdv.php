@@ -223,8 +223,9 @@ require('../PUBLIC/header.php');
                                     <div class="row form-group pb-3">
                                         <div class="col-md-4">
                                             <div class="form-group">
-                                                <label class="col-form-label" for="formGroupExampleInput">Saisir le n° dossier du patient</label>
-                                                <input type="text" name="dossier" class="form-control" placeholder="" value="<?php echo isset($_POST['dossier']) ? htmlspecialchars($_POST['dossier']) : ''; ?>" required>
+                                                <label class="col-form-label" for="dossierInput">Saisir le n° dossier du patient</label>
+                                                <input type="text" id="dossierInput" name="dossier" class="form-control" placeholder="" value="<?php echo isset($_POST['dossier']) ? htmlspecialchars($_POST['dossier']) : ''; ?>" required>
+                                                <div id="dossierStatus" class="mt-1 small"></div>
                                             </div>
                                         </div>
                                     </div>
@@ -463,5 +464,81 @@ document.addEventListener('DOMContentLoaded', function () {
     const serviceId = document.getElementById('serviceSelect').value;
     if (serviceId) updateMedecins();
 });
+        </script>
+        <script>
+        // Vérification automatique de l'existence du numéro de dossier (RDV interne)
+        (function(){
+            const input = document.getElementById('dossierInput');
+            const statusEl = document.getElementById('dossierStatus');
+            const submitBtn = document.querySelector('button[type="submit"][name="ajouter"]');
+            const interneRadios = document.querySelectorAll('input[name="estInterne"]');
+
+            if (!input || !statusEl || !submitBtn) return;
+
+            let debounceTimer = null;
+
+            function isInterneSelected(){
+                const r = document.querySelector('input[name="estInterne"]:checked');
+                return !r || r.value === '0'; // 0 = RDV interne
+            }
+
+            function setStatus(msg, type){
+                statusEl.textContent = msg || '';
+                statusEl.classList.remove('text-danger','text-success');
+                if (type === 'ok') statusEl.classList.add('text-success');
+                if (type === 'err') statusEl.classList.add('text-danger');
+            }
+
+            function setSubmitEnabled(enabled){
+                submitBtn.disabled = !enabled;
+            }
+
+            async function checkDossier(value){
+                if (!value){
+                    setStatus('', null);
+                    setSubmitEnabled(true);
+                    return;
+                }
+                try {
+                    setStatus('Vérification du dossier…', null);
+                    const resp = await fetch(`../public/checkPatient.php?dossier=${encodeURIComponent(value)}`);
+                    if (!resp.ok){
+                        throw new Error('HTTP '+resp.status);
+                    }
+                    const data = await resp.json();
+                    if (data && data.success){
+                        const nom = (data.patient && data.patient.nom) ? `: ${data.patient.nom}` : '';
+                        setStatus('Dossier trouvé'+nom, 'ok');
+                        setSubmitEnabled(true);
+                    } else {
+                        setStatus('Dossier introuvable', 'err');
+                        // Bloquer l’envoi uniquement si RDV interne
+                        setSubmitEnabled(!isInterneSelected() ? true : false);
+                    }
+                } catch(e){
+                    console.error('Erreur vérification dossier:', e);
+                    setStatus('Erreur de vérification', 'err');
+                    setSubmitEnabled(!isInterneSelected() ? true : false);
+                }
+            }
+
+            function debouncedCheck(){
+                if (!isInterneSelected()){
+                    // Si RDV externe, ne pas bloquer
+                    setStatus('', null);
+                    setSubmitEnabled(true);
+                    return;
+                }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => checkDossier(input.value.trim()), 350);
+            }
+
+            input.addEventListener('input', debouncedCheck);
+            input.addEventListener('blur', debouncedCheck);
+            interneRadios.forEach(r => r.addEventListener('change', debouncedCheck));
+
+            // Initial check si valeur déjà présente
+            if (input.value) debouncedCheck();
+        })();
         </script>
         <?php include('../public/footer.php');?>
