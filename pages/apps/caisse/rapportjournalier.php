@@ -3,12 +3,17 @@ include('../public/connect.php');
 require_once('../public/fonction.php');
 session_start();
 
-// Règle d'affichage: seulement du lundi au samedi à partir de 16h30
-// Ajustez le fuseau si nécessaire via date_default_timezone_set('Africa/Abidjan');
+// Définir explicitement le fuseau pour éviter les décalages (adapter si besoin)
+date_default_timezone_set('Africa/Abidjan');
+
+// Fenêtre autorisée: lundi (1) à samedi (6) de 15:00:00 à 23:59:59
 $now = new DateTime();
 $dayOfWeek = (int)$now->format('N'); // 1=lundi .. 7=dimanche
-$timeNow = $now->format('H:i');
-$canShowForm = ($dayOfWeek >= 1 && $dayOfWeek <= 6) && ($timeNow >= '08:00');
+$startWindow = (clone $now)->setTime(15,0,0);
+$endWindow   = (clone $now)->setTime(23,59,59);
+$canShowForm = ($dayOfWeek >= 1 && $dayOfWeek <= 6) && ($now >= $startWindow && $now <= $endWindow);
+// Pour debug ponctuel (à retirer en production):
+// error_log('DEBUG RAPPORT JOURNALIER | now='.$now->format('Y-m-d H:i:s').' day='.$dayOfWeek.' canShow='.(int)$canShowForm);
 
 // Fonction pour nettoyer les entrées
 function cleanInput($data) {
@@ -62,7 +67,7 @@ if (isset($_POST['ajouter'])) {
     ];
     // Vérifier la fenêtre d'autorisation
     if (!$canShowForm) {
-        $errors[] = "Le formulaire de rapport n'est disponible qu'à partir de 16h30, du lundi au samedi.";
+        $errors[] = "Le formulaire de rapport n'est disponible que de 15h00 à 23h59, du lundi au samedi.";
     } else {
         // Validation des données
         $errors = validateAccountData($formData);
@@ -236,7 +241,7 @@ if (isset($_POST['ajouter'])) {
                             <?php else: ?>
                                 <div class="alert alert-info">
                                     <strong>Information</strong><br>
-                                    Le formulaire est disponible uniquement du lundi au samedi à partir de l'heure de descente soit 15h00.
+                                    Le formulaire est disponible uniquement du lundi au samedi entre 15h00 et 23h59.
                                 </div>
                             <?php endif; ?>
                         </div>

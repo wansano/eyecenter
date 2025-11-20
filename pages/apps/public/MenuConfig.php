@@ -443,6 +443,31 @@ class MenuConfig {
         </li>';
     }
 
+    private static function getLogistiqueMenu($user_data) {
+        return '
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Inventaire</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="inventaire.php">Articles & stock</a></li>
+                <li><a class="nav-link" href="mouvements.php">Mouvements de stock</a></li>
+                <li><a class="nav-link" href="alertes.php">Alertes de stock</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Achats</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="fournisseurs.php">Fournisseurs</a></li>
+                <li><a class="nav-link" href="commandes.php">Commandes d\'achat</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Rapports</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="rapports.php">Valeur & rotation</a></li>
+            </ul>
+        </li>';
+    }
+
     private static function getResponsableMenu($user_data) {
         return '
         <li class="dropdown">
@@ -479,6 +504,9 @@ class MenuConfig {
                 break;
             case 'comptabilite':
                 $menu_items .= self::getComptabiliteMenu($user_data);
+                break;
+            case 'logistique':
+                $menu_items .= self::getLogistiqueMenu($user_data);
                 break;
             case 'ophtalmologue':
                 $menu_items .= self::getOphtalmologueMenu($user_data);

@@ -93,6 +93,9 @@ if (isset($_POST['goin'])) {
                         case 'boutique':
                             header('Location: apps/boutique/homeboutique.php?day='.$jour);
                             break;
+                        case 'logistique':
+                            header('Location: apps/logistique/homelogistique.php?day='.$jour);
+                            break;
                         case 'secretariat':
                             header('Location: apps/secretariat/homesecretariat.php?day='.$jour);
                             break;
