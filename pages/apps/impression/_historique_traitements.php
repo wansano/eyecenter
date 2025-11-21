@@ -143,7 +143,7 @@ try {
         foreach ($traitementsParType[$cfg['label']] as $row) {
             $pdf->AddPage();
             $pdf->SetFont('CenturyGothic','B',14);
-            $titre = ($cfg['table']==='mesures') ? 'ORDONNANCE DES LUNETTES' : ( strtoupper(model($row['id_type'])));
+            $titre = strtoupper(model($row['id_type']));
             $pdf->Cell(0,8,pdf_text($titre),0,1,'C');
             $pdf->SetFont('CenturyGothic','',11);
             $dateAff = $row['date_traitement'] ? date('d/m/Y', strtotime($row['date_traitement'])) : '';

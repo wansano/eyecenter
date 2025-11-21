@@ -1,12 +1,23 @@
 <?php
 include('../public/connect.php');
 require_once('../PUBLIC/fonction.php');
+// PHPMailer (envoi SMTP)
+require_once('../public/PHPMailer/vendor/phpmailer/phpmailer/src/PHPMailer.php');
+require_once('../public/PHPMailer/vendor/phpmailer/phpmailer/src/SMTP.php');
+require_once('../public/PHPMailer/vendor/phpmailer/phpmailer/src/Exception.php');
+// Config SMTP centralisée
+$smtpConfig = require('../public/smtp_config.php');
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 session_start();
 
-$errors = 0;
-$existe = 0;
-$id_patient = null;
+$errors = 0;            // 0 aucun, 2 RDV interne OK, 4 RDV externe OK, 3 erreur
+$existe = 0;            // RDV déjà existant
+$id_patient = null;     // identifiant patient
 $error_messages = array();
+$emailSent = false;     // notification envoyée ?
+$emailError = '';       // log interne en cas d'échec
 
 $bdd->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -148,6 +159,72 @@ if (isset($_POST['ajouter'])) {
             }
         }
             $bdd->commit();
+            // Notification email au médecin via PHPMailer (SMTP)
+            if (($errors === 2 || $errors === 4) && $existe === 0) {
+                try {
+                    $stmtMed = $bdd->prepare('SELECT id, pseudo, email FROM users WHERE id = ? LIMIT 1');
+                    $stmtMed->execute([$_POST['medecin']]);
+                    $medInfo = $stmtMed->fetch(PDO::FETCH_ASSOC);
+                    if ($medInfo && !empty($medInfo['email'])) {
+                        $pInfo = $id_patient ? getPatientInfo($id_patient) : [
+                            'nom_patient' => $_POST['nom_patient'] ?? 'Patient',
+                            'phone'       => $_POST['phone'] ?? '',
+                            'age'         => $_POST['age'] ?? '',
+                            'sexe'        => $_POST['sexe'] ?? ''
+                        ];
+                        $serviceNom = service($_POST['service']);
+                        $motifType  = $_POST['type'];
+                        $dateHeure  = $creneauFinal;
+                        $clinique   = getSingleRow($bdd, 'profil_entreprise');
+
+                        $mail = new PHPMailer(true);
+                        try {
+                            // Encodage UTF-8 pour éviter les caractères bizarres
+                            $mail->CharSet  = 'UTF-8';
+                            $mail->Encoding = 'base64';
+                            // CONFIG SMTP via fichier smtp_config.php
+                            $mail->isSMTP();
+                            $mail->Host       = $smtpConfig['host'];
+                            $mail->SMTPAuth   = $smtpConfig['auth'];
+                            $mail->Username   = $smtpConfig['username'];
+                            $mail->Password   = $smtpConfig['password'];
+                            $mail->SMTPSecure = $smtpConfig['secure'];
+                            $mail->Port       = $smtpConfig['port'];
+
+                            $fromEmail  = $smtpConfig['from_email'] ?? ($clinique['email'] ?? 'no-reply@example.com');
+                            $fromName   = $smtpConfig['from_name']  ?? (strtoupper($clinique['denomination'] ?? 'CLINIQUE'));
+
+                            $mail->setFrom($fromEmail, $fromName);
+                            $mail->addAddress($medInfo['email'], $medInfo['pseudo']);
+
+                            $mail->Subject = 'Nouveau rendez-vous - ' . $serviceNom;
+                            $bodyHtml = "Bonjour Dr " . ($medInfo['pseudo'] ?? '') . "<br><br>" .
+                                       "Un nouveau rendez-vous a été programmé pour vous :<br>" .
+                                       "<b>Service</b> : $serviceNom<br>" .
+                                       "<b>Motif</b> : " . model($motifType) . "<br>" .
+                                       "<b>Date & créneau</b> : $dateHeure<br><br>" .
+                                       "<b>Patient</b> : " . ($pInfo['nom_patient'] ?? 'N/A') . "<br>" .
+                                       "<b>Contact</b> : " . ($pInfo['phone'] ?? '') . "<br><br>" .
+                                       "Coordialement.<br><br>" .
+                                       $fromName;
+
+                            $mail->isHTML(true);
+                            $mail->Body    = $bodyHtml;
+                            $mail->AltBody = strip_tags(str_replace('<br>', "\n", $bodyHtml));
+
+                            $mail->send();
+                            $emailSent = true;
+                        } catch (Exception $e) {
+                            $emailError = 'PHPMailer: ' . $mail->ErrorInfo;
+                        }
+                    } else {
+                        $emailError = 'Email médecin introuvable ou vide';
+                    }
+                } catch (Throwable $te) {
+                    $emailError = 'Exception notification: ' . $te->getMessage();
+                }
+                if ($emailError) { error_log('[RDV NOTIF] ' . $emailError); }
+            }
         } catch (Exception $e) {
             $bdd->rollBack();
             $errors = 3;
@@ -175,11 +252,21 @@ require('../PUBLIC/header.php');
                                     <strong>Succès</strong><br/>  
                                     <li>Enregistrement du patient effectué avec succès. Le dossier est ouvert sous le numéro <strong><?= $id_patient ?></strong>.</li>
                                     <li>Le rendez-vous a été ajouté avec succès.</li>
+                                    <?php if ($emailSent): ?>
+                                        <li>Notification email envoyée au médecin.</li>
+                                    <?php else: ?>
+                                        <li>Notification email non envoyée (adresse manquante ou erreur).</li>
+                                    <?php endif; ?>
                                 </div>
                             <?php elseif ($errors == 2): ?>
                                 <div class="alert alert-success">
                                     <strong>Succès</strong><br/>
                                     <li>Le rendez-vous a été ajouté avec succès.</li>
+                                    <?php if ($emailSent): ?>
+                                        <li>Notification email envoyée au médecin.</li>
+                                    <?php else: ?>
+                                        <li>Notification email non envoyée (adresse manquante ou erreur).</li>
+                                    <?php endif; ?>
                                 </div>
                             <?php elseif ($errors == 3): ?>
                                 <div class="alert alert-danger">
