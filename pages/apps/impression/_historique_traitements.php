@@ -147,7 +147,7 @@ try {
             $pdf->Cell(0,8,pdf_text($titre),0,1,'C');
             $pdf->SetFont('CenturyGothic','',11);
             $dateAff = $row['date_traitement'] ? date('d/m/Y', strtotime($row['date_traitement'])) : '';
-            $pdf->Cell(0,6,pdf_text('Effectuée le : '.$dateAff),0,1,'R');
+            $pdf->Cell(0,6,pdf_text('Etabli le : '.$dateAff),0,1,'R');
             $pdf->SetFont('CenturyGothic','',9);
             // $pdf->Cell(0,5,pdf_text(($row['nom_patient']??'').' | '.(adress($row['adresse'])?:$row['adresse']).' | '.($row['phone']??'')),0,1,'L');
             // Acuité (afficher uniquement les paramètres ayant une valeur)
@@ -177,17 +177,24 @@ try {
             if(isset($row['p']) && trim($row['p'])!=='') {
                 $acuSegments[] = 'P '.$row['p'];
             }
-            // Affichage si au moins un segment
-            if(!empty($acuSegments) || (isset($row['glycemie']) && trim($row['glycemie'])!=='')) {
+            // Déterminer si glycémie a une valeur non nulle
+            $hasGly = false;
+            if(isset($row['glycemie'])) {
+                $glyRaw = trim((string)$row['glycemie']);
+                $glyVal = (float)str_replace(',', '.', $glyRaw);
+                if($glyRaw !== '' && $glyVal != 0) { $hasGly = true; }
+            }
+            // Affichage si au moins un segment ou glycémie pertinente
+            if(!empty($acuSegments) || $hasGly) {
                 $pdf->SetFont('CenturyGothic','B',10);
                 $pdf->Cell(0,5,pdf_text('ACUITÉ VISUELLE :'),0,1,'L');
                 if(!empty($acuSegments)) {
                     $pdf->SetFont('CenturyGothic','',9);
                     $pdf->Cell(0,5,pdf_text(implode(' | ',$acuSegments)),0,1,'L');
                 }
-                if(isset($row['glycemie']) && trim($row['glycemie'])!=='') {
+                if($hasGly) {
                     $pdf->SetFont('CenturyGothic','',9);
-                    $pdf->Cell(0,4,pdf_text('Glycémie: '.$row['glycemie']),0,1,'L');
+                    $pdf->Cell(0,4,pdf_text('Glycémie: '.trim((string)$row['glycemie'])),0,1,'L');
                 }
                 $pdf->Ln(3);
             }
