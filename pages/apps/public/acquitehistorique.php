@@ -105,7 +105,7 @@
     <div class="col-md-2">
         <div class="form-group">
             <label class="col-form-label" for="formGroupExampleInput"><?= nom_patient($id_patient);?> </label>
-            <button class="btn btn-info" name="voir_dossier" class="form-control"> voir le dossier </button>
+            <a class="btn btn-info" target="_blank" href="../impression/_historique_traitements.php?id_patient=<?php echo (int)$id_patient; ?>">Voir le dossier (PDF)</a>
         </div>
     </div>
 </div>
