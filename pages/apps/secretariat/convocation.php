@@ -31,8 +31,9 @@ $errors=0;
 										<option value="">-- Choisir un médecin --</option>
 										<?php
 										try {
-											$st = $bdd->prepare("SELECT DISTINCT traitant FROM dmd_rendez_vous WHERE prochain_rdv >= :datejour AND status IN (0,1,2) ORDER BY traitant");
-											$st->execute(['datejour' => date('Y-m-d')]);
+											$today = date('Y-m-d');
+											$st = $bdd->prepare("SELECT DISTINCT traitant FROM dmd_rendez_vous WHERE DATE(prochain_rdv) = :datejour AND status IN (0,1,2) ORDER BY traitant");
+											$st->execute(['datejour' => $today]);
 											while ($row = $st->fetch(PDO::FETCH_ASSOC)) {
 												$idMed = (int)$row['traitant'];
 												$label = htmlspecialchars(traitant($idMed) ?: ('#'.$idMed), ENT_QUOTES, 'UTF-8');
