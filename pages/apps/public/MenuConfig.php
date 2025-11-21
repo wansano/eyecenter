@@ -478,6 +478,7 @@ class MenuConfig {
                 <li><a class="nav-link" href="demandevalidate.php?u=' . $user_data['id_user'] . '">Demande de depense validées</a></li>
                 <li><a class="nav-link" href="demandeordered.php?u=' . $user_data['id_user'] . '">Demande de depense payées</a></li>
                 <li><a class="nav-link" href="#">Situation des partenaires</a></li>
+                <li><a class="nav-link" href="interrogation_realisations.php">Réalisations médecin</a></li>
             </ul>
         </li>';
     }
