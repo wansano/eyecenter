@@ -90,11 +90,6 @@ include('../public/header.php');
                                     </div>
                                     <div class="col-md-3 mb-2 d-flex align-items-end">
                                         <button type="submit" class="btn btn-primary mr-2">Rechercher</button>
-                                        <?php if (!empty($traitements)): ?>
-                                            <a href="<?='../impression/_realisationsmedecin.php?medecin=' . urlencode($userId) . '&debut=' . urlencode($date_debut) . '&fin=' . urlencode($date_fin);?>" target="_blank" class="btn btn-default">
-                                                <i class="fa fa-file-pdf-o"></i> Imprimer PDF
-                                            </a>
-                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </form>
@@ -102,6 +97,11 @@ include('../public/header.php');
                             <hr>
 
                             <h5>Prestations de <?= htmlspecialchars(traitant($userId)) ?> du <?= htmlspecialchars($date_debut) ?> au <?= htmlspecialchars($date_fin) ?> :</h5>
+                            <?php if (!empty($traitements)): ?>
+                                <button type="button" id="btnImprimer" class="btn btn-success mb-3">
+                                    <i class="fa fa-file-pdf"></i> Imprimer le rapport
+                                </button>
+                            <?php endif; ?>
                             <div class="row mt-3">
                                 <?php if (empty($traitements)): ?>
                                     <div class="col-md-12">
@@ -125,6 +125,17 @@ include('../public/header.php');
                 </div>
             </section>
         </div>
+        <?php if (!empty($traitements)): ?>
+            <script>
+                document.getElementById('btnImprimer').addEventListener('click', function () {
+                    var url = 'imprimer_realisationmedecin.php'
+                        + '?medecin=' + encodeURIComponent(<?= json_encode($userId) ?>)
+                        + '&debut=' + encodeURIComponent(<?= json_encode($date_debut) ?>)
+                        + '&fin=' + encodeURIComponent(<?= json_encode($date_fin) ?>);
+                    window.open(url, '_blank');
+                });
+            </script>
+        <?php endif; ?>
         <?php include('../public/footer.php'); ?>
 </body>
 </html>

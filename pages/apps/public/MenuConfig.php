@@ -471,13 +471,13 @@ class MenuConfig {
     private static function getResponsableMenu($user_data) {
         return '
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Depenses & Comptes</a>
+            <a href="#" class="nav-link dropdown-toggle">Validation</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="interocompte.php">Intérogation de compte</a></li>
-                <li><a class="nav-link" href="demandevalidation.php?u=' . $user_data['user'] . '">Depense en attente de validation</a></li>
-                <li><a class="nav-link" href="demandevalidate.php?u=' . $user_data['id_user'] . '">Demande de depense validées</a></li>
-                <li><a class="nav-link" href="demandeordered.php?u=' . $user_data['id_user'] . '">Demande de depense payées</a></li>
-                <li><a class="nav-link" href="#">Situation des partenaires</a></li>
+                <li><a class="nav-link" href="demandevalidation.php?u=' . $user_data['user'] . '">Depense en attente</a></li>
+                <li><a class="nav-link" href="demandevalidate.php?u=' . $user_data['id_user'] . '">Depense validées</a></li>
+                <li><a class="nav-link" href="demandeordered.php?u=' . $user_data['id_user'] . '">Depense payées</a></li>
+                <li><a class="nav-link" href="#">Situation partenaires</a></li>
                 <li><a class="nav-link" href="interrogation_realisations.php">Réalisations médecin</a></li>
             </ul>
         </li>';
