@@ -88,8 +88,13 @@ include ('header.php');
         <div id="userbox" class="userbox">
             <a href="#" data-bs-toggle="dropdown">
                 <figure class="profile-picture">
-                    <img src="../img/!logged-user.png" alt="avatar" class="rounded-circle"
-                        data-lock-picture="../img/!logged-user.png" />
+                    <?php
+                        $initial = '?';
+                        if (!empty($user)) {
+                            $initial = mb_substr($user, 0, 1, 'UTF-8');
+                        }
+                        echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8');
+                    ?>
                 </figure>
                 <div class="profile-info" data-lock-name="John Doe" data-lock-email="johndoe@okler.com">
                     <?php
