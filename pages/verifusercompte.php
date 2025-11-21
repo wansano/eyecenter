@@ -118,7 +118,7 @@ if (isset($_POST['goin'])) {
                             header('Location: apps/optometrie/homeoptometriste.php?day='.$jour);
                             break;
                         case 'medecin':
-                            header('Location: apps/medecinchef/homemedecinchef.php?day='.$jour);
+                            header('Location: apps/medecinchef/homemedecin.php?day='.$jour);
                             break;
                         default:
                             header('Location: index.php');
