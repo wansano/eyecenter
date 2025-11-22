@@ -95,20 +95,22 @@ $pdf->WriteHTML($html);
     addSection($pdf, 'Montant total :', (number_format($_GET['montant'] < 0 ? 0 : $_GET['montant']) .' '.$devise));
     addSection($pdf, 'Rapport caissier :', (number_format($_GET['rapportcaisse'] < 0 ? 0 : $_GET['rapportcaisse']) .' '.$devise));
     addSection($pdf, 'Différence :', (number_format($_GET['solde'] < 0 ? 0 : $_GET['solde']) .' '.$devise));
-    addSection($pdf, 'Prestations :', '');
+    addSection($pdf, 'Réalisations :', '');
 
     // Construction du tableau directement avec FPDF pour contrôler largeur et taille des cellules
     $pdf->Ln(1);
     $pdf->SetFont('CenturyGothic','B',11);
     // Définir largeurs des colonnes (en mm) — total 190 mm (A4 largeur utile par défaut)
-    $wType = 130;   // colonne Prestation
-    $wNb = 25;      // colonne Nombre
+    $wType = 100;   // colonne Prestation
+    $wNb = 20;      // colonne Nombre
+    $wPrix = 25;    // colonne Prix Unitaire
     $wMontant = 35; // colonne Montant
 
     // Entête stylisée
     $pdf->SetFillColor(0,102,204); // bleu
     $pdf->SetTextColor(255,255,255); // texte blanc
-    $pdf->Cell($wType,10, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Type de prestation'), 1, 0, 'C', true);
+    $pdf->Cell($wType,10, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Prestation'), 1, 0, 'C', true);
+    $pdf->Cell($wPrix,10, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Prix Unitaire'), 1, 0, 'C', true);
     $pdf->Cell($wNb,10, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Nombre'), 1, 0, 'C', true);
     $pdf->Cell($wMontant,10, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant'), 1, 1, 'C', true);
 
@@ -130,10 +132,12 @@ $pdf->WriteHTML($html);
             $nb = nombrejour_periode($nom, $_GET['debut'], $_GET['fin']);
         }
         if ($nb != 0) {
-            $montantPrestation = $nb * montant($nom);
+            $prixUnitaire = montant($nom);
+            $montantPrestation = $nb * $prixUnitaire;
             $totalNb += $nb;
             $totalMontant += $montantPrestation;
             $pdf->Cell($wType,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', model($nom)), 1, 0, 'L');
+            $pdf->Cell($wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($prixUnitaire) . ' ' . $devise), 1, 0, 'R');
             $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$nb), 1, 0, 'C');
             $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($montantPrestation) . ' ' . $devise), 1, 1, 'R');
         }
@@ -141,21 +145,22 @@ $pdf->WriteHTML($html);
 
     // Lignes additionnelles demandées
     $pdf->SetFont('CenturyGothic','B',11);
-    // Montant total (paramètre fourni)
-    $pdf->Cell($wType,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant total'), 1, 0, 'R');
+    // Montant total (paramètre fourni) - Fusion Prestation + Prix Unitaire
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant total'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($montantParam) . ' ' . $devise), 1, 1, 'R');
     
     // Frais de retrait = Montant total - Total général (planché à 0)
     $fraisRetrait = max(0, $montantParam - (int)$totalMontant);
-    $pdf->Cell($wType,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Frais de retrait'), 1, 0, 'R');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Frais de retrait'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($fraisRetrait) . ' ' . $devise), 1, 1, 'R');
 
     // Ligne Total Général
     $pdf->SetFont('CenturyGothic','B',11);
-    $pdf->Cell($wType,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total Général'), 1, 0, 'R');
-    $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$totalNb), 1, 0, 'C');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total Général'), 1, 0, 'R');
+    $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$totalNb), 1, 0, 'C', true);
+    $pdf->SetFillColor(255,255,255); // Retour à blanc
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalMontant) . ' ' . $devise), 1, 1, 'R');
 
     // Signature
