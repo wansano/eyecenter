@@ -87,7 +87,7 @@ include ('header.php');
 
         <div id="userbox" class="userbox">
             <a href="#" data-bs-toggle="dropdown">
-                <figure class="profile-picture">
+                <figure class="profile-picture" style="color: #fff; background-color: #000;">
                     <?php
                         $initial = '?';
                         if (!empty($user)) {
