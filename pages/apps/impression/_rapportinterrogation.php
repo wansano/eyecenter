@@ -103,7 +103,7 @@ $pdf->WriteHTML($html);
     // Définir largeurs des colonnes (en mm) — total 190 mm (A4 largeur utile par défaut)
     $wType = 100;   // colonne Prestation
     $wNb = 20;      // colonne Nombre
-    $wPrix = 25;    // colonne Prix Unitaire
+    $wPrix = 30;    // colonne Prix Unitaire
     $wMontant = 35; // colonne Montant
 
     // Entête stylisée
