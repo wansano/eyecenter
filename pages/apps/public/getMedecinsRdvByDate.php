@@ -1,6 +1,23 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/connect.php';
+
+// Inclure connect.php avec chemin absolu
+$connectPath = __DIR__ . '/connect.php';
+if (!file_exists($connectPath)) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Fichier connect.php non trouvé']);
+    exit;
+}
+
+require_once $connectPath;
+
+// Vérifier que la connexion DB existe
+if (!isset($bdd)) {
+    error_log('Erreur: $bdd non défini dans getMedecinsRdvByDate.php');
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Connexion DB non disponible']);
+    exit;
+}
 
 $date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 
@@ -13,9 +30,9 @@ try {
     $st = $bdd->prepare($sql);
     $st->execute([$date]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-    echo json_encode(['success' => true, 'medecins' => $rows]);
+    echo json_encode(['success' => true, 'medecins' => $rows, 'debug' => ['date' => $date]]);
 } catch (Throwable $e) {
-    if (function_exists('error_log')) error_log('getMedecinsRdvByDate error: '.$e->getMessage());
+    error_log('getMedecinsRdvByDate error: '.$e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false]);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }

@@ -65,10 +65,16 @@ $errors=0;
 	<?php include('../PUBLIC/footer.php');?>
 
 <script>
-(function($) {
+// Forcer l'exécution du JavaScript quand le DOM est entièrement chargé
+document.addEventListener('DOMContentLoaded', function() {
 	'use strict';
+	
 	var initCalendar = function() {
 		var calendarEl = document.getElementById('calendarHello');
+		if (!calendarEl) {
+			console.warn('Calendrier non trouvé');
+			return;
+		}
 		var calendar = new FullCalendar.Calendar(calendarEl, {
 			initialView: 'dayGridMonth',
 			initialDate: new Date().toISOString().slice(0, 10),
@@ -111,55 +117,80 @@ $errors=0;
 		calendar.render();
 	};
 
-	$(function() {
-				initCalendar();
-				// Impression RDV du jour par médecin
-				var btn = document.getElementById('btnPrintRdv');
-				var sel = document.getElementById('medecinPrintSelect');
-				var dateInput = document.getElementById('datePrintInput');
-				if (btn && sel) {
-					btn.addEventListener('click', function(){
-						var med = sel.value;
-						if (!med) { alert('Veuillez choisir un médecin.'); return; }
-						var d = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().slice(0,10);
-						var url = 'imprimer_listerdv.php?date='+encodeURIComponent(d)+'&medecin='+encodeURIComponent(med);
-						window.open(url, '_blank');
-					});
-				}
+	// Initialiser le calendrier
+	initCalendar();
+	
+	// Impression RDV du jour par médecin
+	var btn = document.getElementById('btnPrintRdv');
+	var sel = document.getElementById('medecinPrintSelect');
+	var dateInput = document.getElementById('datePrintInput');
+	
+	console.log('Éléments trouvés:', {btn: !!btn, sel: !!sel, dateInput: !!dateInput});
+	
+	if (btn && sel) {
+		btn.addEventListener('click', function(){
+			var med = sel.value;
+			if (!med) { alert('Veuillez choisir un médecin.'); return; }
+			var d = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().slice(0,10);
+			var url = 'imprimer_listerdv.php?date='+encodeURIComponent(d)+'&medecin='+encodeURIComponent(med);
+			window.open(url, '_blank');
+		});
+	}
 
-				// Mise à jour de la liste des médecins en fonction de la date choisie
-				function resetSelect(el, placeholder){
-					if (!el) return;
-					el.innerHTML = '';
-					var opt = document.createElement('option');
-					opt.value = '';
-					opt.textContent = placeholder || '-- Choisir --';
-					el.appendChild(opt);
+	// Mise à jour de la liste des médecins en fonction de la date choisie
+	function resetSelect(el, placeholder){
+		if (!el) return;
+		el.innerHTML = '';
+		var opt = document.createElement('option');
+		opt.value = '';
+		opt.textContent = placeholder || '-- Choisir --';
+		el.appendChild(opt);
+	}
+	
+	async function refreshMedecinsByDate(){
+		if (!sel || !dateInput) {
+			console.warn('sel ou dateInput non disponible');
+			return;
+		}
+		var d = dateInput.value || new Date().toISOString().slice(0,10);
+		console.log('Rechargement des médecins pour la date:', d);
+		resetSelect(sel, '-- Choisir un médecin --');
+		try {
+			const resp = await fetch('../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d));
+			console.log('Réponse reçue:', resp.status, resp.statusText);
+			
+			const text = await resp.text();
+			console.log('Réponse brute:', text);
+			
+			if (!resp.ok) {
+				console.error('Erreur HTTP:', resp.status, text);
+				throw new Error('HTTP '+resp.status);
+			}
+			
+			const data = JSON.parse(text);
+			console.log('Données reçues:', data);
+			
+			if (data && data.success && Array.isArray(data.medecins)){
+				console.log('Nombre de médecins:', data.medecins.length);
+				for (const m of data.medecins){
+					const o = document.createElement('option');
+					o.value = m.id;
+					o.textContent = m.pseudo || ('#'+m.id);
+					sel.appendChild(o);
 				}
-				async function refreshMedecinsByDate(){
-					if (!sel || !dateInput) return;
-					var d = dateInput.value || new Date().toISOString().slice(0,10);
-					resetSelect(sel, '-- Choisir un médecin --');
-					try {
-						const resp = await fetch('../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d));
-						if (!resp.ok) throw new Error('HTTP '+resp.status);
-						const data = await resp.json();
-						if (data && data.success && Array.isArray(data.medecins)){
-							for (const m of data.medecins){
-								const o = document.createElement('option');
-								o.value = m.id;
-								o.textContent = m.pseudo || ('#'+m.id);
-								sel.appendChild(o);
-							}
-						}
-					} catch(e){ console.error('Erreur medecins/date:', e); }
-				}
-				if (dateInput){
-					dateInput.addEventListener('change', refreshMedecinsByDate);
-					// Charger la liste dès l'arrivée sur la page
-					refreshMedecinsByDate();
-				}
-	});
-
-}).apply(this, [jQuery]);
+			} else {
+				console.warn('Format de réponse inattendu:', data);
+			}
+		} catch(e){ 
+			console.error('Erreur medecins/date:', e);
+			alert('Erreur lors du chargement des médecins: ' + e.message);
+		}
+	}
+	
+	if (dateInput){
+		dateInput.addEventListener('change', refreshMedecinsByDate);
+		// Charger la liste dès l'arrivée sur la page
+		refreshMedecinsByDate();
+	}
+});
 </script>
