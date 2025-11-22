@@ -155,36 +155,55 @@ document.addEventListener('DOMContentLoaded', function() {
 		var d = dateInput.value || new Date().toISOString().slice(0,10);
 		console.log('Rechargement des médecins pour la date:', d);
 		resetSelect(sel, '-- Choisir un médecin --');
-		try {
-			const resp = await fetch('../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d));
-			console.log('Réponse reçue:', resp.status, resp.statusText);
-			
-			const text = await resp.text();
-			console.log('Réponse brute:', text);
-			
-			if (!resp.ok) {
-				console.error('Erreur HTTP:', resp.status, text);
-				throw new Error('HTTP '+resp.status);
-			}
-			
-			const data = JSON.parse(text);
-			console.log('Données reçues:', data);
-			
-			if (data && data.success && Array.isArray(data.medecins)){
-				console.log('Nombre de médecins:', data.medecins.length);
-				for (const m of data.medecins){
-					const o = document.createElement('option');
-					o.value = m.id;
-					o.textContent = m.pseudo || ('#'+m.id);
-					sel.appendChild(o);
+		
+		// Essayer plusieurs chemins possibles
+		var possibleUrls = [
+			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
+			'../../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
+			'/APPECv3PHP/pages/apps/public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d)
+		];
+		
+		var lastError = null;
+		for (var url of possibleUrls) {
+			try {
+				console.log('Essai URL:', url);
+				const resp = await fetch(url);
+				console.log('Réponse reçue:', resp.status, resp.statusText);
+				
+				const text = await resp.text();
+				console.log('Réponse brute:', text);
+				
+				if (!resp.ok) {
+					console.warn('Erreur HTTP:', resp.status, text);
+					lastError = 'HTTP '+resp.status;
+					continue;
 				}
-			} else {
-				console.warn('Format de réponse inattendu:', data);
+				
+				const data = JSON.parse(text);
+				console.log('Données reçues:', data);
+				
+				if (data && data.success && Array.isArray(data.medecins)){
+					console.log('Nombre de médecins:', data.medecins.length);
+					for (const m of data.medecins){
+						const o = document.createElement('option');
+						o.value = m.id;
+						o.textContent = m.pseudo || ('#'+m.id);
+						sel.appendChild(o);
+					}
+					return; // Succès, sortir de la boucle
+				} else {
+					console.warn('Format de réponse inattendu:', data);
+					lastError = 'Format inattendu';
+				}
+			} catch(e){ 
+				console.error('Erreur avec URL ' + url + ':', e.message);
+				lastError = e.message;
 			}
-		} catch(e){ 
-			console.error('Erreur medecins/date:', e);
-			alert('Erreur lors du chargement des médecins: ' + e.message);
 		}
+		
+		// Si on arrive ici, toutes les URLs ont échoué
+		console.error('Impossible de charger les médecins avec aucun chemin');
+		alert('Erreur lors du chargement des médecins: ' + lastError);
 	}
 	
 	if (dateInput){
