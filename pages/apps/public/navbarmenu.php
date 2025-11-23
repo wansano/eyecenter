@@ -87,7 +87,9 @@ include ('header.php');
 
         <div id="userbox" class="userbox">
             <a href="#" data-bs-toggle="dropdown">
-                <figure class="profile-picture" style="color: #fff; background-color: #000;">
+                <figure class="profile-picture">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" 
+						style="width: 40px; height: 40px; background:#0d6efd; color: white; font-weight: bold; font-size: 25px;">
                     <?php
                         $initial = '?';
                         if (!empty($user)) {
@@ -95,6 +97,7 @@ include ('header.php');
                         }
                         echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8');
                     ?>
+                    </div>
                 </figure>
                 <div class="profile-info" data-lock-name="John Doe" data-lock-email="johndoe@okler.com">
                     <?php
