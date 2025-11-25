@@ -85,13 +85,13 @@ include('../PUBLIC/header.php');
                             $assurance = return_assurance($id_patient);
                             
                             if (isset($_POST['transmettre'])) {
-
+                                /*
                                 $req1 = $bdd->prepare('SELECT * FROM affectations WHERE id_patient=? AND type=? AND status IN (?, ?, ?)');
                                 $req1->execute([$id_patient, $_POST['type'], 6, 1, 2]);
                                 while ($dta = $req1->fetch(PDO::FETCH_ASSOC)) 
                                 {
                                 $existe=2;
-                                }
+                                }*/
 
                                 if ($existe == 0) {
                                 
@@ -101,13 +101,6 @@ include('../PUBLIC/header.php');
                                     {
                                     $model = $donnees1['id_organigramme'];
                                     }
-
-                                /* $reponse8 = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme=?');
-                                $reponse8->execute([$model]);
-                                    while ($donnees1 = $reponse8->fetch(PDO::FETCH_ASSOC))
-                                    {
-                                    $services = $donnees1['id_organigramme'];
-                                    }  */
                             
                                 $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
                                 $req->execute([$id_patient, $model, $_POST['motif_id']]);
