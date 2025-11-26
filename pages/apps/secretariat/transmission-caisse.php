@@ -85,13 +85,30 @@ include('../PUBLIC/header.php');
                             $assurance = return_assurance($id_patient);
                             
                             if (isset($_POST['transmettre'])) {
-                                /*
-                                $req1 = $bdd->prepare('SELECT * FROM affectations WHERE id_patient=? AND type=? AND status IN (?, ?, ?)');
+                                // Vérifier s'il existe une affectation récente (moins de 24h) pour ce type de traitement
+                                $req1 = $bdd->prepare('SELECT * FROM affectations WHERE id_patient=? AND type=? AND status IN (?, ?, ?) ORDER BY date DESC LIMIT 1');
                                 $req1->execute([$id_patient, $_POST['type'], 6, 1, 2]);
-                                while ($dta = $req1->fetch(PDO::FETCH_ASSOC)) 
-                                {
-                                $existe=2;
-                                }*/
+                                $affectationRecente = null;
+                                $heuresRestantes = 0;
+                                $minutesRestantes = 0;
+                                
+                                if ($req1->rowCount() > 0) {
+                                    $affectationRecente = $req1->fetch(PDO::FETCH_ASSOC);
+                                    
+                                    // Vérifier si moins de 24h se sont écoulées
+                                    if (!empty($affectationRecente['date'])) {
+                                        $dateAffectation = new DateTime($affectationRecente['date']);
+                                        $dateActuelle = new DateTime();
+                                        $intervalle = $dateActuelle->diff($dateAffectation);
+                                        $heuresEcoulees = $intervalle->h + ($intervalle->days * 24);
+                                        
+                                        if ($heuresEcoulees < 24) {
+                                            $existe = 2;
+                                            $heuresRestantes = 24 - $heuresEcoulees;
+                                            $minutesRestantes = 60 - $intervalle->i;
+                                        }
+                                    }
+                                }
 
                                 if ($existe == 0) {
                                 
@@ -129,9 +146,11 @@ include('../PUBLIC/header.php');
                                             ';}
                                         if ($existe==2) {
                                             echo '
-                                                <div class="alert alert-danger">
-                                                    <strong>Erreur</strong> <br/>  
-                                                    <li>Ce patient est déjà transmis pour ce traitement de <strong>'.model($_POST['type']).'</strong>.</li>
+                                                <div class="alert alert-warning">
+                                                    <strong>Attention</strong> <br/>  
+                                                    <li>Ce patient a déjà une affectation active pour le traitement de <strong>'.model($_POST['type']).'</strong>.</li>
+                                                    <li>Vous pourrez le transmettre à nouveau dans <strong>'.$heuresRestantes.' heure(s) et '.$minutesRestantes.' minute(s)</strong>.</li>
+                                                    <li>L\'ancienne affectation ne sera pas supprimée, une nouvelle sera créée.</li>
                                                 </div>
                                                 ';}
                                     echo '
@@ -192,7 +211,7 @@ include('../PUBLIC/header.php');
 											</div>
 										</div>
 									</div>
-                                    <form class="form-horizontal" novalidate="novalidate" method="POST" action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?id_patient='.$_GET['id_patient'].'" enctype="multipart/form-data">
+                                    <form class="form-horizontal" novalidate="novalidate" method="POST" action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?id_patient='.$_GET['id_patient'].'" enctype="multipart/form-data" onsubmit="return confirmSubmit(event)">
                                     <input type="hidden" value="'.$_GET['id_patient'].'"> 
                                         <div class="row form-group pb-3">
                                             <div class="col-md-2">
@@ -233,3 +252,30 @@ include('../PUBLIC/header.php');
             </section>
         </div>
         <?php include('../PUBLIC/footer.php');?>
+    </body>
+</html>
+
+<script>
+function confirmSubmit(event) {
+    const motifSelect = document.getElementById('motifSelect');
+    const motifValue = motifSelect.value;
+    
+    if (motifValue === '') {
+        alert('Veuillez sélectionner un motif de présence avant de continuer.');
+        return false;
+    }
+    
+    // Vérifier s'il existe déjà une affectation pour ce type de traitement
+    const patientId = new URLSearchParams(window.location.search).get('id_patient');
+    
+    // Afficher une notification Bootstrap pour confirmer
+    const confirmMessage = 'Êtes-vous sûr de vouloir affecter ce patient à ce traitement ? Si une affectation existe déjà, elle sera mises à jour.';
+    
+    if (!confirm(confirmMessage)) {
+        event.preventDefault();
+        return false;
+    }
+    
+    return true;
+}
+</script>
