@@ -18,7 +18,7 @@ try {
     }
     
     // Construire la requête SQL
-    $sql = "SELECT DISTINCT dr.traitant AS id, 
+    $sql = "SELECT dr.traitant AS id, 
             COALESCE(u.pseudo, CONCAT('#', dr.traitant)) AS pseudo
             FROM dmd_rendez_vous dr
             LEFT JOIN users u ON u.id = dr.traitant
