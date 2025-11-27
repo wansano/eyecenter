@@ -56,7 +56,7 @@ $errors=0;
 										?>
 									</select>
 								</div>
-								<div class="col-sm-3 col-md-2">
+								<div class="col-sm-4 col-md-2">
 									<button id="btnPrintRdv" class="btn btn-primary w-100" type="button">Imprimer les RDV du jour</button>
 								</div>
 							</form>
@@ -174,8 +174,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		var possibleUrls = [
 			apiBase + '?date=' + encodeURIComponent(d),
 			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
-			'../../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
-			'/APPECv3PHP/pages/apps/public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d)
+			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
+			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d)
 		];
 		
 		var lastError = null;
