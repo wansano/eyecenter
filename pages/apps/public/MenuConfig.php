@@ -444,6 +444,7 @@ class MenuConfig {
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="ajoutrdv.php">Ajouter un rendez-vous</a></li>
                 <li><a class="nav-link" href="convocation.php">Liste des rendez-vous</a></li>
+                <li><a class="nav-link" href="rechercheinformation.php">Recherche patient</a></li>
             </ul>
         </li>
         <li class="dropdown">
