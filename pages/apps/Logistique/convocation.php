@@ -5,17 +5,6 @@ session_start();
 $errors=0;
 
 	include('../PUBLIC/header.php');
-	// Construit l'URL absolue de l'endpoint getMedecinsRdvByDate de façon dynamique
-	try {
-		$scriptDir = dirname($_SERVER['SCRIPT_NAME']); // /APPECv3PHP/pages/apps/logistique
-		$appsDir = dirname($scriptDir);               // /APPECv3PHP/pages/apps
-		$apiGetMedecinsPath = $appsDir . '/public/getMedecinsRdvByDate.php';
-		$scheme = (!empty($_SERVER['REQUEST_SCHEME'])) ? $_SERVER['REQUEST_SCHEME'] : ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
-		$host = $_SERVER['HTTP_HOST'] ?? '';
-		$apiGetMedecinsUrl = ($host ? ($scheme . '://' . $host) : '') . $apiGetMedecinsPath;
-	} catch (Throwable $e) {
-		$apiGetMedecinsUrl = '/APPECv3PHP/pages/apps/public/getMedecinsRdvByDate.php';
-	}
   ?>
 	<body>
 		<section class="body">
@@ -167,15 +156,10 @@ document.addEventListener('DOMContentLoaded', function() {
 		console.log('Rechargement des médecins pour la date:', d);
 		resetSelect(sel, '-- Choisir un médecin --');
 		
-		// URL serveur calculée côté PHP (prioritaire)
-		var apiBase = <?php echo json_encode($apiGetMedecinsUrl); ?>;
-		
-		// Essayer plusieurs chemins possibles, en priorité l'URL absolue calculée
+		// Essayer plusieurs chemins possibles
 		var possibleUrls = [
-			apiBase + '?date=' + encodeURIComponent(d),
-			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
-			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d),
-			'../public/getMedecinsRdvByDate.php?date='+encodeURIComponent(d)
+			'../public/getMedecinsRdvByDate.php?date=' + encodeURIComponent(d),
+			'/APPECv3PHP/pages/apps/public/getMedecinsRdvByDate.php?date=' + encodeURIComponent(d)
 		];
 		
 		var lastError = null;
