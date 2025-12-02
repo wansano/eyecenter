@@ -4,19 +4,24 @@ include('../PUBLIC/fonction.php');
 include('../PUBLIC/medecin_ieu.php');
 session_start();
 
+$existe = 0; 
+$errors = 0;
+$affectation = null;
+$data = null;
+$id_patient = null;
+$type = null;
+
 try {
     // Vérification des paramètres
     if (!isset($_GET['affectation'])) {
         throw new Exception("ID d'affectation manquant");
     }
 
-    $existe = 0; 
-    $errors = 0;
-    $affectation = $_GET['affectation'];
+    $affectation = (int)$_GET['affectation'];
     
     // Récupération des données en une seule requête
     $stmt = $bdd->prepare('
-        SELECT a.*, p.nom_patient, p.responsable 
+        SELECT a.*, p.nom_patient, p.responsable
         FROM affectations a
         JOIN patients p ON a.id_patient = p.id_patient
         WHERE a.id_affectation = ?
@@ -28,37 +33,118 @@ try {
         throw new Exception("Affectation non trouvée");
     }
 
-    // Extraction des données
     extract($data);
+    $type = (int)$type;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['consulter'])) {
+        // Validation des champs obligatoires
+        $champsObligatoires = ['diagnostic', 'traitement', 'protocole', 'prescription', 'glycemie', 'date_chirurgie'];
+        $champsManquants = array_filter($champsObligatoires, function($champ) {
+            return empty($_POST[$champ]);
+        });
 
-    // Traitement du formulaire
-    if (isset($_POST['consulter']) && !empty($_POST['traitement']) && !empty($_POST['protocole']) && !empty($_POST['diagnostic']) && !empty($_POST['prescription']) && !empty($_POST['avlscod']) && !empty($_POST['avlscos'])) {
+        if (!empty($champsManquants)) {
+            throw new Exception("Champs obligatoires manquants: " . implode(', ', $champsManquants));
+        }
+
         // Vérification si déjà traité
-        $existe = checkTraitementExisteChirurgie($bdd, $affectation);
-
-        if ($existe == 0) {
+        if (checkTraitementExisteChirurgie($bdd, $affectation)) {
+            $existe = 1;
+        } else {
             $bdd->beginTransaction();
             
             try {
-                insertAcquitteVisuelle($bdd, $id_patient, $affectation, $_POST);
-                insertChirurgie($bdd, $id_patient, $type, $affectation, $_POST);
-                updateAffectationStatus($bdd, $affectation);
-
-                if (!empty($_POST['prochain_rdv'])) {
-                    insererRendezVousInterne($bdd, $id_patient, $_POST['service'], $_POST['type'], $_POST['medecin'], $_POST['prochain_rdv']);
+                // Traitement des fichiers (optionnels)
+                $fileData = handleMedicalFiles();
+                
+                // Préparation des données POST avec fichiers
+                $postData = array_merge($_POST, $fileData);
+                
+                // Vérification que l'utilisateur est authentifié
+                if (empty($_SESSION['auth'])) {
+                    throw new Exception("Utilisateur non authentifié. Reconnexion requise.");
                 }
+                
+                // Insertion des enregistrements
+                insertChirurgie($bdd, $id_patient, $type, $affectation, $postData);
+                insertGlycemie($bdd, $affectation, $postData);
+                updateAffectationStatus($bdd, $affectation);
 
                 $bdd->commit();
                 $errors = 4;
             } catch (Exception $e) {
                 $bdd->rollBack();
-                error_log("Erreur lors du traitement de la consultation : " . $e->getMessage());
-                $errors = 1;
+                error_log("Erreur lors du traitement de la chirurgie: " . $e->getMessage());
+                $errors = $e->getMessage();
             }
         }         
     }  
 } catch (Exception $e) {
     $errors = $e->getMessage();
+}
+
+function handleMedicalFiles() {
+    $result = ['biometrie' => null, 'echographie' => null];
+    
+    // Chemin exact demandé : pages/apps/documents/biometrieEchographie/
+    $uploadDir = __DIR__ . '/../documents/biometrieEchographie/';
+    
+    // Créer le dossier s'il n'existe pas
+    if (!is_dir($uploadDir)) {
+        if (!@mkdir($uploadDir, 0777, true)) {
+            error_log("Impossible de créer le dossier: $uploadDir");
+            return $result;
+        }
+    }
+    
+    // Vérifier les permissions d'écriture
+    if (!is_writable($uploadDir)) {
+        error_log("Pas de permissions d'écriture sur: $uploadDir");
+        return $result;
+    }
+
+    $fileFields = ['biometrie', 'echographie'];
+    
+    foreach ($fileFields as $field) {
+        if (isset($_FILES[$field]) && $_FILES[$field]['error'] !== UPLOAD_ERR_NO_FILE) {
+            // Traiter les erreurs d'upload - ne pas lever d'exception, les fichiers sont optionnels
+            if ($_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
+                error_log("Erreur upload optionnel $field: " . $_FILES[$field]['error']);
+                continue;
+            }
+            
+            $file = $_FILES[$field];
+            
+            // Vérifier que le fichier temporaire existe
+            if (!file_exists($file['tmp_name'])) {
+                error_log("Fichier temporaire $field introuvable");
+                continue;
+            }
+            
+            // Valider le type MIME
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            
+            if ($mimeType !== 'application/pdf') {
+                error_log("Le fichier $field n'est pas un PDF valide (type: $mimeType)");
+                continue;
+            }
+            
+            // Générer un nom sécurisé
+            $filename = uniqid($field . '_', true) . '.pdf';
+            $filepath = $uploadDir . $filename;
+            
+            // Déplacer le fichier
+            if (@move_uploaded_file($file['tmp_name'], $filepath) && file_exists($filepath)) {
+                $result[$field] = $filename;
+                error_log("Fichier $field sauvegardé: $filepath");
+            } else {
+                error_log("Impossible de sauvegarder le fichier optionnel $field vers $filepath");
+            }
+        }
+    }
+    
+    return $result;
 }
 
 include('../PUBLIC/header.php');   
@@ -80,190 +166,106 @@ include('../PUBLIC/header.php');
                     <section class="card">
                         <div class="card-body">
                             <?php
-                                        if ($errors==4) {
-                                            echo '
-                                                <div class="alert alert-success">
-                                                <strong>'.model($type).' de '.nom_patient($id_patient).' validé avec succès </strong> <br/> 
-                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="traitementdata.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
-                                                </div>
-                                                ';
-                                                    }
-                                            if ($existe==1) {
-                                            echo '
-                                                <div class="alert alert-danger">
-                                                    <strong>Erreur de validation de '.model($type).'  de '.nom_patient($id_patient).'</strong> <br/>  
-                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="traitementdata.php?affectation='.$affectation.'" target="_blank">d\'imprimer les données</a></li>
-                                                </div>
-                                                ';}
-                                    ?>
-                                <div class="row form-group pb-3">
-                                <div class="col-md-6">
-                                    <div class="alert alert-info">
-                                        <?php 
-                                        $accu = $bdd->prepare('SELECT * FROM acquitte_visuelle WHERE id_patient=? ORDER BY id_acquitte DESC LIMIT 0,1');
-                                        $accu->execute(array($id_patient));
-                                            while ($accuite = $accu->fetch(PDO::FETCH_ASSOC))
-                                            { 
-                                                $hist = $bdd->prepare('SELECT * FROM historique WHERE id_patient=? ORDER BY id_historique DESC LIMIT 0,1');
-                                                $hist->execute(array($id_patient));
-                                                while ($historique = $hist->fetch(PDO::FETCH_ASSOC))
-                                                    {
-                                        echo '<li><strong>Dernière accuité visuelle : </strong> <br/> <b>AVLSC : </b>   OD='.($accuite['od_avlsc'] ?: '........').'   OS='.($accuite['os_avlsc'] ?: '........').'       <b>AVC : </b>  OD='.($accuite['od_avc'] ?: '........').'   OS='.($accuite['os_avc'] ?: '........').'        <b>TS : </b>  OD='.($accuite['od_ts'] ?: '........').'   OS='.($accuite['os_ts'] ?: '........').'       <b>P : </b> '.($accuite['p'] ?: '........').'</li>';
-                                        }
-                                        }
-                                        ?>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="alert alert-info">
-                                        <?php
-                                        $accu = $bdd->prepare('SELECT * FROM acquitte_visuelle WHERE id_patient=? ORDER BY id_acquitte DESC LIMIT 0,1');
-                                        $accu->execute(array($id_patient));
-                                            while ($accuite = $accu->fetch(PDO::FETCH_ASSOC))
-                                            { 
-                                                $hist = $bdd->prepare('SELECT * FROM historique WHERE id_patient=? ORDER BY id_historique DESC LIMIT 0,1');
-                                                $hist->execute(array($id_patient));
-                                                while ($historique = $hist->fetch(PDO::FETCH_ASSOC))
-                                                    { echo '<strong>Motif : </strong>'.$historique['motif'].'; <strong>Evolution : </strong>'.$historique['evolution'].'; <br/> <strong>Terrain :</strong> '.$historique['terrain'].'; <strong>Antecedents : </strong>'.$historique['antecedents'].''; } 
-                                            }   
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
+                                if ($errors === 4) {
+                                    echo '
+                                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                            <strong>succès</strong> <br/>
+                                            Les informations relatives à la chirurgie de '.htmlspecialchars(nom_patient($id_patient)).' ont été enregistrées. 
+                                            <a href="imprimer_chirurgie.php?affectation='.$affectation.'" target="_blank" class="alert-link">imprimer les données</a>
+                                        </div>
+                                    ';
+                                }
+                                if ($existe === 1) {
+                                    echo '
+                                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                            <strong>Attention</strong> <br/>
+                                            Cette chirurgie a déjà été approuvée ou traitée. Il est également possible <a href="imprimer_chirurgie.php?affectation='.$affectation.'" target="_blank" class="alert-link">d\'imprimer les données</a>
+                                        </div>
+                                    ';
+                                }
+                                if (is_string($errors) && $errors !== '0' && $errors !== '1' && $errors !== '4') {
+                                    echo '
+                                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                            <strong>Erreur</strong> <br/>
+                                            '.htmlspecialchars($errors).'
+                                        </div>
+                                    ';
+                                }
+                            ?>
+                            <?php include __DIR__ . '/../public/acquitehistorique.php'; ?>
                             <!-- Formulaire de consultation -->
-                            <form class="form-horizontal" novalidate="novalidate" method="POST"
-                                action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?affectation=<?php echo $affectation; ?>" enctype="multipart/form-data">
-                                <input type="hidden" name="consulter" value="<?php $id_affectation ?>">
-                                <div class="row form-group pb-3">                                    
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">AVLSC OD</label>
-                                            <input type="text" maxlength="9" name="avlscod" class="form-control" placeholder="Obligatoire" required value="<?php echo getFormValue('avlscod'); ?>">
+                            <form class="form-horizontal" id="chirurgieForm" method="POST"
+                                action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?affectation=<?php echo htmlspecialchars($affectation); ?>" enctype="multipart/form-data">
+                                <input type="hidden" name="consulter" value="1">
+                                
+                                <!-- Section Acuité Visuelle et Glycémie -->
+                                <fieldset class="mb-4">
+                                    <div class="row form-group pb-3">
+                                        <div class="col-md-2">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Resultat Glycémie <span class="text-danger">*</span></label>
+                                                <input type="text" name="glycemie" class="form-control" placeholder="Ex: 100 mg/dL" required value="<?php echo htmlspecialchars(getFormValue('glycemie')); ?>">
+                                            </div>
+                                        </div>                              
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Kerato Biométrie <span class="text-muted">(Optionnel)</span></label>
+                                                <input type="file" name="biometrie" id="biometrie" class="form-control" accept=".pdf">
+                                                <small class="form-text text-muted">Format: PDF uniquement</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Échographie <span class="text-muted">(Optionnel)</span></label>
+                                                <input type="file" name="echographie" id="echographie" class="form-control" accept=".pdf">
+                                                <small class="form-text text-muted">Format: PDF uniquement</small>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">AVLSC OS</label>
-                                            <input type="text" maxlength="9" name="avlscos" class="form-control" placeholder="Obligatoire" required value="<?php echo getFormValue('avlscos'); ?>">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">AVC OD</label>
-                                            <input type="text" name="avcod" class="form-control" placeholder="Facultatif" value="<?php echo getFormValue('avcod'); ?>">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">AVC OS</label>
-                                            <input type="text" name="avcos" class="form-control" placeholder="Facultatif" value="<?php echo getFormValue('avcos'); ?>">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">TS OD</label>
-                                            <input type="text" name="tsod" class="form-control" placeholder="Facultatif" value="<?php echo getFormValue('tsod'); ?>">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">TS OS</label>
-                                            <input type="text" name="tsos" class="form-control" placeholder="Facultatif" value="<?php echo getFormValue('tsos'); ?>">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">P</label>
-                                            <input type="text" name="p" class="form-control" placeholder="Facultatif" value="<?php echo getFormValue('p'); ?>">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="row form-group pb-3">                                    
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Diagnostic</label>
-                                            <textarea name="diagnostic" class="form-control" rows="3" placeholder="Obligatoire" required><?php echo getFormValue('diagnostic'); ?></textarea>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Traitement</label>
-                                            <textarea name="traitement" class="form-control" rows="3" placeholder="Facultatif" required><?php echo getFormValue('traitement'); ?></textarea>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Protocole</label>
-                                            <textarea name="protocole" class="form-control" rows="3" placeholder="Facultatif" required><?php echo getFormValue('protocole'); ?></textarea>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Prescription</label>
-                                            <textarea name="prescription" class="form-control" rows="3" placeholder="Obligatoire" required><?php echo getFormValue('prescription'); ?></textarea>
-                                        </div>
-                                    </div>
-                                </div>
+                                </fieldset>
 
-                                <div class="row form-group pb-3">
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Service</label>
-                                            <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs()">
-                                                <option value=""> ------ service ----- </option>';
-                                                    <?php $coll = $bdd->prepare('SELECT * FROM services WHERE status = ?');
-                                                    $coll -> execute([1]);
-                                                    while ($services = $coll->fetch(PDO::FETCH_ASSOC))
-                                                    {
-                                                        echo '<option value="'.$services['id_service'].'">'.$services['nom_service'].'</option>';
-                                                    } ?>
-                                                </option>
-                                            </select>
+                                <!-- Section Diagnostique et Traitement -->
+                                <fieldset class="mb-4">
+                                    <div class="row form-group pb-3">                                    
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Diagnostic <span class="text-danger">*</span></label>
+                                                <textarea name="diagnostic" class="form-control" rows="4" placeholder="Décrivez le diagnostic" required><?php echo htmlspecialchars(getFormValue('diagnostic')); ?></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Traitement <span class="text-danger">*</span></label>
+                                                <textarea name="traitement" class="form-control" rows="4" placeholder="Décrivez le traitement proposé" required><?php echo htmlspecialchars(getFormValue('traitement')); ?></textarea>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Motif </label>
-                                            <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice()" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
-                                                <option value=""> ------ Choisir un service d'abord ----- </option>
-                                            </select>
-                                            <input type="hidden" id="hiddenMotifId" name="motif_id" value="">
+                                    
+                                    <div class="row form-group pb-3">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Protocole <span class="text-danger">*</span></label>
+                                                <textarea name="protocole" class="form-control" rows="4" placeholder="Décrivez le protocole suivi" required><?php echo htmlspecialchars(getFormValue('protocole')); ?></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Prescription <span class="text-danger">*</span></label>
+                                                <textarea name="prescription" class="form-control" rows="4" placeholder="Décrivez la prescription" required><?php echo htmlspecialchars(getFormValue('prescription')); ?></textarea>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Medecin</label>
-                                            <select name="medecin" data-plugin-selectTwo class="form-control populate" data-plugin-options='{ "minimumInputLength": 0 }'>
-                                                <optgroup label="Choisir le medecin">
-                                                    <option value=""> --- Choisir le medecin --- </option>
-                                                    <?php
-                                                    $med = $bdd->prepare('SELECT id, pseudo FROM users WHERE type="medecin" AND status=1');
-                                                    $med->execute();
-                                                    while ($medecin = $med->fetch(PDO::FETCH_ASSOC)) {
-                                                        $selected = (isset($_POST['medecin']) && $_POST['medecin'] == $medecin['id']) ? 'selected' : '';
-                                                        echo '<option value="' . $medecin['id'] . '" ' . $selected . '>' . htmlspecialchars($medecin['pseudo']) . '</option>';
-                                                    }
-                                                    ?>
-                                                </optgroup>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Date prochain rendez-vous</label>
-                                            <input type="date" class="form-control mb-2" name="date_rdv" id="dateRdvInput" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Créneau disponible</label>
-                                            <select name="prochain_rdv" class="form-control" id="creneauSelect" required>
-                                                <option value="">-- Choisir un créneau disponible --</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
 
+                                    <div class="row form-group pb-3">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Date et heure chirurgie prévue <span class="text-danger">*</span></label>
+                                                <input type="datetime-local" name="date_chirurgie" id="date_chirurgie" class="form-control" placeholder="Décrivez la date prévue pour la chirurgie" required value="<?php echo htmlspecialchars(getFormValue('date_chirurgie')); ?>">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </fieldset>
                             <footer class="card-footer text-end">
                                 <button class="btn btn-primary" type="submit" name="ajouter">Valider la chirurgie</button>
                             </footer>
@@ -282,4 +284,31 @@ include('../PUBLIC/header.php');
                 };
             </script>
         <?php endif; ?>
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                // Obtenir l'input datetime-local
+                const dateInput = document.getElementById('date_chirurgie');
+                
+                if (dateInput) {
+                    // Définir la date/heure minimale à maintenant
+                    const now = new Date();
+                    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                    const minDateTime = now.toISOString().slice(0, 16);
+                    
+                    dateInput.min = minDateTime;
+                    
+                    // Validation au changement
+                    dateInput.addEventListener('change', function() {
+                        const selectedDate = new Date(this.value);
+                        const currentDate = new Date();
+                        
+                        if (selectedDate < currentDate) {
+                            alert('La date et l\'heure ne peuvent pas être dans le passé');
+                            this.value = '';
+                        }
+                    });
+                }
+            });
+        </script>
     <?php include('../PUBLIC/footer.php');?>

@@ -118,8 +118,8 @@ function insertConsultation($bdd, $id_patient, $type, $affectation, $data) {
  * Insère le traitement de chirurgie
  */
 function insertChirurgie($bdd, $id_patient, $type, $affectation, $data) {
-    $stmt = $bdd->prepare('INSERT INTO chirurgies (id_patient, id_type, id_affectation, diagnostic, traitement, protocole, prescription, traitant) 
-                          VALUES (?,?,?,?,?,?,?,?)');
+    $stmt = $bdd->prepare('INSERT INTO chirurgies (id_patient, id_type, id_affectation, diagnostic, traitement, protocole, biometrie, echographie, prescription, date_chirurgie, traitant) 
+                          VALUES (?,?,?,?,?,?,?,?,?,?,?)');
     $stmt->execute([
         $id_patient,
         $type,
@@ -127,7 +127,10 @@ function insertChirurgie($bdd, $id_patient, $type, $affectation, $data) {
         $data['diagnostic'],
         $data['traitement'],
         $data['protocole'],
+        $data['biometrie'],
+        $data['echographie'],
         $data['prescription'],
+        $data['date_chirurgie'],
         $_SESSION['auth']
     ]);
 }
@@ -145,7 +148,7 @@ function UpdateChirurgieKBECHO($bdd, $biometrie, $echographie, $affectation, $po
 function insertGlycemie($bdd, $affectation, $data) {
     $stmt = $bdd->prepare('UPDATE acquitte_visuelle SET glycemie = ? WHERE id_affectation = ?');
     $stmt->execute([
-        $data['glycemie'],
+        $data['glycemie'] ?? null,
         $affectation
     ]);
 }

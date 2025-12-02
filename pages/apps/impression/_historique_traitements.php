@@ -27,7 +27,7 @@ if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$end))   $end   = '2100-12-31';
 // Définition des tables et champs à afficher (page séparée par traitement)
 $tables = [
     ['table' => 'consultations',   'label' => 'Consultation', 'id' => 'id_affectation', 'fields' => ['diagnostic'=>'DIAGNOSTIC','bilan'=>'BILAN','traitement'=>'TRAITEMENT','prescription'=>'PRESCRIPTION']],
-    ['table' => 'chirurgies',      'label' => 'Chirurgie',    'id' => 'id_affectation', 'fields' => ['diagnostic'=>'DIAGNOSTIC','traitement'=>'TRAITEMENT','protocole'=>'PROTOCOLE','prescription'=>'PRESCRIPTION']],
+    ['table' => 'chirurgies',      'label' => 'Chirurgie',    'id' => 'id_affectation', 'fields' => ['diagnostic'=>'DIAGNOSTIC','traitement'=>'TRAITEMENT','protocole'=>'PROTOCOLE','prescription'=>'PRESCRIPTION', 'date_chirurgie'=>'DATE CHIRURGIE']],
     ['table' => 'soins',           'label' => 'Soin',         'id' => 'id_affectation', 'fields' => ['diagnostic'=>'DIAGNOSTIC','conduite'=>'CONDUITE TENUE','prescription'=>'PRESCRIPTION']],
     ['table' => 'examens',         'label' => 'Examen',       'id' => 'id_affectation', 'fields' => ['diagnostic'=>'DIAGNOSTIC','resultat'=>'RESULTAT']],
     ['table' => 'controles',       'label' => 'Contrôle',     'id' => 'id_affectation', 'fields' => ['diagnostic'=>'DIAGNOSTIC','traitement'=>'TRAITEMENT','prescription'=>'PRESCRIPTION']],
@@ -209,6 +209,29 @@ try {
                     $pdf->Cell(0,5,pdf_text($label.' :'),0,1,'L');
                     $pdf->SetFont('CenturyGothic','',9);
                     $pdf->MultiCell(0,5,pdf_text($row[$col]),0,'L');
+                    $pdf->Ln(2);
+                }
+            }
+
+            // Affichage des fichiers biometrie / echographie pour les chirurgies (avec liens cliquables)
+            if ($cfg['table'] === 'chirurgies') {
+                $pdf->SetFont('CenturyGothic','B',10);
+                $baseDir = '/APPECv3PHP/pages/apps/documents/biometrieEchographie/';
+                // Biometrie
+                if (!empty($row['biometrie'])) {
+                    $pdf->Cell(0,5,pdf_text('Fichier Biométrie :'),0,1,'L');
+                    $pdf->SetFont('CenturyGothic','',9);
+                    $link = $baseDir.$row['biometrie'];
+                    $pdf->Cell(0,5,pdf_text($row['biometrie']),0,1,'L',false,$link);
+                    $pdf->Ln(2);
+                }
+                // Echographie
+                if (!empty($row['echographie'])) {
+                    $pdf->SetFont('CenturyGothic','B',10);
+                    $pdf->Cell(0,5,pdf_text('Fichier Échographie :'),0,1,'L');
+                    $pdf->SetFont('CenturyGothic','',9);
+                    $link = $baseDir.$row['echographie'];
+                    $pdf->Cell(0,5,pdf_text($row['echographie']),0,1,'L',false,$link);
                     $pdf->Ln(2);
                 }
             }

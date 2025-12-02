@@ -22,7 +22,7 @@ try {
             $traitementModel = operation($traitement);
             switch ($traitementModel) {
                 case "1":
-                    $actionLink = 'programmerchirurgie.php';
+                    $actionLink = 'chirurgie.php';
                     break;
                 case "6":
                     $actionLink = 'rapportement.php';
