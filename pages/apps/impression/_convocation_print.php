@@ -57,6 +57,7 @@ try {
         // En-têtes
         $pdf->SetFont('CenturyGothic','B',11);
         $pdf->Cell(30,8,pdf_text('Heure'),1,0,'C');
+        $pdf->Cell(30,8,pdf_text('N° Dossier'),1,0,'C');
         $pdf->Cell(70,8,pdf_text('Patient'),1,0,'C');
         $pdf->Cell(40,8,pdf_text('Contact'),1,0,'C');
         $pdf->Cell(50,8,pdf_text('Motif'),1,1,'C');
@@ -64,6 +65,7 @@ try {
 
         foreach ($rdvs as $r) {
             $heure = substr($r['prochain_rdv'],11,5);
+            $dossier   = $r['id_patient'];
             $nom   = nom_patient($r['id_patient']);
             $tel   = return_phone($r['id_patient']);
             $motif = type_traitement($r['motif']);
