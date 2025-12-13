@@ -56,7 +56,7 @@ try {
     } else {
         // En-têtes
         $pdf->SetFont('CenturyGothic','B',11);
-        $pdf->Cell(30,8,pdf_text('Heure'),1,0,'C');
+        $pdf->Cell(20,8,pdf_text('Heure'),1,0,'C');
         $pdf->Cell(30,8,pdf_text('N° Dossier'),1,0,'C');
         $pdf->Cell(70,8,pdf_text('Patient'),1,0,'C');
         $pdf->Cell(40,8,pdf_text('Contact'),1,0,'C');
@@ -64,14 +64,15 @@ try {
         $pdf->SetFont('CenturyGothic','',10);
 
         foreach ($rdvs as $r) {
-            $heure = substr($r['prochain_rdv'],11,5);
-            $dossier   = $r['id_patient'];
-            $nom   = nom_patient($r['id_patient']);
-            $tel   = return_phone($r['id_patient']);
-            $motif = type_traitement($r['motif']);
+            $heure   = substr($r['prochain_rdv'],11,5);
+            $dossier = $r['id_patient'];
+            $nom     = nom_patient($r['id_patient']);
+            $tel     = return_phone($r['id_patient']);
+            $motif   = type_traitement($r['motif']);
 
-            // Gestion du retour à la ligne pour les longues valeurs
-            $pdf->Cell(30,7,pdf_text($heure),1,0,'C');
+            // Respecte les largeurs d'en-tête: 20 | 30 | 70 | 40 | 50
+            $pdf->Cell(20,7,pdf_text($heure),1,0,'C');
+            $pdf->Cell(30,7,pdf_text($dossier),1,0,'C');
             $pdf->Cell(70,7,pdf_text(mb_strimwidth($nom,0,40,'…','UTF-8')),1,0,'L');
             $pdf->Cell(40,7,pdf_text(mb_strimwidth($tel,0,20,'','UTF-8')),1,0,'L');
             $pdf->Cell(50,7,pdf_text(mb_strimwidth($motif,0,30,'…','UTF-8')),1,1,'L');
