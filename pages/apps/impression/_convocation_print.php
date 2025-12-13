@@ -73,9 +73,9 @@ try {
             // Respecte les largeurs d'en-tête: 20 | 30 | 70 | 40 | 50
             $pdf->Cell(20,7,pdf_text($heure),1,0,'C');
             $pdf->Cell(30,7,pdf_text($dossier),1,0,'C');
-            $pdf->Cell(70,7,pdf_text(mb_strimwidth($nom,0,40,'…','UTF-8')),1,0,'L');
-            $pdf->Cell(40,7,pdf_text(mb_strimwidth($tel,0,20,'','UTF-8')),1,0,'L');
-            $pdf->Cell(50,7,pdf_text(mb_strimwidth($motif,0,30,'…','UTF-8')),1,1,'L');
+            $pdf->Cell(50,7,pdf_text(mb_strimwidth($nom,0,40,'…','UTF-8')),1,0,'L');
+            $pdf->Cell(30,7,pdf_text(mb_strimwidth($tel,0,20,'','UTF-8')),1,0,'L');
+            $pdf->Cell(40,7,pdf_text(mb_strimwidth($motif,0,30,'…','UTF-8')),1,1,'L');
         }
     }
 
