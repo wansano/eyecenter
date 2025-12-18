@@ -32,7 +32,7 @@ $errors=0;
 										<?php
 										try {
 											$today = date('Y-m-d');
-											$st = $bdd->prepare("SELECT traitant FROM dmd_rendez_vous WHERE DATE(prochain_rdv) = :datejour AND status IN (0,1,2) ORDER BY traitant");
+											$st = $bdd->prepare("SELECT DISTINCT traitant FROM dmd_rendez_vous WHERE DATE(prochain_rdv) = :datejour AND status IN (0,1,2) ORDER BY traitant");
 											$st->execute(['datejour' => $today]);
 											while ($row = $st->fetch(PDO::FETCH_ASSOC)) {
 												$idMed = (int)$row['traitant'];
