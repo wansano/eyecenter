@@ -523,7 +523,7 @@ class DossierPatientPDF extends PDF {
         
         $html = '<table align="center">
 <hr widht="50px"/>
-    <tr><td>Patient : ' . utf8_decode($this->patient['nom_patient'] . '    Né(e) en : ' . $anneeNaissance . '    Genre : ' . $this->patient['sexe'] . '  Téléphone : ' . $telephone) . '</td></tr>
+<tr><td>Patient : ' . utf8_decode($this->patient['nom_patient'] . '    Né(e) en : ' . $anneeNaissance . '    Genre : ' . $this->patient['sexe'] . '  Téléphone : ' . $telephone) . '</td></tr>
 <tr><td>Adresse : ' . utf8_decode(adress($this->patient['adresse']) ?: $this->patient['adresse']) . '    Profession : ' . utf8_decode($this->patient['profession']) . '</td></tr>
 <tr><hr widht="50px"/> 
 <td>Motif de consultation : ....................................................................................................................................................<br>...........................................................................................................................................................................................</td></tr>
@@ -562,7 +562,7 @@ try {
     $pdf->generateHeader();
     $pdf->generatePatientInfo();
     $pdf->generateFooter();
-    $pdf->generateHealthCardPage();
+    //$pdf->generateHealthCardPage();
     $filename = 'DOSSIER DU PATIENT PAT-' . $_GET['id_patient'] . '.pdf';
     $pdf->Output($filename, 'I');
     
