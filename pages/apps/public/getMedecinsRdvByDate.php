@@ -17,13 +17,16 @@ try {
         throw new Exception('Format de date invalide: ' . $date);
     }
     
-    // Construire la requête SQL
-    $sql = "SELECT dr.traitant AS id, 
-            COALESCE(u.pseudo, CONCAT('#', dr.traitant)) AS pseudo
-            FROM dmd_rendez_vous dr
-            LEFT JOIN users u ON u.id = dr.traitant
-            WHERE DATE(dr.prochain_rdv) = :date AND dr.status IN (0,1,2)
-            ORDER BY u.pseudo";
+        // Construire la requête SQL (déduplique les traitants)
+        $sql = "SELECT
+                                dr.traitant AS id,
+                                MIN(COALESCE(u.pseudo, CONCAT('#', dr.traitant))) AS pseudo
+                        FROM dmd_rendez_vous dr
+                        LEFT JOIN users u ON u.id = dr.traitant
+                        WHERE DATE(dr.prochain_rdv) = :date
+                            AND dr.status IN (0,1,2)
+                        GROUP BY dr.traitant
+                        ORDER BY pseudo";
     
     // Préparer et exécuter
     $st = $bdd->prepare($sql);

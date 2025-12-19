@@ -7,6 +7,44 @@ require_once('../public/connect.php');
 require_once('../public/fonction.php');
 session_start();
 
+function formatPhoneDisplayConvocation($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+        return '';
+    }
+
+    // Si plusieurs numéros sont fournis, prendre le premier
+    $parts = preg_split('/[;,\|\/]+/', $raw);
+    if (is_array($parts) && isset($parts[0])) {
+        $raw = trim((string)$parts[0]);
+    }
+
+    $digits = preg_replace('/\D+/', '', $raw);
+    $digits = (string)$digits;
+    if ($digits === '') {
+        return '';
+    }
+
+    // Retirer indicatifs courants (ex: +224 / 00224 / 224)
+    if (substr($digits, 0, 5) === '00224') {
+        $digits = substr($digits, 5);
+    } elseif (substr($digits, 0, 3) === '224' && strlen($digits) > 9) {
+        $digits = substr($digits, 3);
+    }
+
+    // Format attendu: 9 chiffres => 3-2-2-2 (ex: 620 00 00 00)
+    if (strlen($digits) > 9) {
+        $digits = substr($digits, -9);
+    }
+
+    if (strlen($digits) === 9) {
+        return substr($digits, 0, 3) . ' ' . substr($digits, 3, 2) . ' ' . substr($digits, 5, 2) . ' ' . substr($digits, 7, 2);
+    }
+
+    // Fallback: grouper par 2
+    return trim(chunk_split($digits, 2, ' '));
+}
+
 $date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 $medecinId = isset($_GET['medecin']) ? (int)$_GET['medecin'] : 0;
 
@@ -67,7 +105,7 @@ try {
             $heure   = substr($r['prochain_rdv'],11,5);
             $dossier = $r['id_patient'];
             $nom     = nom_patient($r['id_patient']);
-            $tel     = return_phone($r['id_patient']);
+            $tel     = formatPhoneDisplayConvocation(return_phone($r['id_patient']));
             $motif   = type_traitement($r['motif']);
 
             // Respecte les largeurs d'en-tête: 20 | 30 | 70 | 40 | 50
