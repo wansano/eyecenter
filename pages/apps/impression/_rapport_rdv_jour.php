@@ -177,10 +177,12 @@ try {
 
     $pdf = new PDF('P','mm','A4');
     $pdf->AliasNbPages();
+    // Marges + saut de page automatique: évite que les dernières lignes soient coupées en bas
+    $pdf->SetMargins(10, 10, 10);
+    $pdf->SetAutoPageBreak(true, 20);
     $pdf->AddPage();
     $pdf->AddFont('CenturyGothic', '', 'CenturyGothic.php');
     $pdf->AddFont('CenturyGothic','B','CenturyGothic_bold.php');
-    $pdf->SetAutoPageBreak(true, -15);
 
     // Entête entreprise
     $profil = $bdd->prepare('SELECT * FROM profil_entreprise LIMIT 1');
@@ -197,7 +199,7 @@ try {
     // Tableau récapitulatif des statistiques
     $pdf->SetFont('CenturyGothic','B',11);
     $pdf->SetFillColor(242, 242, 242);
-    $pdf->Cell(0,7,pdf_text('STATISTIQUES'),0,1,'L', false);
+    $pdf->Cell(0,7,pdf_text('STATISTIQUES'),0,1,'L', true);
     $pdf->Ln(1);
 
     renderStatCards($pdf, [
