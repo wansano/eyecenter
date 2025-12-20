@@ -56,8 +56,8 @@ function renderRdvTable(PDF $pdf, string $title, array $rows): void {
     $pdf->SetFont('CenturyGothic', 'B', 10);
     $pdf->Cell(18, 7, pdf_text('Heure'), 1, 0, 'C');
     $pdf->Cell(18, 7, pdf_text('PAT-N°'), 1, 0, 'C');
-    $pdf->Cell(70, 7, pdf_text('Patient'), 1, 0, 'C');
-    $pdf->Cell(44, 7, pdf_text('Médecin'), 1, 0, 'C');
+    $pdf->Cell(65, 7, pdf_text('Patient'), 1, 0, 'C');
+    $pdf->Cell(50, 7, pdf_text('Médecin'), 1, 0, 'C');
     $pdf->Cell(40, 7, pdf_text('Motif'), 1, 1, 'C');
 
     $pdf->SetFont('CenturyGothic', '', 9);
@@ -77,8 +77,8 @@ function renderRdvTable(PDF $pdf, string $title, array $rows): void {
 
         $pdf->Cell(18, 6, pdf_text($heure), 1, 0, 'C');
         $pdf->Cell(18, 6, pdf_text($dossier), 1, 0, 'C');
-        $pdf->Cell(70, 6, pdf_text(mb_strimwidth((string)$nom, 0, 40, '…', 'UTF-8')), 1, 0, 'L');
-        $pdf->Cell(44, 6, pdf_text(mb_strimwidth((string)$medecin, 0, 36, '…', 'UTF-8')), 1, 0, 'L');
+        $pdf->Cell(65, 6, pdf_text(mb_strimwidth((string)$nom, 0, 48, '…', 'UTF-8')), 1, 0, 'L');
+        $pdf->Cell(50, 6, pdf_text(mb_strimwidth((string)$medecin, 0, 32, '…', 'UTF-8')), 1, 0, 'L');
         $pdf->Cell(40, 6, pdf_text(mb_strimwidth((string)$motif, 0, 28, '…', 'UTF-8')), 1, 1, 'L');
     }
     $pdf->Ln(4);
