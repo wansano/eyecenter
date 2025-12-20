@@ -938,6 +938,9 @@ function GetPageHeight()
 	return $this->h;
 }
 
+/**
+ * @return float
+ */
 function GetX()
 {
 	// Get x position
@@ -953,6 +956,9 @@ function SetX($x)
 		$this->x = $this->w+$x;
 }
 
+/**
+ * @return float
+ */
 function GetY()
 {
 	// Get y position
