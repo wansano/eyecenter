@@ -110,8 +110,8 @@ include('../PUBLIC/header.php');
                                             <select name="refraction" data-plugin-selectTwo class="form-control populate" data-plugin-options="{ "minimumInputLength": 2 }" value="<?php echo getFormValue('refraction'); ?>" required>
                                                 <optgroup label="Choisir le type de réfraction">
                                                     <option value="Vision de près">Vision de près</option>
-                                                    <option value="Vision de loin">Vision de loin</option>
-                                                    <option value="Vision de loin et de près">Vision de loin et de près</option>
+                                                    <option value="Vision de loin" selected>Vision de loin</option>
+                                                    <option value="Progressif">Progressif</option>
                                                 </optgroup>
                                             </select>
                                         </div>
