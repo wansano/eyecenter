@@ -54,11 +54,13 @@ function renderRdvTable(PDF $pdf, string $title, array $rows): void {
 
     // En-têtes : 18 | 18 | 70 | 44 | 40 = 190mm
     $pdf->SetFont('CenturyGothic', 'B', 10);
-    $pdf->Cell(18, 7, pdf_text('Heure'), 1, 0, 'C');
-    $pdf->Cell(18, 7, pdf_text('PAT-N°'), 1, 0, 'C');
-    $pdf->Cell(65, 7, pdf_text('Patient'), 1, 0, 'C');
-    $pdf->Cell(50, 7, pdf_text('Médecin'), 1, 0, 'C');
-    $pdf->Cell(40, 7, pdf_text('Motif'), 1, 1, 'C');
+    // Couleur fine (gris clair) sur les en-têtes
+    $pdf->SetFillColor(242, 242, 242);
+    $pdf->Cell(18, 7, pdf_text('Heure'), 1, 0, 'C', true);
+    $pdf->Cell(18, 7, pdf_text('PAT-N°'), 1, 0, 'C', true);
+    $pdf->Cell(65, 7, pdf_text('Patient'), 1, 0, 'C', true);
+    $pdf->Cell(50, 7, pdf_text('Médecin'), 1, 0, 'C', true);
+    $pdf->Cell(40, 7, pdf_text('Motif'), 1, 1, 'C', true);
 
     $pdf->SetFont('CenturyGothic', '', 9);
     foreach ($rows as $r) {
@@ -90,7 +92,9 @@ function renderStatCards(PDF $pdf, array $items): void {
         return;
     }
 
-    $cols = 5;
+    $count = count($items);
+    // 5 items -> 1 ligne de 5, 6+ -> 2 lignes de 3 (plus lisible)
+    $cols = ($count <= 5) ? $count : 3;
     $cellW = 190 / $cols;
     // Plus haut pour que les libellés longs (ex: "N'ont pas payé") tiennent sur 2 lignes
     $labelH = 7;
@@ -106,6 +110,11 @@ function renderStatCards(PDF $pdf, array $items): void {
 
         $x = $pdf->GetX();
         $y = $pdf->GetY();
+
+        // Couleur fine sur l'en-tête (zone label)
+        $pdf->SetFillColor(242, 242, 242);
+        $pdf->Rect($x, $y, $cellW, $labelH, 'F');
+
         // Bordure cellule
         $pdf->Rect($x, $y, $cellW, $cellH);
         // Séparateur entre label et valeur
@@ -141,19 +150,20 @@ try {
     // Détails RDV du jour
     $stmtList = $bdd->prepare('SELECT id_rdv, id_patient, prochain_rdv, motif, traitant, status
         FROM dmd_rendez_vous
-        WHERE DATE(prochain_rdv) = :d AND status IN (0,1,2)
+        WHERE DATE(prochain_rdv) = :d AND status IN (0,1,2,4)
         ORDER BY prochain_rdv');
     $stmtList->execute(['d' => $date]);
     $allRdvs = $stmtList->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     $stmt = $bdd->prepare('SELECT 
         COUNT(*) AS total,
-        SUM(CASE WHEN status IN (1,2) THEN 1 ELSE 0 END) AS present,
+        SUM(CASE WHEN status IN (1,2,4) THEN 1 ELSE 0 END) AS present,
         SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS absent,
-        SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS paye,
-        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS non_paye
+        SUM(CASE WHEN status IN (2,4) THEN 1 ELSE 0 END) AS paye,
+        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS non_paye,
+        SUM(CASE WHEN status = 4 THEN 1 ELSE 0 END) AS vu
         FROM dmd_rendez_vous
-        WHERE DATE(prochain_rdv) = :d AND status IN (0,1,2)'
+        WHERE DATE(prochain_rdv) = :d AND status IN (0,1,2,4)'
     );
     $stmt->execute(['d' => $date]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -163,6 +173,7 @@ try {
     $absent = (int)($row['absent'] ?? 0);
     $paye = (int)($row['paye'] ?? 0);
     $nonPaye = (int)($row['non_paye'] ?? 0);
+    $vu = (int)($row['vu'] ?? 0);
 
     $pdf = new PDF('P','mm','A4');
     $pdf->AliasNbPages();
@@ -185,15 +196,17 @@ try {
 
     // Tableau récapitulatif des statistiques
     $pdf->SetFont('CenturyGothic','B',11);
-    $pdf->Cell(0,7,pdf_text('STATISTIQUES'),0,1,'L');
+    $pdf->SetFillColor(242, 242, 242);
+    $pdf->Cell(0,7,pdf_text('STATISTIQUES'),0,1,'L', false);
     $pdf->Ln(1);
 
     renderStatCards($pdf, [
         ['label' => 'Total RDV', 'value' => $total],
-        ['label' => 'Présents', 'value' => $present],
-        ['label' => 'Absents', 'value' => $absent],
+        ['label' => 'Etaient Présents', 'value' => $present],
+        ['label' => 'Etaient Absents', 'value' => $absent],
         ['label' => 'Ont payé', 'value' => $paye],
         ['label' => 'N\'ont pas payé', 'value' => $nonPaye],
+        ['label' => 'Etaient vus par le médecin', 'value' => $vu],
     ]);
 
     // Tableaux détaillés
@@ -201,19 +214,23 @@ try {
     $absents = [];
     $payeRows = [];
     $nonPayeRows = [];
+    $vusRows = [];
     foreach ($allRdvs as $r) {
         $status = (int)($r['status'] ?? -1);
         if ($status === 0) {
             $absents[] = $r;
         }
-        if ($status === 1 || $status === 2) {
+        if ($status === 1 || $status === 2 || $status === 4) {
             $presents[] = $r;
         }
-        if ($status === 2) {
+        if ($status === 2 || $status === 4) {
             $payeRows[] = $r;
         }
         if ($status === 1) {
             $nonPayeRows[] = $r;
+        }
+        if ($status === 4) {
+            $vusRows[] = $r;
         }
     }
 
@@ -222,6 +239,7 @@ try {
     renderRdvTable($pdf, 'LISTE DES ABSENTS', $absents);
     renderRdvTable($pdf, 'LISTE DE CEUX QUI ONT PAYÉ', $payeRows);
     renderRdvTable($pdf, 'LISTE DE CEUX QUI N\'ONT PAS PAYÉ', $nonPayeRows);
+    renderRdvTable($pdf, 'LISTE DE CEUX QUI ONT ÉTÉ VUS PAR LE MÉDECIN', $vusRows);
 
     $pdf->Ln(10);
     $pdf->SetFont('CenturyGothic','',8);

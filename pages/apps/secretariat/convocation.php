@@ -195,6 +195,7 @@ $errors=0;
 											'<th class="text-center">Absents</th>'+
 											'<th class="text-center">Ont payé</th>'+
 											'<th class="text-center">N\'ont pas payé</th>'+
+											'<th class="text-center">Vus médecin</th>'+
 										'</tr>'+
 									'</thead>'+
 									'<tbody>'+
@@ -204,6 +205,7 @@ $errors=0;
 											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.absent ?? 0)+'</td>'+
 											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.paye ?? 0)+'</td>'+
 											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.non_paye ?? 0)+'</td>'+
+											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.vu ?? 0)+'</td>'+
 										'</tr>'+
 									'</tbody>'+
 								'</table>';
