@@ -23,7 +23,7 @@ $errors=0;
 							<form class="row g-2 align-items-end" onsubmit="return false;">
 								<div class="col-sm-6 col-md-2">
 									<label class="col-form-label" for="datePrintInput">Choisir la date</label>
-									<input type="date" id="datePrintInput" class="form-control" value="<?php echo date('Y-m-d'); ?>">
+									<input type="date" id="datePrintInput" class="form-control" value="<?php echo date('Y-m-d'); ?>" min="<?php echo date('Y-m-d', strtotime('-7 days')); ?>">
 								</div>
 								<div class="col-sm-6 col-md-3">
 									<label class="col-form-label" for="medecinPrintSelect">Médecin</label>
@@ -46,7 +46,10 @@ $errors=0;
 									</select>
 								</div>
 								<div class="col-sm-4 col-md-2">
-									<button id="btnPrintRdv" class="btn btn-primary w-100" type="button">Imprimer les RDV du jour</button>
+									<button id="btnPrintRdvListe" class="btn btn-info w-100" type="button" style="display:none">imprimer la liste</button>
+								</div>
+								<div class="col-sm-4 col-md-3">
+									<button id="btnRapportRdv" class="btn btn-success w-100" type="button" style="display:none">rapport rendez-vous global</button>
 								</div>
 							</form>
 						</div>
@@ -63,6 +66,27 @@ $errors=0;
 				</section>
 			</div>
 	<?php include('../PUBLIC/footer.php');?>
+
+	<!-- Modal rapport RDV du jour -->
+	<div class="modal fade" id="rapportRdvModal" tabindex="-1" role="dialog" aria-hidden="true">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Rapport des rendez-vous du jour</h5>
+					<!-- <button type="button" class="close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button> -->
+				</div>
+				<div class="modal-body">
+					<div id="rapportRdvContent">
+						Chargement...
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a id="rapportRdvPrint" class="btn btn-primary" target="_blank" rel="noopener">Imprimer le PDF pour +détails</a>
+					<button type="button" class="btn btn-default" data-dismiss="modal" data-bs-dismiss="modal">Fermer</button>
+				</div>
+			</div>
+		</div>
+	</div>
 
 <script>
 (function($) {
@@ -114,7 +138,8 @@ $errors=0;
 	$(function() {
 				initCalendar();
 				// Impression RDV du jour par médecin
-				var btn = document.getElementById('btnPrintRdv');
+				var btn = document.getElementById('btnPrintRdvListe');
+				var btnRapport = document.getElementById('btnRapportRdv');
 				var sel = document.getElementById('medecinPrintSelect');
 				var dateInput = document.getElementById('datePrintInput');
 				if (btn && sel) {
@@ -125,6 +150,90 @@ $errors=0;
 						var url = 'imprimer_listerdv.php?date='+encodeURIComponent(d)+'&medecin='+encodeURIComponent(med);
 						window.open(url, '_blank');
 					});
+				}
+
+				// Rapport RDV du jour (uniquement si le bouton existe)
+				function openModal(el){
+					if (window.bootstrap && window.bootstrap.Modal){
+						new bootstrap.Modal(el).show();
+						return;
+					}
+					if (window.jQuery && typeof jQuery(el).modal === 'function'){
+						jQuery(el).modal('show');
+					}
+				}
+				if (btnRapport){
+					btnRapport.addEventListener('click', async function(){
+						var selectedDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().slice(0,10);
+						var modalEl = document.getElementById('rapportRdvModal');
+						var contentEl = document.getElementById('rapportRdvContent');
+						var printEl = document.getElementById('rapportRdvPrint');
+						if (!modalEl || !contentEl || !printEl) return;
+
+						contentEl.textContent = 'Chargement...';
+						try {
+							const resp = await fetch('../public/getRapportRdvDuJour.php?date='+encodeURIComponent(selectedDate), { headers: { 'Accept': 'application/json' } });
+							if (!resp.ok) throw new Error('HTTP '+resp.status);
+							const data = await resp.json();
+							if (!data || !data.success){
+								throw new Error((data && data.message) ? data.message : 'Erreur');
+							}
+							if ((data.total ?? 0) <= 0){
+								contentEl.textContent = 'Aucun rendez-vous pour cette date.';
+								printEl.href = 'imprimer_rapport_rdv.php?date=' + encodeURIComponent(selectedDate);
+								openModal(modalEl);
+								return;
+							}
+							var reportDate = (data.date || selectedDate || '');
+							contentEl.innerHTML =
+								'<div class="mb-2"><strong>Date :</strong> '+reportDate+'</div>'+
+								'<table class="table table-bordered table-sm mb-0">'+
+									'<thead>'+
+										'<tr>'+
+											'<th class="text-center">Total RDV</th>'+
+											'<th class="text-center">Présents</th>'+
+											'<th class="text-center">Absents</th>'+
+											'<th class="text-center">Ont payé</th>'+
+											'<th class="text-center">N\'ont pas payé</th>'+
+										'</tr>'+
+									'</thead>'+
+									'<tbody>'+
+										'<tr>'+
+											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.total ?? 0)+'</td>'+
+											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.present ?? 0)+'</td>'+
+											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.absent ?? 0)+'</td>'+
+											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.paye ?? 0)+'</td>'+
+											'<td class="text-center" style="font-size: 18px; font-weight: 700;">'+(data.non_paye ?? 0)+'</td>'+
+										'</tr>'+
+									'</tbody>'+
+								'</table>';
+
+							printEl.href = 'imprimer_rapport_rdv.php?date=' + encodeURIComponent(data.date || selectedDate);
+							openModal(modalEl);
+						} catch(e){
+							console.error('Erreur rapport RDV:', e);
+							contentEl.textContent = 'Impossible de charger le rapport.';
+							printEl.href = 'imprimer_rapport_rdv.php?date=' + encodeURIComponent(selectedDate);
+							openModal(modalEl);
+						}
+					});
+				}
+
+				// Afficher/masquer le bouton rapport selon la date sélectionnée
+				async function refreshRapportAvailability(){
+					if (!dateInput) return;
+					var d = dateInput.value || new Date().toISOString().slice(0,10);
+					try {
+						const resp = await fetch('../public/getRapportRdvDuJour.php?date='+encodeURIComponent(d), { headers: { 'Accept': 'application/json' } });
+						if (!resp.ok) throw new Error('HTTP '+resp.status);
+						const data = await resp.json();
+						var hasRdv = (data && data.success && (data.total ?? 0) > 0);
+						if (btnRapport) btnRapport.style.display = hasRdv ? '' : 'none';
+						if (btn) btn.style.display = hasRdv ? '' : 'none';
+					} catch(e){
+						if (btnRapport) btnRapport.style.display = 'none';
+						if (btn) btn.style.display = 'none';
+					}
 				}
 
 				// Mise à jour de la liste des médecins en fonction de la date choisie
@@ -156,8 +265,10 @@ $errors=0;
 				}
 				if (dateInput){
 					dateInput.addEventListener('change', refreshMedecinsByDate);
+					dateInput.addEventListener('change', refreshRapportAvailability);
 					// Charger la liste dès l'arrivée sur la page
 					refreshMedecinsByDate();
+					refreshRapportAvailability();
 				}
 	});
 
