@@ -71,9 +71,12 @@ include('../PUBLIC/header.php');
                                 </section>
                             </div>
                         </div>'; }
-                        $id_patient = $_GET['id_patient'];
-                        if (isset($id_patient)) {
+
+                        $id_patient = $_GET['id_patient'] ?? null;
+                        if (!empty($id_patient)) {
                               $errors=0; $existe=0;
+                            $rdvDuJour = null;
+                            $rdvBloquant = 0;
                             $patient = nom_patient($id_patient);
                             $telephone = return_phone($id_patient);
                             $adresse = return_adresse($id_patient);
@@ -85,6 +88,25 @@ include('../PUBLIC/header.php');
                             $assurance = return_assurance($id_patient);
                             
                             if (isset($_POST['transmettre'])) {
+                                // Bloquer l'affectation uniquement si le patient a un rendez-vous aujourd'hui
+                                // pour le même motif/type de traitement sélectionné.
+                                try {
+                                    $selectedType = $_POST['type'] ?? null;
+                                    if (!empty($selectedType)) {
+                                        $stRdv = $bdd->prepare('SELECT id_rdv, prochain_rdv, motif FROM dmd_rendez_vous WHERE id_patient = ? AND motif = ? AND DATE(prochain_rdv) = CURDATE() AND status IN (0,1,2) ORDER BY prochain_rdv ASC LIMIT 1');
+                                        $stRdv->execute([$id_patient, $selectedType]);
+                                    } else {
+                                        $stRdv = null;
+                                    }
+                                    if ($stRdv->rowCount() > 0) {
+                                        $rdvDuJour = $stRdv->fetch(PDO::FETCH_ASSOC);
+                                        $rdvBloquant = 1;
+                                    }
+                                } catch (PDOException $e) {
+                                    error_log("Erreur lors de la vérification du RDV du jour : " . $e->getMessage());
+                                }
+
+                                if ($rdvBloquant === 0) {
                                 // Vérifier s'il existe une affectation récente (moins de 24h) pour ce type de traitement
                                 $req1 = $bdd->prepare('SELECT * FROM affectations WHERE id_patient=? AND type=? AND status IN (?, ?, ?) ORDER BY date DESC LIMIT 1');
                                 $req1->execute([$id_patient, $_POST['type'], 6, 1, 2]);
@@ -124,6 +146,7 @@ include('../PUBLIC/header.php');
 
                                 $errors=2; 
                                 }
+                                }
                             }
                         echo '
                         <div class="col-md-12">
@@ -143,6 +166,15 @@ include('../PUBLIC/header.php');
                                                 <strong>Erreur</strong> <br/>  
                                                 <li>Patient non transmis, merci de vérifier les informations saisies</li>.
                                             </div>
+                                            ';}
+                                        if ($rdvBloquant==1 && !empty($rdvDuJour)) {
+                                            echo '
+                                                <div class="alert alert-warning">
+                                                    <strong>Attention</strong><br/>
+                                                    <li>Ce patient a un rendez-vous prévu aujourd\'hui pour <strong>'.model($rdvDuJour['motif']).'</strong> (<strong>'.$rdvDuJour['prochain_rdv'].'</strong>).</li>
+                                                    <li>Veuillez faire l\'affectation à partir du calendrier des rendez-vous.</li>
+                                                    <li><a href="convocationdetails.php?rdv='.$rdvDuJour['id_rdv'].'">Ouvrir le rendez-vous</a> ou <a href="convocation.php">ouvrir le calendrier</a>.</li>
+                                                </div>
                                             ';}
                                         if ($existe==2) {
                                             echo '
