@@ -122,7 +122,7 @@ try {
     $pdf->SetFont('CenturyGothic','',8);
     $pdf->Cell(0,5,pdf_text('Généré le '.date('d/m/Y H:i').' par '.(isset($_SESSION['auth'])?traitant($_SESSION['auth']):'Système')),0,1,'R');
 
-    $pdf->Output('I','rdv_'.$date.'_medecin_'.$medecinId.'.pdf');
+    $pdf->Output('I','RdV_'.$date.'_'.traitant($medecinId).'.pdf');
     exit;
 
 } catch (Exception $e) {

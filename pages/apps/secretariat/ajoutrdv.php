@@ -377,7 +377,7 @@ require('../PUBLIC/header.php');
                                                 </select>
                                                 <input type="hidden" id="hiddenquartierId" name="quartier_id" value="">
                                             </div>
-                                            <a href="../administration/ajoutQuartier.php" target="_blank">Quartier manquant ? ajouter</a>
+                                            <a href="../technologie/ajoutQuartier.php" target="_blank">Quartier manquant ? ajouter</a>
                                         </div>
                                         <div class="col-md-5">
                                             <div class="form-group">
