@@ -89,8 +89,8 @@
 @endphp
 
     <main class="wrap">
-        <!-- <h4 class="clinic">{{ $clinicName ?? config('app.name') }}</h4> -->
-        <h2 class="clinic">{{ __('Prochain rendez-vous') }}</h2>
+        <h4 class="clinic">{{ $clinicName ?? config('app.name') }}</h4>
+        <h2 class="clinic" id="nextTitleEl" @if (empty($rdvItems)) style="display:none" @endif>{{ __('Prochain rendez-vous') }}</h2>
         <p class="empty" id="emptyEl" @if (!empty($rdvItems)) style="display:none" @endif>{{ $message ?: 'Aucun rendez-vous' }}</p>
 
         <div class="time" id="timeEl" @if (empty($rdvItems)) style="display:none" @endif>{{ $time ?? '--:--' }}</div>
@@ -124,6 +124,7 @@
             const emptyEl = document.getElementById('emptyEl');
             const timeEl = document.getElementById('timeEl');
             const itemsEl = document.getElementById('itemsEl');
+            const nextTitleEl = document.getElementById('nextTitleEl');
             const overlay = document.getElementById('audioOverlay');
 
             // Certains navigateurs bloquent l'audio sans interaction utilisateur.
@@ -342,6 +343,7 @@
                 rdvItems = items;
 
                 if (!items.length) {
+                    if (nextTitleEl) nextTitleEl.style.display = 'none';
                     if (emptyEl) {
                         emptyEl.textContent = message || 'Aucun rendez-vous';
                         emptyEl.style.display = '';
@@ -351,6 +353,7 @@
                     return;
                 }
 
+                if (nextTitleEl) nextTitleEl.style.display = '';
                 if (emptyEl) emptyEl.style.display = 'none';
                 if (timeEl) {
                     timeEl.textContent = time;
