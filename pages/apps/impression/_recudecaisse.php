@@ -4,6 +4,38 @@ require('../PDF/html_table13.php');
 include('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 
+function pdf_text_compat($text): string {
+    $text = (string)$text;
+    if ($text === '') {
+        return '';
+    }
+
+    // Si ce n'est pas du UTF-8 valide, on ne touche pas (probablement déjà en encodage mono-octet attendu par FPDF).
+    if (!preg_match('//u', $text)) {
+        return $text;
+    }
+
+    if (function_exists('iconv')) {
+        $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $text);
+        if ($converted !== false) {
+            return $converted;
+        }
+        $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $text);
+        if ($converted !== false) {
+            return $converted;
+        }
+    }
+
+    if (function_exists('mb_convert_encoding')) {
+        $converted = @mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
+        if (is_string($converted) && $converted !== '') {
+            return $converted;
+        }
+    }
+
+    return $text;
+}
+
 $pdf = new PDF();
 $pdf->AliasNbPages();
 $pdf->AddPage();
@@ -23,21 +55,21 @@ $pdf->SetFont('CenturyGothic','',12);
 function genererContenuRecu($pdf, $donnees1, $donnees2) {
     $html = '<table align="center" border="">';
     $html .= '<hr />';
-    $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . utf8_decode(nom_patient($donnees1['id_patient'])) . '</td></tr>';
-    $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . utf8_decode((adress(return_adresse($donnees1['id_patient'])) ?: return_adresse($donnees1['id_patient']))) . ' | ' . return_phone($donnees1['id_patient']) . '</td></tr>';
+    $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . nom_patient($donnees1['id_patient']) . '</td></tr>';
+    $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . (adress(return_adresse($donnees1['id_patient'])) ?: return_adresse($donnees1['id_patient'])) . ' | ' . return_phone($donnees1['id_patient']) . '</td></tr>';
     $html .= '<hr />';
-    $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . utf8_decode('Prestation : ' . model($donnees1['type'])) . '</td></tr>';
-    $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . utf8_decode('Montant Payé : ' . number_format($donnees2['montant_paye'])) . ' GNF </td></tr>';
+    $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . ('Prestation : ' . model($donnees1['type'])) . '</td></tr>';
+    $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . ('Montant Payé : ' . number_format($donnees2['montant_paye'])) . ' GNF </td></tr>';
 
     // Affichage conditionnel du solde
     if (!empty($donnees2['solde']) && floatval($donnees2['solde']) != 0) {
         $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">'
-            . utf8_decode('Reste à Payer : ' . number_format($donnees2['solde'])) . ' GNF </td></tr>';
+            . ('Reste à Payer : ' . number_format($donnees2['solde'])) . ' GNF </td></tr>';
     }
 
-    $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . utf8_decode('Payé Par : ' . type_paiement($donnees1['type_paiement'])) . ' </td></tr>';
-    $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . utf8_decode('Paiement N° : ' . $donnees2['code']) . ' </td></tr>';
-    return $html;
+    $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . ('Payé Par : ' . type_paiement($donnees1['type_paiement'])) . ' </td></tr>';
+    $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . ('Paiement N° : ' . $donnees2['code']) . ' </td></tr>';
+    return pdf_text_compat($html);
 }
 
 // Récupération des données
@@ -56,16 +88,16 @@ if (!$donnees1 || !$donnees2) {
 genererEntete($pdf, $data);
 
 $pdf->SetFont('CenturyGothic', '', 11);
-$pdf->Cell(0, 5, utf8_decode('PAT-' . $donnees1['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $donnees1['date']), 0, 1);
+$pdf->Cell(0, 5, pdf_text_compat('PAT-' . $donnees1['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $donnees1['date']), 0, 1);
 $pdf->WriteHTML(genererContenuRecu($pdf, $donnees1, $donnees2));
 
 // Signature et NB
-$pdf->Cell(0, -60, utf8_decode("signature et cachet"), 0, 0, 'R');
+$pdf->Cell(0, -60, pdf_text_compat("signature et cachet"), 0, 0, 'R');
 $pdf->Ln(2);
 $pdf->SetFont('CenturyGothic', 'B', 11);
-$pdf->Cell(0, -13, utf8_decode(traitant($donnees2['caisse'])), 0, 0, 'R');
+$pdf->Cell(0, -13, pdf_text_compat(traitant($donnees2['caisse'])), 0, 0, 'R');
 $pdf->Ln(8);
-$pdf->Cell(0, 5, utf8_decode("NB : Veuillez apporter un de vos reçu de paiement lors de votre prochaine visite."), 0, 0, 'L');
+$pdf->Cell(0, 5, pdf_text_compat("NB : Veuillez apporter un de vos reçu de paiement lors de votre prochaine visite."), 0, 0, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 // Séparateur
 $pdf->Ln(25);
@@ -73,16 +105,16 @@ $pdf->Cell(5, 0, str_repeat("-", 146), 0, 0, 'L');
 $pdf->Ln(25);
 // Deuxième reçu
 genererEntete($pdf, $data, 163);
-$pdf->Cell(0, 5, utf8_decode('PAT-' . $donnees1['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $donnees1['date']), 0, 1);
+$pdf->Cell(0, 5, pdf_text_compat('PAT-' . $donnees1['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $donnees1['date']), 0, 1);
 $pdf->WriteHTML(genererContenuRecu($pdf, $donnees1, $donnees2));
 
 // Signature et NB pour le deuxième reçu
-$pdf->Cell(0, -60, utf8_decode("signature et cachet"), 0, 0, 'R');
+$pdf->Cell(0, -60, pdf_text_compat("signature et cachet"), 0, 0, 'R');
 $pdf->Ln(2);
 $pdf->SetFont('CenturyGothic', 'B', 11);
-$pdf->Cell(0, -13, utf8_decode(traitant($donnees2['caisse'])), 0, 0, 'R');
+$pdf->Cell(0, -13, pdf_text_compat(traitant($donnees2['caisse'])), 0, 0, 'R');
 $pdf->Ln(8);
-$pdf->Cell(0, 5, utf8_decode("NB : Veuillez remettre ce reçu à la comptabilité."), 0, 0, 'L');
+$pdf->Cell(0, 5, pdf_text_compat("NB : Veuillez remettre ce reçu à la comptabilité."), 0, 0, 'L');
 $filename = 'RECU DE PAIEMENT PAT-' . $donnees1['id_patient'] . '.pdf';
 $pdf->Output($filename, 'I');
 ?>

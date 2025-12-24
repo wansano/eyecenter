@@ -4,6 +4,38 @@ require_once('../PDF/html_table13.php');
 require_once('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 
+function pdf_text_compat($text): string {
+    $text = (string)$text;
+    if ($text === '') {
+        return '';
+    }
+
+    // Si ce n'est pas du UTF-8 valide, on ne touche pas (probablement déjà en encodage mono-octet attendu par FPDF).
+    if (!preg_match('//u', $text)) {
+        return $text;
+    }
+
+    if (function_exists('iconv')) {
+        $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $text);
+        if ($converted !== false) {
+            return $converted;
+        }
+        $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $text);
+        if ($converted !== false) {
+            return $converted;
+        }
+    }
+
+    if (function_exists('mb_convert_encoding')) {
+        $converted = @mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
+        if (is_string($converted) && $converted !== '') {
+            return $converted;
+        }
+    }
+
+    return $text;
+}
+
 try {
     if (!isset($_GET['affectation'])) {
         throw new Exception("ID d'affectation manquant");
@@ -40,23 +72,23 @@ try {
     // date de traitement
     $date = date('d/m/Y', strtotime($data['date_traitement']));
     //information patient
-    $pdf->Cell(0, 5, utf8_decode('PAT-' . $data['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $date), 0, 1);
+    $pdf->Cell(0, 5, pdf_text_compat('PAT-' . $data['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $date), 0, 1);
 $html = '<table align="center" border="">
 <tr style="line-height:1px;">
 <hr />
-<td width="350" height="50">' . utf8_decode( $data['nom_patient']) . '</td>
+<td width="350" height="50">' . ($data['nom_patient']) . '</td>
 </tr>
 <tr style="line-height:1px;">
-<td width="350" height="50">' . utf8_decode((adress($data['adresse_patient'])?:$data['adresse_patient'])) . ' | ' . return_phone($data['id_patient']) . '</td>
+<td width="350" height="50">' . ((adress($data['adresse_patient'])?:$data['adresse_patient'])) . ' | ' . return_phone($data['id_patient']) . '</td>
 </tr>
 </table> 
 <hr />';
-$pdf->WriteHTML($html);
+$pdf->WriteHTML(pdf_text_compat($html));
 
 
     // Titre
     $pdf->SetFont('CenturyGothic', 'B', 16);
-    $pdf->Cell(0, 25, utf8_decode('ORDONNANCE DES LUNETTES'), 0, 0, 'C');
+    $pdf->Cell(0, 25, pdf_text_compat('ORDONNANCE DES LUNETTES'), 0, 0, 'C');
     $pdf->Ln(22);
     $pdf->SetFont('CenturyGothic','',12);
 
@@ -71,20 +103,20 @@ $pdf->WriteHTML($html);
     $htmls = '<table align="center" border="">';
     foreach ($fields as $key => $label) {
         if (!empty($data[$key])) {
-            $htmls .= '<tr style="line-height:1px;"><td width="350" height="50">' . sprintf($label, utf8_decode($data[$key])) . '</td></tr><br>';
+            $htmls .= '<tr style="line-height:1px;"><td width="350" height="50">' . sprintf($label, $data[$key]) . '</td></tr><br>';
         }
     }
     $htmls .= '</table>';
-    $pdf->WriteHTML($htmls);
+    $pdf->WriteHTML(pdf_text_compat($htmls));
 
     $pdf->Ln(8);
     if (!empty($data['details'])) {
         $pdf->SetFont('CenturyGothic', 'B', 12);
-        $pdf->MultiCell(0,5,utf8_decode( $data['details']), '');
+        $pdf->MultiCell(0,5,pdf_text_compat($data['details']), '');
     }
     $pdf->Ln(16);
    
-    $pdf->Cell(0, 5, utf8_decode('Dr ' . traitant($data['traitant'])), 0, 1, 'C');
+    $pdf->Cell(0, 5, pdf_text_compat('Dr ' . traitant($data['traitant'])), 0, 1, 'C');
 
     $filename = 'ORDONNANCE LUNETTES PAT-' . $data['id_patient'] . '.pdf';
     $pdf->Output($filename, 'I');
