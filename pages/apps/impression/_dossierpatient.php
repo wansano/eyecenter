@@ -9,6 +9,39 @@ class DossierPatientPDF extends PDF {
     private $data;
     private $patient;
     private $angle = 0;
+
+    private function pdfText($text): string {
+        $text = (string)$text;
+        if ($text == '') {
+            return '';
+        }
+
+        // Si la chaîne n'est pas du UTF-8 valide, on suppose qu'elle est déjà en encodage mono-octet (Windows-1252/ISO-8859-1)
+        // compatible avec FPDF.
+        if (!preg_match('//u', $text)) {
+            return $text;
+        }
+
+        if (function_exists('iconv')) {
+            $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $text);
+            if ($converted !== false) {
+                return $converted;
+            }
+            $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $text);
+            if ($converted !== false) {
+                return $converted;
+            }
+        }
+
+        if (function_exists('mb_convert_encoding')) {
+            $converted = @mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
+            if (is_string($converted) && $converted !== '') {
+                return $converted;
+            }
+        }
+
+        return $text;
+    }
     
     public function __construct($orientation = 'P', $unit = 'mm', $size = 'A5') {
         parent::__construct($orientation, $unit, $size);
@@ -54,7 +87,7 @@ class DossierPatientPDF extends PDF {
     }
 
     private function splitTextToLines($text, $maxWidth): array {
-        $s = utf8_decode((string)$text);
+        $s = $this->pdfText((string)$text);
         $s = str_replace("\r", '', $s);
         $s = preg_replace('/\s+/', ' ', trim($s));
         if ($s === '') {
@@ -152,15 +185,17 @@ class DossierPatientPDF extends PDF {
         $labelText = (string)$label;
         $valueText = (string)$value;
 
+        $labelEncoded = $this->pdfText($labelText . ' ');
+        $valueEncoded = $this->pdfText($valueText);
+
         $this->SetX($x);
         $this->SetFont('CenturyGothic', 'B', $fontSize);
-        $labelTextWithSpace = $labelText . ' ';
-        $labelW = $this->GetStringWidth(utf8_decode($labelTextWithSpace));
+        $labelW = $this->GetStringWidth($labelEncoded);
         if ($labelW > ($w * 0.55)) {
             $labelW = $w * 0.55;
         }
 
-        $this->Cell($labelW, $lineH, utf8_decode($labelTextWithSpace), 0, 0, 'L');
+        $this->Cell($labelW, $lineH, $labelEncoded, 0, 0, 'L');
         $this->SetFont('CenturyGothic', '', $fontSize);
 
         $remainingW = $w - $labelW;
@@ -169,7 +204,7 @@ class DossierPatientPDF extends PDF {
         }
 
         if (!$multiline) {
-            $this->Cell($remainingW, $lineH, utf8_decode($valueText), 0, 1, 'L');
+            $this->Cell($remainingW, $lineH, $valueEncoded, 0, 1, 'L');
             return;
         }
 
@@ -300,7 +335,7 @@ class DossierPatientPDF extends PDF {
     public function generateHeader() {
         $this->Ln(250);
         $this->SetFont('CenturyGothic', 'B', 20);
-        $this->Cell(0, 9, utf8_decode('N° ' . $this->patient['id_patient']), 0, 0, '');
+        $this->Cell(0, 9, $this->pdfText('N° ' . $this->patient['id_patient']), 0, 0, '');
         $this->Ln(9);
         if ($this->data) {
             genererEnteteDossier($this, $this->data);
@@ -310,7 +345,7 @@ class DossierPatientPDF extends PDF {
     public function generatePatientInfo() {
         $this->SetFont('CenturyGothic', '', 8);
         $statut = $this->patient['assure'] == 1 ? 'Assuré' : 'Non assuré';
-        $this->Cell(0, 5, utf8_decode($statut . str_repeat(' ', 101) . 'Date d\'admission ' . $this->patient['date']), 0, 1, 'L');
+        $this->Cell(0, 5, $this->pdfText($statut . str_repeat(' ', 101) . 'Date d\'admission ' . $this->patient['date']), 0, 1, 'L');
         
         $html = $this->generatePatientTable();
         $this->WriteHTML($html);
@@ -463,7 +498,7 @@ class DossierPatientPDF extends PDF {
 
         $this->SetX($contentX);
         $this->SetFont('CenturyGothic', 'B', 7);
-        $this->Cell($contentW, 4.0, utf8_decode('CARTE D\'ADHESION PATIENT N° ' . $dossier), 0, 1, 'C');
+        $this->Cell($contentW, 4.0, $this->pdfText('CARTE D\'ADHESION PATIENT N° ' . $dossier), 0, 1, 'C');
 
         $lineH = 3.4;
         $fontSize = 6.2;
@@ -523,31 +558,31 @@ class DossierPatientPDF extends PDF {
         
         $html = '<table align="center">
 <hr widht="50px"/>
-<tr><td>Patient : ' . utf8_decode($this->patient['nom_patient'] . '    Né(e) en : ' . $anneeNaissance . '    Genre : ' . $this->patient['sexe'] . '  Téléphone : ' . $telephone) . '</td></tr>
-<tr><td>Adresse : ' . utf8_decode(adress($this->patient['adresse']) ?: $this->patient['adresse']) . '    Profession : ' . utf8_decode($this->patient['profession']) . '</td></tr>
+<tr><td>Patient : ' . ($this->patient['nom_patient'] . '    Né(e) en : ' . $anneeNaissance . '    Genre : ' . $this->patient['sexe'] . '  Téléphone : ' . $telephone) . '</td></tr>
+<tr><td>Adresse : ' . (adress($this->patient['adresse']) ?: $this->patient['adresse']) . '    Profession : ' . ($this->patient['profession']) . '</td></tr>
 <tr><hr widht="50px"/> 
 <td>Motif de consultation : ....................................................................................................................................................<br>...........................................................................................................................................................................................</td></tr>
 <tr><td>Evolution : ........................................................................................................................................................................</td></tr>
 <tr><td>Terrain : ............................................................................................................................................................................</td></tr>
-<tr><td>' . utf8_decode('Antécédents') . ' : .................................................................................................................................................................</td></tr><br>
+<tr><td>Antécédents : .................................................................................................................................................................</td></tr><br>
 <tr><hr widht="50px"/><br> 
 <td> AVLSC :  OD .......... OS ..........  |  AVC :  OD ......... OS .........  |  TS :  OD ......... OS .........    P :  ..............................</td></tr><br>
 <tr><td>1. Examen Externe : </td></tr>
 <tr><td>2. Biomicroscopie : <br> </td><br>
 <td> - Annexes : <br><br> </td>
-<td> - ' . utf8_decode('Segment Antérieur') . ' : <br><br></td>
-<td> - ' . utf8_decode('Segment Postérieur') . ' : </td></tr><br>
-<tr><td>3. ' . utf8_decode('Diagnostic de présomption') . ' : </td></tr><br>
+<td> - Segment Antérieur : <br><br></td>
+<td> - Segment Postérieur : </td></tr><br>
+<tr><td>3. Diagnostic de présomption : </td></tr><br>
 <tr><td>4. Conduite tenue :  <br> </td></tr>
-<tr><td>5. ' . utf8_decode('Diagnostic définitif') . ' : </td></tr><br>
-<tr><td>6. ' . utf8_decode('Contrôle de suivi') . ' : </td></tr><br><br>
+<tr><td>5. Diagnostic définitif : </td></tr><br>
+<tr><td>6. Contrôle de suivi : </td></tr><br><br>
 <hr widht="50px"/>';
-        
-        return $html;
+
+        return $this->pdfText($html);
     }
     
     public function generateFooter() {
-        $this->Cell(0, 5, utf8_decode("Voir le monde sous un nouveau jour !"), 0, 0, 'C');
+        $this->Cell(0, 5, $this->pdfText("Voir le monde sous un nouveau jour !"), 0, 0, 'C');
     }
 }
 
