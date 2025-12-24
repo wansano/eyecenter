@@ -52,13 +52,18 @@ $data = $profil->fetch();
 // Fonctions pour générer l'en-tête du reçu
 $pdf->SetFont('CenturyGothic','',12);
 // Fonctions pour générer le contenu du reçu
-function genererContenuRecu($pdf, $donnees1, $donnees2) {
+function genererContenuRecu($pdf, $donnees1, $donnees2, $rdvDisplay = '') {
     $html = '<table align="center" border="">';
     $html .= '<hr />';
     $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . nom_patient($donnees1['id_patient']) . '</td></tr>';
     $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . (adress(return_adresse($donnees1['id_patient'])) ?: return_adresse($donnees1['id_patient'])) . ' | ' . return_phone($donnees1['id_patient']) . '</td></tr>';
     $html .= '<hr />';
     $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . ('Prestation : ' . model($donnees1['type'])) . '</td></tr>';
+
+    if (is_string($rdvDisplay) && trim($rdvDisplay) !== '') {
+        $html .= '<tr style="line-height:1px;"><td width="350" height="50">' . ('Date de rendez-vous : ' . $rdvDisplay) . '</td></tr>';
+    }
+
     $html .= '<tr style="line-height:1px;border:1px;"><td width="350" height="50">' . ('Montant Payé : ' . number_format($donnees2['montant_paye'])) . ' GNF </td></tr>';
 
     // Affichage conditionnel du solde
@@ -84,12 +89,36 @@ $donnees2 = $reponse2->fetch();
 if (!$donnees1 || !$donnees2) {
     die("Données non trouvées");
 }
+
+// Date RDV (affichage conditionnel) : uniquement si la prestation est liée à un rendez-vous et que celui-ci n'est pas encore arrivé.
+$rdvDisplay = '';
+$idRdv = (int)($donnees1['id_rdv'] ?? 0);
+if ($idRdv > 0 && function_exists('getRdvInfo')) {
+    $rdvInfo = getRdvInfo($bdd, $idRdv);
+    $rawRdv = is_array($rdvInfo) ? trim((string)($rdvInfo['prochain_rdv'] ?? '')) : '';
+    if ($rawRdv !== '') {
+        try {
+            $dtRdv = new DateTime($rawRdv);
+            $now = new DateTime();
+            if ($dtRdv > $now) {
+                $rdvDisplay = $dtRdv->format('d/m/Y');
+                if ($dtRdv->format('H:i:s') !== '00:00:00') {
+                    $rdvDisplay .= ' ' . $dtRdv->format('H:i');
+                }
+            }
+        } catch (Exception $e) {
+            // Ne rien afficher si la date est invalide
+            $rdvDisplay = '';
+        }
+    }
+}
+
 // Premier reçu
 genererEntete($pdf, $data);
 
 $pdf->SetFont('CenturyGothic', '', 11);
 $pdf->Cell(0, 5, pdf_text_compat('PAT-' . $donnees1['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $donnees1['date']), 0, 1);
-$pdf->WriteHTML(genererContenuRecu($pdf, $donnees1, $donnees2));
+$pdf->WriteHTML(genererContenuRecu($pdf, $donnees1, $donnees2, $rdvDisplay));
 
 // Signature et NB
 $pdf->Cell(0, -60, pdf_text_compat("signature et cachet"), 0, 0, 'R');
@@ -106,7 +135,7 @@ $pdf->Ln(25);
 // Deuxième reçu
 genererEntete($pdf, $data, 163);
 $pdf->Cell(0, 5, pdf_text_compat('PAT-' . $donnees1['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $donnees1['date']), 0, 1);
-$pdf->WriteHTML(genererContenuRecu($pdf, $donnees1, $donnees2));
+$pdf->WriteHTML(genererContenuRecu($pdf, $donnees1, $donnees2, $rdvDisplay));
 
 // Signature et NB pour le deuxième reçu
 $pdf->Cell(0, -60, pdf_text_compat("signature et cachet"), 0, 0, 'R');
