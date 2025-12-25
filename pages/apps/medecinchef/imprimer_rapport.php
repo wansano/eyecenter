@@ -5,7 +5,7 @@ $pdf_url = "../impression/_rapportement.php?affectation=" . $affectation;
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Impression chirurgie</title>
+    <title>Impression Rapport Medical</title>
 </head>
 <body style="margin:0">
     <iframe id="pdfFrame" src="<?php echo $pdf_url; ?>" style="width:100vw; height:100vh;" frameborder="0"></iframe>

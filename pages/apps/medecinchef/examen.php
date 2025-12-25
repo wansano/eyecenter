@@ -1,7 +1,7 @@
 <?php
-include('../PUBLIC/connect.php');
-include('../PUBLIC/fonction.php');
-include('../PUBLIC/medecin_ieu.php');
+include('../public/connect.php');
+include('../public/fonction.php');
+include('../public/medecin_ieu.php');
 session_start();
 
 try {
@@ -23,20 +23,20 @@ try {
     ');
     $stmt->execute([$affectation]);
     $data = $stmt->fetch(PDO::FETCH_ASSOC);
-    $id_patient = $data['id_patient'];
-
-    // Récupération des dernières données d'acuité visuelle et historique en une seule fois
-    $derniereDonnees = recupererDerniereAcquiteEtHistorique($bdd, $id_patient);
-
     if (!$data) {
         throw new Exception("Affectation non trouvée");
     }
+    $id_patient = isset($data['id_patient']) ? (int)$data['id_patient'] : 0;
+    $rdv = isset($data['id_rdv']) ? (int)$data['id_rdv'] : 0;
+
+    // Récupération des dernières données d'acuité visuelle et historique en une seule fois
+    $derniereDonnees = $id_patient ? recupererDerniereAcquiteEtHistorique($bdd, $id_patient) : null;
 
     // Extraction des données
     extract($data);
 
     // Traitement du formulaire
-    if (isset($_POST['consulter']) && !empty($_POST['diagnostic']) && !empty($_POST['resultat'])) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['diagnostic']) && !empty($_POST['resultat'])) {
         // Vérification si déjà traité
         $existe = checkTraitementExisteExamen($bdd, $affectation);
 
@@ -47,11 +47,9 @@ try {
                 insertAcquitteVisuelle($bdd, $id_patient, $affectation, $_POST);
                 insertExamen($bdd, $id_patient, $type, $affectation, $_POST);
                 updateAffectationStatus($bdd, $affectation);
-
-                if (!empty($_POST['prochain_rdv'])) {
-                    insererRendezVousInterne($bdd, $id_patient, $_POST['service'], $_POST['type'], $_POST['medecin'], $_POST['prochain_rdv']);
+                if ($rdv > 0) {
+                    updateRendezvousStatus($bdd, $rdv);
                 }
-
                 $bdd->commit();
                 $errors = 4;
             } catch (Exception $e) {
@@ -65,13 +63,13 @@ try {
     $errors = $e->getMessage();
 }
 
-include('../PUBLIC/header.php');   
+include('../public/header.php');   
 ?>
 
 <body>
     <section class="body">
 
-        <?php include('../PUBLIC/navbarmenu.php'); ?>
+    <?php include('../public/navbarmenu.php'); ?>
 
         <div class="inner-wrapper">
             <section role="main" class="content-body">
@@ -100,36 +98,11 @@ include('../PUBLIC/header.php');
                                                 </div>
                                                 ';}
                                     ?>
-                                <div class="row form-group pb-3">
-                                <div class="col-md-6">
-                                    <div class="alert alert-info">
-                                        <?php if ($derniereDonnees): ?>
-                                            <li><strong>Dernière accuité visuelle : </strong> <br/> 
-                                            <b>AVLSC : </b>   OD=<?php echo $derniereDonnees['od_avlsc'] ?: '........'; ?>   
-                                            OS=<?php echo $derniereDonnees['os_avlsc'] ?: '........'; ?>       
-                                            <b>AVC : </b>  OD=<?php echo $derniereDonnees['od_avc'] ?: '........'; ?>   
-                                            OS=<?php echo $derniereDonnees['os_avc'] ?: '........'; ?>        
-                                            <b>TS : </b>  OD=<?php echo $derniereDonnees['od_ts'] ?: '........'; ?>   
-                                            OS=<?php echo $derniereDonnees['os_ts'] ?: '........'; ?>       
-                                            <b>P : </b> <?php echo $derniereDonnees['p'] ?: '........'; ?></li>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="alert alert-info">
-                                        <?php if ($derniereDonnees): ?>
-                                            <strong>Motif : </strong><?php echo htmlspecialchars($derniereDonnees['motif']); ?>; 
-                                            <strong>Evolution : </strong><?php echo htmlspecialchars($derniereDonnees['evolution']); ?>; <br/> 
-                                            <strong>Terrain :</strong> <?php echo htmlspecialchars($derniereDonnees['terrain']); ?>; 
-                                            <strong>Antecedents : </strong><?php echo htmlspecialchars($derniereDonnees['antecedents']); ?>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
+                            <?php include __DIR__ . '/../public/acquitehistorique.php'; ?>
                             <!-- Formulaire de consultation -->
                             <form class="form-horizontal" novalidate="novalidate" method="POST"
                                 action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?affectation=<?php echo $affectation; ?>" enctype="multipart/form-data">
-                                <input type="hidden" name="consulter" value="<?php $id_affectation ?>">
+                                <input type="hidden" name="consulter" value="<?php echo htmlspecialchars($affectation, ENT_QUOTES, 'UTF-8'); ?>">
                                 <div class="row form-group pb-3">                                    
                                     <div class="col-md-2">
                                         <div class="form-group">
@@ -188,64 +161,6 @@ include('../PUBLIC/header.php');
                                         </div>
                                     </div>
                                 </div>
-                                <div class="row form-group pb-3">
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Service</label>
-                                            <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs()">
-                                                <option value=""> ------ service ----- </option>';
-                                                    <?php $coll = $bdd->prepare('SELECT * FROM services WHERE status = ?');
-                                                    $coll -> execute([1]);
-                                                    while ($services = $coll->fetch(PDO::FETCH_ASSOC))
-                                                    {
-                                                        echo '<option value="'.$services['id_service'].'">'.$services['nom_service'].'</option>';
-                                                    } ?>
-                                                </option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Motif </label>
-                                            <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice()" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
-                                                <option value=""> ------ Choisir un service d'abord ----- </option>
-                                            </select>
-                                            <input type="hidden" id="hiddenMotifId" name="motif_id" value="">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Medecin</label>
-                                            <select name="medecin" data-plugin-selectTwo class="form-control populate" data-plugin-options='{ "minimumInputLength": 0 }'>
-                                                <optgroup label="Choisir le medecin">
-                                                    <option value=""> --- Choisir le medecin --- </option>
-                                                    <?php
-                                                    $med = $bdd->prepare('SELECT id, pseudo FROM users WHERE type="medecin" AND status=1');
-                                                    $med->execute();
-                                                    while ($medecin = $med->fetch(PDO::FETCH_ASSOC)) {
-                                                        $selected = (isset($_POST['medecin']) && $_POST['medecin'] == $medecin['id']) ? 'selected' : '';
-                                                        echo '<option value="' . $medecin['id'] . '" ' . $selected . '>' . htmlspecialchars($medecin['pseudo']) . '</option>';
-                                                    }
-                                                    ?>
-                                                </optgroup>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Date prochain rendez-vous</label>
-                                            <input type="date" class="form-control mb-2" name="date_rdv" id="dateRdvInput" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Créneau disponible</label>
-                                            <select name="prochain_rdv" class="form-control" id="creneauSelect" required>
-                                                <option value="">-- Choisir un créneau disponible --</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
                             
                             <footer class="card-footer text-end">
                                 <button class="btn btn-primary" type="submit" name="ajouter">Valider l'examen</button>
@@ -265,4 +180,4 @@ include('../PUBLIC/header.php');
                 };
             </script>
         <?php endif; ?>
-    <?php include('../PUBLIC/footer.php');?>
+    <?php include('../public/footer.php');?>
