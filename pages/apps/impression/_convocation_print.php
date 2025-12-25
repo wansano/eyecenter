@@ -55,7 +55,7 @@ try {
 
     // Récupération des RDV
     $sql = "SELECT id_patient, prochain_rdv, motif FROM dmd_rendez_vous
-            WHERE DATE(prochain_rdv) = ? AND traitant = ? AND status IN (0,1,2)
+            WHERE DATE(prochain_rdv) = ? AND traitant = ? AND status IN (0,1,2,4)
             ORDER BY prochain_rdv";
     $st = $bdd->prepare($sql);
     $st->execute([$date, $medecinId]);
