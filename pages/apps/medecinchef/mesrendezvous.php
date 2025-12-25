@@ -48,7 +48,7 @@ $errors=0;
 			events: [
 				<?php
 				
-					$reponse1 = $bdd->prepare('SELECT * FROM dmd_rendez_vous WHERE prochain_rdv >= :datejour AND status IN (1,2) AND traitant = :avec ORDER BY prochain_rdv');
+					$reponse1 = $bdd->prepare('SELECT * FROM dmd_rendez_vous WHERE prochain_rdv >= :datejour AND status IN (0,1,2) AND traitant = :avec ORDER BY prochain_rdv');
 					$reponse1->execute(['datejour' => date('Y-m-d'), 'avec' => $_SESSION['auth']]);
 					while ($donnees1 = $reponse1->fetch(PDO::FETCH_ASSOC)) {
 						echo "{\n	title: '".addslashes(nom_patient($donnees1['id_patient']))."',
