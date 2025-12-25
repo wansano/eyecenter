@@ -38,7 +38,7 @@ try {
 
     // Titre
     $pdf->SetFont('CenturyGothic', 'B', 16);
-    $pdf->Cell(0, 25, utf8_decode('FICHE DE CONSENTEMENT A UNE INTERVENTION CHIRURGICALE'), 0, 0, 'C');
+    $pdf->Cell(0, 25, pdf_text_compat('FICHE DE CONSENTEMENT A UNE INTERVENTION CHIRURGICALE'), 0, 0, 'C');
     $pdf->Ln(22);
 
     // Corps du document
@@ -54,21 +54,21 @@ D\'un commun accord, nous sommes convenus d\'un délai entre la consultation et 
 Je m\'engage à me rendre aux consultations et à me soumettre aux soins prescrits avant et après l\'intervention chirurgicale.
 En foi de quoi je conscents librement à cette intervention et j\'autorise le médecin de proceder à la chirurgie.',
         $data['nom_patient'],
-        utf8_decode($data['denomination']),
+        pdf_text_compat($data['denomination']),
         $data['id_patient'],
         model($data['type'])
     );
-    $pdf->MultiCell(0, 7, utf8_decode($consentText));
+    $pdf->MultiCell(0, 7, pdf_text_compat($consentText));
 
     // Date et signatures
     $pdf->Ln(3);
-    $pdf->Cell(0, 8, utf8_decode('Conakry, le ' . $data['date']), 0, 0, 'R');
+    $pdf->Cell(0, 8, pdf_text_compat('Conakry, le ' . $data['date']), 0, 0, 'R');
     $pdf->Ln(10);
     
     // Signatures
     $patientLabel = ($data['sexe'] == "Femme") ? "La Patiente" : "Le Patient";
-    $pdf->Cell(0, 10, utf8_decode($patientLabel), 0, 0, 'L');
-    $pdf->Cell(0, 10, utf8_decode('Le Chirurgien'), 0, 0, 'R');
+    $pdf->Cell(0, 10, pdf_text_compat($patientLabel), 0, 0, 'L');
+    $pdf->Cell(0, 10, pdf_text_compat('Le Chirurgien'), 0, 0, 'R');
 
     // Code-barres
     // $pdf->Codabar(10, 273, 'COEC' . $data['id_affectation']);

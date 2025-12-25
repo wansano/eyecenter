@@ -1153,4 +1153,38 @@ function getFormValue($field, $default = '') {
     }
     return $default;
 }
+
+// fonction pour l'encodage des textes pour FPDF
+function pdf_text_compat($text): string {
+    $text = (string)$text;
+    if ($text === '') {
+        return '';
+    }
+
+    // Si ce n'est pas du UTF-8 valide, on ne touche pas (probablement déjà en encodage mono-octet attendu par FPDF).
+    if (!preg_match('//u', $text)) {
+        return $text;
+    }
+
+    if (function_exists('iconv')) {
+        $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $text);
+        if ($converted !== false) {
+            return $converted;
+        }
+        $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $text);
+        if ($converted !== false) {
+            return $converted;
+        }
+    }
+
+    if (function_exists('mb_convert_encoding')) {
+        $converted = @mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
+        if (is_string($converted) && $converted !== '') {
+            return $converted;
+        }
+    }
+
+    return $text;
+}
+
 ?>

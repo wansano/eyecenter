@@ -44,9 +44,9 @@ $pdf->WriteHTML($html);
     // Fonction helper pour ajouter une section
     function addSection($pdf, $title, $content) {
         $pdf->SetFont('CenturyGothic', 'B', 11); // Titre en gras
-        $pdf->Cell(50, 5, utf8_decode($title), 0, 0); // Largeur fixe pour le titre
+        $pdf->Cell(50, 5, pdf_text_compat($title), 0, 0); // Largeur fixe pour le titre
         $pdf->SetFont('CenturyGothic', '', 11); // Texte normal
-        $pdf->Cell(0, 5, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $content), 0, 1); // Contenu aligné sur la même ligne
+        $pdf->Cell(0, 5, pdf_text_compat($content), 0, 1); // Contenu aligné sur la même ligne
         $pdf->Ln(6);
     }
 
@@ -166,7 +166,7 @@ $pdf->WriteHTML($html);
     // Signature
     $pdf->Ln(4);
     $pdf->SetFont('CenturyGothic', '', 8);
-    $pdf->Cell(0, 8, utf8_decode("Imprimé le " . date('d/m/Y') . " par " . traitant($_SESSION['auth'])), 0, 0, 'R');
+    $pdf->Cell(0, 8, pdf_text_compat("Imprimé le " . date('d/m/Y') . " par " . traitant($_SESSION['auth'])), 0, 0, 'R');
 
     $pdf->Output();
 

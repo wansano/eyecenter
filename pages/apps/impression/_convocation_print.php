@@ -90,7 +90,7 @@ try {
     // Tableau des rendez-vous
     if (!$rdvs) {
         $pdf->SetFont('CenturyGothic','B',11);
-        $pdf->Cell(0,8,utf8_decode('Aucun rendez-vous pour cette date.'),0,1,'C');
+        $pdf->Cell(0,8,pdf_text_compat('Aucun rendez-vous pour cette date.'),0,1,'C');
     } else {
         // En-têtes
         $pdf->SetFont('CenturyGothic','B',11);

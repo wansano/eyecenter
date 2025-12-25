@@ -4,38 +4,6 @@ require_once('../PDF/html_table13.php');
 require_once('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 
-function pdf_text_compat($text): string {
-    $text = (string)$text;
-    if ($text === '') {
-        return '';
-    }
-
-    // Si ce n'est pas du UTF-8 valide, on ne touche pas (probablement déjà en encodage mono-octet attendu par FPDF).
-    if (!preg_match('//u', $text)) {
-        return $text;
-    }
-
-    if (function_exists('iconv')) {
-        $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $text);
-        if ($converted !== false) {
-            return $converted;
-        }
-        $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $text);
-        if ($converted !== false) {
-            return $converted;
-        }
-    }
-
-    if (function_exists('mb_convert_encoding')) {
-        $converted = @mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
-        if (is_string($converted) && $converted !== '') {
-            return $converted;
-        }
-    }
-
-    return $text;
-}
-
 try {
     if (!isset($_GET['affectation'])) {
         throw new Exception("ID d'affectation manquant");

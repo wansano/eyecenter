@@ -47,17 +47,17 @@ try {
     // date de traitement
     $date = date('d/m/Y', strtotime($data['date_traitement']));
     //information patient
-    $pdf->Cell(0, 5, utf8_decode('PAT-' . $data['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $date), 0, 1);
+    $pdf->Cell(0, 5, pdf_text_compat('PAT-' . $data['id_patient'] . str_repeat(' ', 128) . 'Date : ' . $date), 0, 1);
     $pdf->SetFont('CenturyGothic', '', 12);
 
     // Informations patient
 $html = '<table align="center" border="">
 <hr />
 <tr style="line-height:1px;">
-<td width="350" height="50">' . utf8_decode( $data['nom_patient']) . '</td>
+<td width="350" height="50">' . pdf_text_compat( $data['nom_patient']) . '</td>
 </tr>
 <tr style="line-height:1px;">
-<td width="350" height="50">' .  utf8_decode(adress($data['adresse']) ?: $data['adresse']) . ' | ' . $data['phone'] . '</td>
+<td width="350" height="50">' .  pdf_text_compat(adress($data['adresse']) ?: $data['adresse']) . ' | ' . $data['phone'] . '</td>
 </tr>
 <hr /> <br>
 <tr>
@@ -76,7 +76,7 @@ $pdf->WriteHTML($html);
     // Fonction helper pour ajouter une section
     function addSection($pdf, $title, $content) {
         $pdf->SetFont('CenturyGothic', 'B', 12);
-        $pdf->Cell(0, 5, utf8_decode($title), 0, 1);
+        $pdf->Cell(0, 5, pdf_text_compat($title), 0, 1);
         $pdf->SetFont('CenturyGothic', '', 12);
         $pdf->MultiCell(0, 5, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $content), '');
         $pdf->Ln(6);
@@ -90,7 +90,7 @@ $pdf->WriteHTML($html);
     // Signature
     $pdf->Ln(4);
     $pdf->SetFont('CenturyGothic', 'B', 12);
-    $pdf->Cell(0, 8, utf8_decode('Dr ' . traitant($data['traitant'])), 0, 0, 'C');
+    $pdf->Cell(0, 8, pdf_text_compat('Dr ' . traitant($data['traitant'])), 0, 0, 'C');
 
     $pdf->Output();
 

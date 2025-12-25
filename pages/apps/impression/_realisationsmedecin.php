@@ -131,7 +131,7 @@ try {
     $pdf->Ln(6);
     $pdf->SetFont('CenturyGothic', '', 8);
     $texteFooter = "Imprimé le " . date('d/m/Y') . " par " . traitant($_SESSION['auth']);
-    $pdf->Cell(0, 6, utf8_decode($texteFooter), 0, 0, 'R');
+    $pdf->Cell(0, 6, pdf_text_compat($texteFooter), 0, 0, 'R');
 
     $pdf->Output();
 

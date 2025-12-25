@@ -35,12 +35,12 @@ $data = $profil->fetch();
     // date de traitement
     $date = date('d/m/Y', strtotime($donnees3['date_traitement']));
     //information patient
-$pdf->Cell(0, 5, utf8_decode('Ref n° : ' . $donnees3['reference'] . str_repeat(' ', 90) . 'Date : ' . $date), 0, 1);
+$pdf->Cell(0, 5, pdf_text_compat('Ref n° : ' . $donnees3['reference'] . str_repeat(' ', 90) . 'Date : ' . $date), 0, 1);
 //$pdf->Ln(2);
 $html = '<table align="center" border="0">';
 $html = '<hr />';
-$html .= '<tr style="line-height:1px;"><td width="350" height="50">' . utf8_decode(nom_patient($donnees1['id_patient'])) . '</td></tr>';
-$html .= '<tr style="line-height:1px;"><td width="350" height="50">' . utf8_decode(adress(return_adresse($donnees1['id_patient'])) ?: return_adresse($donnees1['id_patient'])) . ' | ' . return_phone($donnees1['id_patient']) . '</td></tr>';
+$html .= '<tr style="line-height:1px;"><td width="350" height="50">' . pdf_text_compat(nom_patient($donnees1['id_patient'])) . '</td></tr>';
+$html .= '<tr style="line-height:1px;"><td width="350" height="50">' . pdf_text_compat(adress(return_adresse($donnees1['id_patient'])) ?: return_adresse($donnees1['id_patient'])) . ' | ' . return_phone($donnees1['id_patient']) . '</td></tr>';
 $html .= '<hr />';
 $html .= '</table>';
 $pdf->WriteHTML($html);
@@ -52,7 +52,7 @@ $pdf->SetFont('CenturyGothic','',11);
 $pdf->MultiCell(0,6,iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $donnees3['rapport']), '');
 $pdf->Ln(2);
 $pdf->SetFont('CenturyGothic','B',10);
-$pdf->Cell(0,8,utf8_decode('Dr '.traitant($donnees3['traitant'])),0,0,'C');
+$pdf->Cell(0,8,pdf_text_compat('Dr '.traitant($donnees3['traitant'])),0,0,'C');
 if ($donnees3['pathologie'] != NULL) {
    $pdf->Image(realpath('../documents/photo/'.$donnees3['pathologie']),175,52,27,32);
 }
