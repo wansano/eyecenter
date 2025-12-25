@@ -9,7 +9,7 @@ date_default_timezone_set('Africa/Abidjan');
 // Fenêtre autorisée: lundi (1) à samedi (6) de 15:00:00 à 23:59:59
 $now = new DateTime();
 $dayOfWeek = (int)$now->format('N'); // 1=lundi .. 7=dimanche
-$startWindow = (clone $now)->setTime(12,0,0);
+$startWindow = (clone $now)->setTime(15,0,0);
 $endWindow   = (clone $now)->setTime(23,59,59);
 $canShowForm = ($dayOfWeek >= 1 && $dayOfWeek <= 6) && ($now >= $startWindow && $now <= $endWindow);
 // Pour debug ponctuel (à retirer en production):
