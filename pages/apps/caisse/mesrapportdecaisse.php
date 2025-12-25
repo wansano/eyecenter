@@ -38,6 +38,7 @@ include('../PUBLIC/header.php');
                                                     <th>B20000</th>
 													<th>MONTANT EN LETTRE</th>
 													<th>CONFORMITE</th>
+													<th>ACTION</th>
 												</tr>
 											</thead>
 											<tbody>
@@ -70,6 +71,7 @@ include('../PUBLIC/header.php');
 															echo '<button class="btn btn-sm btn-danger">non conforme</button>';
 														}
 														echo'</td>';
+														echo '<td><a href="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '" class="btn btn-sm btn-primary">imprimer</a></td>';
 														echo '</tr>';
 													}
 													if (!$hasRows) {

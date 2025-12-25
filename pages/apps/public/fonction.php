@@ -27,13 +27,30 @@ class Cache {
  */
 function pdf_text($str) {
     if ($str === null) return '';
-    // Tentative via iconv avec translit
-    $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', (string)$str);
-    if ($converted === false) {
-        // Fallback via mb_convert_encoding
-        $converted = mb_convert_encoding((string)$str, 'Windows-1252', 'UTF-8');
+
+    $s = (string)$str;
+    if ($s === '') {
+        return '';
     }
-    return $converted;
+
+    // Tentative via iconv avec translit (si l'extension est dispo)
+    if (function_exists('iconv')) {
+        $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $s);
+        if ($converted !== false) {
+            return $converted;
+        }
+    }
+
+    // Fallback via mb_convert_encoding (si mbstring est dispo)
+    if (function_exists('mb_convert_encoding')) {
+        $converted = @mb_convert_encoding($s, 'Windows-1252', 'UTF-8');
+        if (is_string($converted) && $converted !== '') {
+            return $converted;
+        }
+    }
+
+    // Dernier recours : renvoyer tel quel (évite un fatal error)
+    return $s;
 }
 
 /**
