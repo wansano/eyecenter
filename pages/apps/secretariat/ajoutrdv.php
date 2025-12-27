@@ -53,6 +53,7 @@ if (isset($_POST['ajouter'])) {
     }
 
     if (empty($error_messages)) {
+        $dateChoisie = isset($_POST['date_rdv']) ? trim((string)$_POST['date_rdv']) : '';
         // Traiter le créneau reçu (peut être au format ISO complet)
         $creneauRaw = isset($_POST['prochain_rdv']) ? trim($_POST['prochain_rdv']) : '';
         $creneauFinal = '';
@@ -92,16 +93,16 @@ if (isset($_POST['ajouter'])) {
                 if (!$verif_patient->fetch()) {
                     throw new Exception("Le numéro de dossier patient n'existe pas dans la base de données.");
                 }
-                // Vérification de l'existence du rendez-vous
-                $verif = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_patient = ? AND id_service = ? AND motif = ? AND traitant = ? AND prochain_rdv = ?');
-                $verif->execute([
+                // Vérification: pas de RDV le même jour pour le même traitement
+                // (même patient + même service + même motif/type + même date)
+                $verifJour = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_patient = ? AND id_service = ? AND motif = ? AND DATE(prochain_rdv) = ? LIMIT 1');
+                $verifJour->execute([
                     $id_patient,
-                    $_POST['service'],
-                    $_POST['type'],
-                    $_POST['medecin'],
-                    $creneauFinal
+                    (int) $_POST['service'],
+                    (int) $_POST['type'],
+                    $dateChoisie
                 ]);
-                if ($verif->fetch()) {
+                if ($verifJour->fetch()) {
                     $existe = 1;
                 } else {
                     insererRendezVousInterne($bdd, $id_patient, $_POST['service'], $_POST['type'], $_POST['medecin'], $creneauFinal);
@@ -119,8 +120,25 @@ if (isset($_POST['ajouter'])) {
             ]);
 
             if ($data = $req1->fetch()) {
-                $existe = 1;
-                $patientid = $data['id_patient'];
+                // Patient déjà connu: on peut quand même créer un RDV.
+                $id_patient = (int) $data['id_patient'];
+
+                // Vérification: pas de RDV le même jour pour le même traitement
+                $verifJour2 = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_patient = ? AND id_service = ? AND motif = ? AND DATE(prochain_rdv) = ? LIMIT 1');
+                $verifJour2->execute([
+                    $id_patient,
+                    (int) $_POST['service'],
+                    (int) $_POST['type'],
+                    $dateChoisie
+                ]);
+
+                if ($verifJour2->fetch()) {
+                    $existe = 1;
+                } else {
+                    insererRendezVousExterne($bdd, $id_patient, $_POST['service'], $_POST['type'], $_POST['medecin'], $creneauFinal, $type_patient = 1);
+                    // Pas d'ouverture de dossier (patient existant) => message simple
+                    $errors = 2;
+                }
             } else {
                 // Insertion du patient
                 $assure = $_POST['estAssure'] == 1 ? 1 : 0;
@@ -141,16 +159,17 @@ if (isset($_POST['ajouter'])) {
                 ]);
                 // Récupérer le dernier id_patient
                 $id_patient = $bdd->lastInsertId();
-                // Vérification de l'existence du rendez-vous pour ce patient
-                $verif2 = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_patient = ? AND id_service = ? AND motif = ? AND traitant = ? AND prochain_rdv = ?');
-                $verif2->execute([
-                    $id_patient,
-                    $_POST['service'],
-                    $_POST['type'],
-                    $_POST['medecin'],
-                    $creneauFinal
+
+                // Vérification: pas de RDV le même jour pour le même traitement
+                $verifJour3 = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_patient = ? AND id_service = ? AND motif = ? AND DATE(prochain_rdv) = ? LIMIT 1');
+                $verifJour3->execute([
+                    (int) $id_patient,
+                    (int) $_POST['service'],
+                    (int) $_POST['type'],
+                    $dateChoisie
                 ]);
-                if ($verif2->fetch()) {
+
+                if ($verifJour3->fetch()) {
                     $existe = 1;
                 } else {
                     insererRendezVousExterne($bdd, $id_patient, $_POST['service'], $_POST['type'], $_POST['medecin'], $creneauFinal, $type_patient = 1);
@@ -308,13 +327,13 @@ require('../PUBLIC/header.php');
 
                                 <div id="typeRDVFieldInterne" style="display: <?php echo (isset($_POST['estInterne']) && $_POST['estInterne'] == '0') ? 'block' : 'none'; ?>;">
                                     <div class="row form-group pb-3">
-                                        <div class="col-md-4">
+                                        <div class="col-md-2">
                                             <div class="form-group">
                                                 <label class="col-form-label" for="dossierInput">Saisir le n° dossier du patient</label>
                                                 <input type="text" id="dossierInput" name="dossier" class="form-control" placeholder="" value="<?php echo isset($_POST['dossier']) ? htmlspecialchars($_POST['dossier']) : ''; ?>" required>
-                                                <div id="dossierStatus" class="mt-1 small"></div>
                                             </div>
                                         </div>
+                                        <strong><div id="dossierStatus" class="mt-1 small "></div></strong>
                                     </div>
                                 </div>
                                 <div id="typeRDVFieldExterne" style="display: <?php echo (isset($_POST['estInterne']) && $_POST['estInterne'] == '1') ? 'block' : 'none'; ?>;">
@@ -595,7 +614,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     const data = await resp.json();
                     if (data && data.success){
                         const nom = (data.patient && data.patient.nom) ? `: ${data.patient.nom}` : '';
-                        setStatus('Dossier trouvé'+nom, 'ok');
+
+                        let rdvInfo = '';
+                        if (data.last_rdv && data.last_rdv.date) {
+                            const label = data.last_rdv.state_label || 'Inconnu';
+                            rdvInfo = ` | Rendez-vous du : ${data.last_rdv.date} ${label}`;
+                        }
+
+                        // Si dernier RDV non honoré, on affiche en rouge mais on n'empêche pas la création du nouveau RDV.
+                        if (data.last_rdv && data.last_rdv.state === 'non_respecte') {
+                            setStatus('Patient '+nom+rdvInfo, 'err');
+                        } else {
+                            setStatus('Patient '+nom+rdvInfo, 'ok');
+                        }
                         setSubmitEnabled(true);
                     } else {
                         setStatus('Dossier introuvable', 'err');
