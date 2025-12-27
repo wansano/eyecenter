@@ -68,12 +68,6 @@ if (isset($_POST['ajouter'])) {
         }
     }
 }
-
-// Fonction pour récupérer la valeur d'un champ
-function getFormValue($field, $default = '') {
-    global $formData;
-    return isset($formData[$field]) ? htmlspecialchars($formData[$field]) : $default;
-}
 ?>
 <?php include '../PUBLIC/header.php'; ?>
 <body>

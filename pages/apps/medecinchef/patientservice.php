@@ -151,7 +151,7 @@ include('../PUBLIC/header.php');
                           try {
                               $stmt = $bdd->prepare('SELECT a.*, p.age as patient_age, t.operation as traitement_operation
                                 FROM affectations a JOIN patients p ON a.id_patient = p.id_patient
-                                JOIN traitements t ON a.type = t.id_type WHERE t.id_organigramme IN (4) AND a.status IN (1,2,8)
+                                JOIN traitements t ON a.type = t.id_type WHERE t.id_organigramme IN (1,2,3,4) AND a.status IN (1,2,8)
                                 ORDER BY a.id_affectation');
                               $stmt->execute();
                               
@@ -177,18 +177,17 @@ include('../PUBLIC/header.php');
                                       <td>'.htmlspecialchars($age).' ans</td>
                                       <td>'.htmlspecialchars(model($traitement)).'</td>
                                       <td>';
-                                
-                                                                    if ($status==1 || $status==2 || $status==8) {
-                                                                            echo '
-                                                                            <div class="d-flex gap-1">
-                                                                                <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
-                                                                                        <input type="hidden" name="accepter" value="'.$affectation.'">
-                                                                                        <input type="hidden" name="traitement" value="'.$traitement.'">
-                                                                                        <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
-                                                                                </form>
-                                                                                <button type="button" class="btn btn-sm btn-danger open-refus-modal" data-id="'.$affectation.'">refuser</button>
-                                                                            </div>';
-                                                                    }
+                                        if ($status==1 || $status==2 || $status==8) {
+                                            echo '
+                                            <div class="d-flex gap-1">
+                                                <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
+                                                        <input type="hidden" name="accepter" value="'.$affectation.'">
+                                                        <input type="hidden" name="traitement" value="'.$traitement.'">
+                                                        <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
+                                                </form>
+                                                <button type="button" class="btn btn-sm btn-danger open-refus-modal" data-id="'.$affectation.'">refuser</button>
+                                            </div>';
+                                        }
                                 }
                             echo '</td>
                                 </tr>';
