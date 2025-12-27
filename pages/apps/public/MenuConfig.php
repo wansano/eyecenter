@@ -420,6 +420,9 @@ class MenuConfig {
             <a href="#" class="nav-link dropdown-toggle">Reporting</a>
             <ul class="dropdown-menu">
                 <li class="dropdown-submenu">
+                    <li><a class="nav-link" href="verificationprix.php">Prix de prestation</a></li>
+                </li>
+                <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Rapport Clinique</a>
                     <ul class="dropdown-menu">
                         <li><a class="nav-link" href="#">Inventaire équipement</a></li>
