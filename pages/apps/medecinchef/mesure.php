@@ -24,6 +24,7 @@ try {
     $stmt->execute([$affectation]);
     $data = $stmt->fetch(PDO::FETCH_ASSOC);
     $id_patient = $data['id_patient'];
+    $rdv = $data['id_rdv'];
 
     if (!$data) {
         throw new Exception("Affectation non trouvée");
@@ -46,7 +47,9 @@ try {
             try {
                 insertMesures($bdd, $id_patient, $type, $affectation, $_POST);
                 updateAffectationStatus($bdd, $affectation);
-
+                if ($rdv > 0) {
+                    updateRendezvousStatus($bdd, $rdv);
+                }
                 $bdd->commit();
                 $errors = 4;
             } catch (Exception $e) {
@@ -95,32 +98,7 @@ include('../PUBLIC/header.php');
                                                 </div>
                                                 ';}
                                     ?>
-                            <div class="row form-group pb-3">
-                                <div class="col-md-6">
-                                    <div class="alert alert-info">
-                                        <?php if ($derniereDonnees): ?>
-                                            <li><strong>Dernière accuité visuelle : </strong> <br/> 
-                                            <b>AVLSC : </b>   OD=<?php echo $derniereDonnees['od_avlsc'] ?: '........'; ?>   
-                                            OS=<?php echo $derniereDonnees['os_avlsc'] ?: '........'; ?>       
-                                            <b>AVC : </b>  OD=<?php echo $derniereDonnees['od_avc'] ?: '........'; ?>   
-                                            OS=<?php echo $derniereDonnees['os_avc'] ?: '........'; ?>        
-                                            <b>TS : </b>  OD=<?php echo $derniereDonnees['od_ts'] ?: '........'; ?>   
-                                            OS=<?php echo $derniereDonnees['os_ts'] ?: '........'; ?>       
-                                            <b>P : </b> <?php echo $derniereDonnees['p'] ?: '........'; ?></li>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="alert alert-info">
-                                        <?php if ($derniereDonnees): ?>
-                                            <strong>Motif : </strong><?php echo htmlspecialchars($derniereDonnees['motif']); ?>; 
-                                            <strong>Evolution : </strong><?php echo htmlspecialchars($derniereDonnees['evolution']); ?>; <br/> 
-                                            <strong>Terrain :</strong> <?php echo htmlspecialchars($derniereDonnees['terrain']); ?>; 
-                                            <strong>Antecedents : </strong><?php echo htmlspecialchars($derniereDonnees['antecedents']); ?>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
+                            <?php include __DIR__ . '/../public/acquitehistorique.php'; ?>
                             <!-- Formulaire de consultation -->
                             <form class="form-horizontal" novalidate="novalidate" method="POST"
                                 action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?affectation=<?php echo $affectation; ?>" enctype="multipart/form-data">
@@ -132,8 +110,8 @@ include('../PUBLIC/header.php');
                                             <select name="refraction" data-plugin-selectTwo class="form-control populate" data-plugin-options="{ "minimumInputLength": 2 }" value="<?php echo getFormValue('refraction'); ?>" required>
                                                 <optgroup label="Choisir le type de réfraction">
                                                     <option value="Vision de près">Vision de près</option>
-                                                    <option value="Vision de loin">Vision de loin</option>
-                                                    <option value="Vision de loin et de près">Vision de loin et de près</option>
+                                                    <option value="Vision de loin" selected>Vision de loin</option>
+                                                    <option value="Progressif">Progressif</option>
                                                 </optgroup>
                                             </select>
                                         </div>

@@ -19,9 +19,15 @@ try {
             $traitement = (int) $_POST['traitement'];
 
             // Déterminer la page cible via operation()
-            $traitementModel = operation($traitement);
+            // Important: la valeur vient de la BDD et peut être vide ou contenir des espaces.
+            $traitementModelRaw = operation($traitement);
+            $traitementModel = trim((string)$traitementModelRaw);
+
+            // Fallback: si la valeur est vide / non reconnue, on envoie vers consultation.
+            $actionLink = 'consultation.php';
             switch ($traitementModel) {
                 case "0":
+                case "":
                     $actionLink = 'consultation.php';
                     break;
                 case "1":
@@ -29,6 +35,9 @@ try {
                     break;
                 case "4":
                     $actionLink = 'controle.php';
+                    break;
+                case "5":
+                    $actionLink = 'mesure.php';
                     break;
                 case "3":
                     $actionLink = 'examen.php';
@@ -38,6 +47,10 @@ try {
                     break;
                 case "7":
                     $actionLink = 'rapportementevacuation.php';
+                    break;
+                default:
+                    error_log('patientservice.php: operation() inattendue pour traitement=' . $traitement . ' raw=' . print_r($traitementModelRaw, true) . ' trimmed=' . $traitementModel);
+                    $actionLink = 'consultation.php';
                     break;
             }
 
@@ -160,7 +173,7 @@ include('../PUBLIC/header.php');
                           try {
                               $stmt = $bdd->prepare('SELECT a.*, p.age as patient_age, t.operation as traitement_operation
                                 FROM affectations a JOIN patients p ON a.id_patient = p.id_patient
-                                JOIN traitements t ON a.type = t.id_type WHERE t.id_organigramme IN (1,2,3,4) AND a.status IN (1,2,8)
+                                JOIN traitements t ON a.type = t.id_type WHERE t.id_organigramme IN (1,2,3,4) AND a.status IN (1,2)
                                 ORDER BY a.id_affectation');
                               $stmt->execute();
                               
@@ -177,7 +190,7 @@ include('../PUBLIC/header.php');
                                   $age = calculerAge($donnees1['patient_age']);
                                   $rdv = $donnees1['id_rdv'];
 
-                                  if ($rdv === 0 && in_array($status, [1, 2, 8], true)) {
+                                  if ($rdv === 0 && in_array($status, [1, 2], true)) {
                                   echo' <tr>
                                       <td>'.htmlspecialchars($donnees1['date']).'</td>
                                       <td>'.htmlspecialchars($donnees1['id_patient']).'</td>
@@ -186,7 +199,7 @@ include('../PUBLIC/header.php');
                                       <td>'.htmlspecialchars($age).' ans</td>
                                       <td>'.htmlspecialchars(model($traitement)).'</td>
                                       <td>';
-                                        if ($status==1 || $status==2 || $status==8) {
+                                        if ($status==1 || $status==2) {
                                             echo '
                                             <div class="d-flex gap-1">
                                                 <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">

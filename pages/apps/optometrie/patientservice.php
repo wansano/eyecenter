@@ -32,16 +32,6 @@ try {
             $stmt->execute([$affectationId]);
             $errors = 2;
 
-            // Consentement éventuel
-            try {
-                if (consentement($traitement) == 1) {
-                    echo '<script>window.onload = function(){ window.open("imprimer_consentement.php?affectation=' . $affectationId . '", "_blank"); window.location.href = "' . $actionLink . '?affectation=' . $affectationId . '"; };</script>';
-                    exit;
-                }
-            } catch (Exception $e) {
-                error_log('Erreur consentement: ' . $e->getMessage());
-            }
-
             header('Location: ' . $actionLink . '?affectation=' . $affectationId);
             exit;
         }
