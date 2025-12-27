@@ -21,8 +21,17 @@ try {
             // Déterminer la page cible via operation()
             $traitementModel = operation($traitement);
             switch ($traitementModel) {
+                case "0":
+                    $actionLink = 'consultation.php';
+                    break;
                 case "1":
                     $actionLink = 'chirurgie.php';
+                    break;
+                case "4":
+                    $actionLink = 'controle.php';
+                    break;
+                case "3":
+                    $actionLink = 'examen.php';
                     break;
                 case "6":
                     $actionLink = 'rapportement.php';
