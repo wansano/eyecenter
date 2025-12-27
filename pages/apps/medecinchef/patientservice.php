@@ -190,9 +190,9 @@ include('../PUBLIC/header.php');
                                             echo '
                                             <div class="d-flex gap-1">
                                                 <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'" method="post">
-                                                        <input type="hidden" name="accepter" value="'.$affectation.'">
-                                                        <input type="hidden" name="traitement" value="'.$traitement.'">
-                                                        <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
+                                                    <input type="hidden" name="accepter" value="'.$affectation.'">
+                                                    <input type="hidden" name="traitement" value="'.$traitement.'">
+                                                    <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
                                                 </form>
                                                 <button type="button" class="btn btn-sm btn-danger open-refus-modal" data-id="'.$affectation.'">refuser</button>
                                             </div>';
