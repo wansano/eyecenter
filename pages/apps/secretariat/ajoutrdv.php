@@ -12,6 +12,99 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 session_start();
 
+// Vérification rendez-vous (AJAX) : recherche par dossier ou téléphone et retourne les RDV à venir.
+if (isset($_GET['ajax_check_rdv'])) {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $mode = isset($_GET['mode']) ? trim((string)$_GET['mode']) : '';
+    $qRaw = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+
+    if ($qRaw === '' || ($mode !== 'dossier' && $mode !== 'phone')) {
+        echo json_encode(['success' => false, 'message' => 'Paramètres invalides.']);
+        exit;
+    }
+
+    try {
+        $rows = [];
+
+        if ($mode === 'dossier') {
+            $idPatient = (int)$qRaw;
+            if ($idPatient <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Numéro de dossier invalide.']);
+                exit;
+            }
+
+            $stmt = $bdd->prepare(
+                'SELECT id_rdv, id_patient, id_service, motif, traitant, prochain_rdv, status
+                 FROM dmd_rendez_vous
+                 WHERE id_patient = ? AND prochain_rdv >= NOW()
+                 ORDER BY prochain_rdv ASC
+                 LIMIT 20'
+            );
+            $stmt->execute([$idPatient]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        if ($mode === 'phone') {
+            // Recherche exacte sur le téléphone (fallback : sans espaces)
+            $phone = preg_replace('/\s+/', '', $qRaw);
+            if ($phone === '') {
+                echo json_encode(['success' => false, 'message' => 'Numéro de téléphone invalide.']);
+                exit;
+            }
+
+            $stmt = $bdd->prepare('SELECT id_patient FROM patients WHERE phone = ? LIMIT 20');
+            $stmt->execute([$phone]);
+            $patientIds = array_map(fn($r) => (int)$r['id_patient'], $stmt->fetchAll(PDO::FETCH_ASSOC));
+
+            if (empty($patientIds)) {
+                echo json_encode(['success' => true, 'rdvs' => []]);
+                exit;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($patientIds), '?'));
+            $sql =
+                'SELECT id_rdv, id_patient, id_service, motif, traitant, prochain_rdv, status
+                 FROM dmd_rendez_vous
+                 WHERE id_patient IN (' . $placeholders . ') AND prochain_rdv >= NOW()
+                 ORDER BY prochain_rdv ASC
+                 LIMIT 50';
+
+            $stmt = $bdd->prepare($sql);
+            $stmt->execute($patientIds);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        $statusLabels = [
+            0 => 'Programmé',
+            1 => 'Transmis',
+            2 => 'En cours',
+        ];
+
+        $out = [];
+        foreach ($rows as $r) {
+            $status = (int)($r['status'] ?? 0);
+            $out[] = [
+                'id_rdv' => (int)$r['id_rdv'],
+                'id_patient' => (int)($r['id_patient'] ?? 0),
+                'prochain_rdv' => (string)($r['prochain_rdv'] ?? ''),
+                'service' => (string)service($r['id_service'] ?? 0),
+                'motif' => (string)model($r['motif'] ?? 0),
+                'medecin' => (string)traitant($r['traitant'] ?? 0),
+                'status' => $status,
+                'status_label' => $statusLabels[$status] ?? ('Statut ' . $status),
+            ];
+        }
+
+        echo json_encode(['success' => true, 'rdvs' => $out]);
+        exit;
+    } catch (Exception $e) {
+        error_log('[CHECK RDV] ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Erreur lors de la vérification.']);
+        exit;
+    }
+}
+
 // Ajout quartier (AJAX) : renvoie JSON et stoppe l'exécution pour ne pas afficher toute la page.
 if (isset($_POST['ajax_add_quartier'])) {
     header('Content-Type: application/json; charset=UTF-8');
@@ -328,6 +421,11 @@ require('../PUBLIC/header.php');
                 <div class="col-md-12">
                     <section class="card">
                         <div class="card-body">
+                            <div class="d-flex justify-content-end mb-3">
+                                <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#verificationRdvModal">
+                                    <i class="fa fa-search"></i> Vérifier un RDV
+                                </button>
+                            </div>
                             <?php if ($errors == 4 && $id_patient): ?>
                                 <div class="alert alert-success">
                                     <strong>Succès</strong><br/>  
@@ -890,6 +988,168 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 });
             }
+        });
+        </script>
+
+        <!-- Modal: Vérification rendez-vous -->
+        <div class="modal fade" id="verificationRdvModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Vérification rendez-vous</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="col-form-label">Rechercher par</label>
+                                <select class="form-control" id="rdvCheckMode">
+                                    <option value="dossier">Numéro dossier</option>
+                                    <option value="phone">Téléphone</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="col-form-label" id="rdvCheckLabel">Numéro dossier</label>
+                                <input type="text" class="form-control" id="rdvCheckQuery" placeholder="Ex: 123">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100" id="btnCheckRdv">OK</button>
+                            </div>
+                        </div>
+
+                        <div id="rdvCheckAlert" class="alert d-none mt-3" role="alert"></div>
+
+                        <div class="table-responsive mt-3">
+                            <table class="table table-bordered table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>RDV</th>
+                                        <th>Dossier</th>
+                                        <th>Date</th>
+                                        <th>Service</th>
+                                        <th>Motif</th>
+                                        <th>Médecin</th>
+                                        <th>Statut</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rdvCheckTbody">
+                                    <tr><td colspan="8">Saisissez un dossier ou téléphone.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modeEl = document.getElementById('rdvCheckMode');
+            const labelEl = document.getElementById('rdvCheckLabel');
+            const queryEl = document.getElementById('rdvCheckQuery');
+            const btnEl = document.getElementById('btnCheckRdv');
+            const alertEl = document.getElementById('rdvCheckAlert');
+            const tbodyEl = document.getElementById('rdvCheckTbody');
+
+            function setAlert(type, msg) {
+                if (!alertEl) return;
+                if (!msg) {
+                    alertEl.className = 'alert d-none';
+                    alertEl.textContent = '';
+                    return;
+                }
+                alertEl.className = 'alert alert-' + type;
+                alertEl.textContent = msg;
+                alertEl.classList.remove('d-none');
+            }
+
+            function setLoading() {
+                if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="8">Chargement...</td></tr>';
+            }
+
+            function setEmpty() {
+                if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="8">Aucun rendez-vous à venir trouvé.</td></tr>';
+            }
+
+            function renderRows(rows) {
+                if (!tbodyEl) return;
+                if (!rows || !rows.length) {
+                    setEmpty();
+                    return;
+                }
+                tbodyEl.innerHTML = '';
+                for (const r of rows) {
+                    const tr = document.createElement('tr');
+                    const detailsUrl = 'convocationdetails.php?rdv=' + encodeURIComponent(r.id_rdv);
+                    tr.innerHTML =
+                        '<td>RDV-' + String(r.id_rdv) + '</td>' +
+                        '<td>PAT-' + String(r.id_patient) + '</td>' +
+                        '<td>' + (r.prochain_rdv || '') + '</td>' +
+                        '<td>' + (r.service || '') + '</td>' +
+                        '<td>' + (r.motif || '') + '</td>' +
+                        '<td>' + (r.medecin || '') + '</td>' +
+                        '<td>' + (r.status_label || r.status) + '</td>' +
+                        '<td><a class="btn btn-sm btn-dark" href="' + detailsUrl + '">Détails</a></td>';
+                    tbodyEl.appendChild(tr);
+                }
+            }
+
+            async function checkRdv() {
+                const mode = modeEl ? modeEl.value : 'dossier';
+                const q = queryEl ? queryEl.value.trim() : '';
+                setAlert(null, '');
+                if (!q) {
+                    setAlert('warning', 'Veuillez saisir une valeur.');
+                    return;
+                }
+                setLoading();
+                if (btnEl) btnEl.disabled = true;
+                try {
+                    const url = '<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>' +
+                        '?ajax_check_rdv=1&mode=' + encodeURIComponent(mode) + '&q=' + encodeURIComponent(q);
+                    const resp = await fetch(url);
+                    const data = await resp.json();
+                    if (!data || !data.success) {
+                        setAlert('danger', (data && data.message) ? data.message : 'Erreur lors de la vérification.');
+                        setEmpty();
+                        return;
+                    }
+                    renderRows(data.rdvs || []);
+                } catch (e) {
+                    setAlert('danger', 'Erreur lors de la vérification.');
+                    setEmpty();
+                } finally {
+                    if (btnEl) btnEl.disabled = false;
+                }
+            }
+
+            function syncLabel() {
+                if (!modeEl || !labelEl || !queryEl) return;
+                if (modeEl.value === 'phone') {
+                    labelEl.textContent = 'Téléphone';
+                    queryEl.placeholder = 'Ex: 621000000';
+                } else {
+                    labelEl.textContent = 'Numéro dossier';
+                    queryEl.placeholder = 'Ex: 123';
+                }
+            }
+
+            if (modeEl) modeEl.addEventListener('change', syncLabel);
+            if (btnEl) btnEl.addEventListener('click', checkRdv);
+            if (queryEl) {
+                queryEl.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        checkRdv();
+                    }
+                });
+            }
+
+            syncLabel();
         });
         </script>
         <?php include('../public/footer.php');?>
