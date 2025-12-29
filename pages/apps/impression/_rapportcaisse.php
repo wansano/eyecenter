@@ -149,6 +149,7 @@ $pdf->SetTextColor(0, 0, 0);
 
 $pdf->SetFont('CenturyGothic', '', 10);
 $billets = [
+    500 => (int)($rapport['b0'] ?? 0),
     1000 => (int)($rapport['b1'] ?? 0),
     2000 => (int)($rapport['b2'] ?? 0),
     5000 => (int)($rapport['b5'] ?? 0),

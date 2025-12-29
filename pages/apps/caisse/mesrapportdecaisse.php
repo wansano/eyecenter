@@ -31,6 +31,7 @@ include('../PUBLIC/header.php');
                                                     <th>DATE</th>
                                                     <th>COMPTE</th>
 													<th>MONTANT</th>
+														<th>B500</th>
                                                     <th>B1000</th>
 													<th>B2000</th>
 													<th>B5000</th>
@@ -58,6 +59,7 @@ include('../PUBLIC/header.php');
 														echo '<td>' . htmlspecialchars($donnees1['date_rapportement']) . '</td>';
 														echo '<td>' . htmlspecialchars(type_paiement($donnees1['compte'])) . '</td>';
 														echo '<td>' . number_format($donnees1['montant']) . ' ' . htmlspecialchars($devise) . '</td>';
+																			echo '<td>' . number_format($donnees1['b0'] ?? 0) . '</td>';
 														echo '<td>' . number_format($donnees1['b1']) . '</td>';
 														echo '<td>' . number_format($donnees1['b2']) . '</td>';
 														echo '<td>' . number_format($donnees1['b5']) . '</td>';
@@ -74,8 +76,8 @@ include('../PUBLIC/header.php');
 														echo '<td><a href="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '" target="_blank" class="btn btn-sm btn-primary">imprimer</a></td>';
 														echo '</tr>';
 													}
-													if (!$hasRows) {
-														echo '<tr><td colspan="11" class="text-center">Aucun rapport trouvé pour ce mois.</td></tr>';
+															if (!$hasRows) {
+																echo '<tr><td colspan="13" class="text-center">Aucun rapport trouvé pour ce mois.</td></tr>';
 													}
 												?>
 											</tbody>

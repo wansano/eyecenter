@@ -30,7 +30,7 @@ function validateAccountData($data) {
         $errors[] = "Le montant est requis";
     }
     // Vérifier que chaque champ billet est bien défini (y compris 0)
-    $billets = ['b1', 'b2', 'b5', 'b10', 'b20'];
+    $billets = ['b0', 'b1', 'b2', 'b5', 'b10', 'b20'];
     foreach ($billets as $b) {
         if (!isset($data[$b]) || $data[$b] === '' || !is_numeric($data[$b])) {
             $errors[] = "Le nombre de billet est requis pour chaque montant";
@@ -57,6 +57,7 @@ if (isset($_POST['ajouter'])) {
     $formData = [
         'compte' => cleanInput($_POST['compte'] ?? ''),
         'montant' => cleanInput($_POST['montant'] ?? ''),
+        'b0' => cleanInput($_POST['b0'] ?? 0),
         'b1' => cleanInput($_POST['b1'] ?? 0),
         'b2' => cleanInput($_POST['b2'] ?? 0),
         'b5' => cleanInput($_POST['b5'] ?? 0),
@@ -84,11 +85,12 @@ if (isset($_POST['ajouter'])) {
             } else {
                 $formData['montant'] = str_replace(' ', '', $formData['montant']);
                 // Insertion du rapport journalier avec la date du jour
-                $req = $bdd->prepare('INSERT INTO preuvedecaisse (date_rapportement,compte, montant, b1, b2, b5, b10, b20, montant_lettre, id_user) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $req = $bdd->prepare('INSERT INTO preuvedecaisse (date_rapportement,compte, montant, b0, b1, b2, b5, b10, b20, montant_lettre, id_user) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $req->execute([
                     date('Y-m-d'),
                     $formData['compte'],
                     $formData['montant'],
+                    $formData['b0'] ?? 0,
                     $formData['b1'] ?? 0,
                     $formData['b2'] ?? 0,
                     $formData['b5'] ?? 0,
@@ -197,6 +199,12 @@ if (isset($_POST['ajouter'])) {
                                     </div>
                                     <div class="col-md-2">
                                         <div class="form-group">
+                                            <label class="col-form-label" for="montant">Billet de 500</label>
+                                            <input type="number" name="b0" step="0" min="0" id="b0" class="form-control" value="<?php echo getFormValue('b0'); ?>" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="form-group">
                                             <label class="col-form-label" for="montant">Billet de 1 000</label>
                                             <input type="number" name="b1" step="0" min="0" id="b1" class="form-control" value="<?php echo getFormValue('b1'); ?>" required>
                                         </div>
@@ -255,6 +263,7 @@ if (isset($_POST['ajouter'])) {
             
         document.addEventListener('DOMContentLoaded', function() {
             const inputs = {
+                b0: document.getElementById('b0'),
                 b1: document.getElementById('b1'),
                 b2: document.getElementById('b2'),
                 b5: document.getElementById('b5'),
@@ -343,6 +352,7 @@ if (isset($_POST['ajouter'])) {
 
             function recalc() {
                 const total =
+                    toInt(inputs.b0) * 500 +
                     toInt(inputs.b1) * 1000 +
                     toInt(inputs.b2) * 2000 +
                     toInt(inputs.b5) * 5000 +
@@ -357,7 +367,7 @@ if (isset($_POST['ajouter'])) {
                 }
             }
 
-            ['b1','b2','b5','b10','b20'].forEach(id => {
+            ['b0','b1','b2','b5','b10','b20'].forEach(id => {
                 const el = inputs[id];
                 if (!el) return;
                 el.addEventListener('input', function() {
