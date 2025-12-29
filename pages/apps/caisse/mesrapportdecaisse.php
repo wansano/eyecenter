@@ -71,7 +71,7 @@ include('../PUBLIC/header.php');
 															echo '<button class="btn btn-sm btn-danger">non conforme</button>';
 														}
 														echo'</td>';
-														echo '<td><a href="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '" class="btn btn-sm btn-primary">imprimer</a></td>';
+														echo '<td><a href="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '" target="_blank" class="btn btn-sm btn-primary">imprimer</a></td>';
 														echo '</tr>';
 													}
 													if (!$hasRows) {

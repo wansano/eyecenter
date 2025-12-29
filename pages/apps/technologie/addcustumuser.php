@@ -14,8 +14,9 @@ while ($dta = $req1->fetch())
 
 if ($existe==0) 
     {
-        $req = $bdd->prepare('INSERT INTO users (pseudo, email, type, id_service, date_engagement, responsable,  mdp) VALUES (?,?,?,?,?,?,?)');
-        $req->execute(array($_POST['pseudo'], $_POST['email'], $_POST['type'], $_POST['service'], $_POST['date_engagement'],  $_POST['responsable'], password_hash($_POST['mdp'], PASSWORD_DEFAULT)));
+        $plage_connexion = isset($_POST['plage_connexion']) ? trim((string)$_POST['plage_connexion']) : '';
+        $req = $bdd->prepare('INSERT INTO users (pseudo, email, type, id_service, date_engagement, responsable, plage_connexion, mdp) VALUES (?,?,?,?,?,?,?,?)');
+        $req->execute(array($_POST['pseudo'], $_POST['email'], $_POST['type'], $_POST['service'], $_POST['date_engagement'],  $_POST['responsable'], $plage_connexion, password_hash($_POST['mdp'], PASSWORD_DEFAULT)));
         $errors=2;
     }
 }
@@ -117,21 +118,32 @@ include('../PUBLIC/header.php');
                                             <select name="service" data-plugin-selectTwo class="form-control populate">
                                                 <optgroup>
                                                 <?php
-                                                    if ($types=="comptabilité"){
-                                                    $type = $bdd->prepare('SELECT * FROM services WHERE status!=3 AND id_service=?');
-                                                    $type -> execute(array($id_service));
-                                                    while ($services = $type->fetch())
-                                                        {   
-                                                            echo '<option value="'.$services['id_service'].'">'.$services['nom_service'].'</option>';
-                                                        }
-                                                    } else {
-                                                    $type = $bdd->prepare('SELECT * FROM services WHERE status!=3');
-                                                    $type -> execute();
-                                                    while ($services = $type->fetch())
-                                                        {   
-                                                            echo '<option value="'.$services['id_service'].'">'.$services['nom_service'].'</option>';
-                                                        }
+                                                    // Afficher les cellules (services) depuis l'organigramme : cohérent avec service($id_service)
+                                                    $hasDepartement = false;
+                                                    $statusCol = null;
+                                                    try { $bdd->query('SELECT departement FROM organigramme LIMIT 1'); $hasDepartement = true; } catch (PDOException $e) { $hasDepartement = false; }
+                                                    try { $bdd->query('SELECT status FROM organigramme LIMIT 1'); $statusCol = 'status'; } catch (PDOException $e) {}
+                                                    if ($statusCol === null) {
+                                                        try { $bdd->query('SELECT statuts FROM organigramme LIMIT 1'); $statusCol = 'statuts'; } catch (PDOException $e) {}
+                                                    }
 
+                                                    $cols = 'id_organigramme, celulle' . ($hasDepartement ? ', departement' : '');
+                                                    $sql = 'SELECT ' . $cols . ' FROM organigramme';
+                                                    if ($statusCol !== null) {
+                                                        $sql .= ' WHERE ' . $statusCol . ' != 3';
+                                                    }
+                                                    $sql .= ' ORDER BY ' . ($hasDepartement ? 'departement, ' : '') . 'celulle';
+
+                                                    $stmt = $bdd->prepare($sql);
+                                                    $stmt->execute();
+                                                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                                                        $idOrg = (int) ($row['id_organigramme'] ?? 0);
+                                                        $celulle = (string) ($row['celulle'] ?? '');
+                                                        $departement = $hasDepartement ? (string) ($row['departement'] ?? '') : '';
+                                                        if ($idOrg <= 0 || $celulle === '') { continue; }
+
+                                                        $label = ($departement !== '') ? ($departement . ' - ' . $celulle) : $celulle;
+                                                        echo '<option value="' . htmlspecialchars((string)$idOrg, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</option>';
                                                     }
                                                 ?>
                                                 </optgroup>
@@ -171,6 +183,13 @@ include('../PUBLIC/header.php');
                                             <input type="password" class="form-control" name="mdp" id="formGroupExampleInput" required>
                                         </div>
                                     </div>
+									<div class="col-md-12">
+										<div class="form-group">
+											<label class="col-form-label" for="plage_connexion">Plage de connexion</label>
+											<input type="text" class="form-control" name="plage_connexion" id="plage_connexion" placeholder="ex: lundi:caisse;mardi:secretariat" value="<?php echo isset($_POST['plage_connexion']) ? htmlspecialchars((string)$_POST['plage_connexion'], ENT_QUOTES, 'UTF-8') : ''; ?>">
+											<small class="text-muted">Format: jour:type séparés par ';' (ex: lundi:caisse;mardi:acceuil)</small>
+										</div>
+									</div>
                                 </div>
                                 <?php
                                     if ($types=="comptabilité"){

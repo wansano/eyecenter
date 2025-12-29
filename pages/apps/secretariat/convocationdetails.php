@@ -8,6 +8,49 @@ include('../public/header.php');
 // initialisation du flag d'état
 $errors = 0;
 $existe = 0;
+
+if (isset($_POST['suppression'])) {
+    // on reçoit l'id du rdv (et non l'id patient) pour sécuriser l'opération
+    $rdv_post = intval($_POST['suppression']);
+
+    $userDataPost = getRdvInfo($bdd, $rdv_post);
+    if (!$userDataPost) {
+        $errors = 6;
+    } else {
+        try {
+            // Autoriser uniquement la suppression si le rendez-vous n'a pas encore été transmis/traité
+            if ((int)($userDataPost['status'] ?? -1) !== 0) {
+                throw new Exception("Suppression refusée : ce rendez-vous est déjà en cours de traitement.");
+            }
+
+            $bdd->beginTransaction();
+
+            // Bloquer si une affectation existe déjà pour ce rendez-vous
+            $stmt = $bdd->prepare('SELECT COUNT(*) FROM affectations WHERE id_rdv = ?');
+            $stmt->execute([$rdv_post]);
+            $hasAffectation = (int)$stmt->fetchColumn() > 0;
+            if ($hasAffectation) {
+                throw new Exception("Suppression refusée : ce rendez-vous a déjà une affectation associée.");
+            }
+
+            $stmt = $bdd->prepare('DELETE FROM dmd_rendez_vous WHERE id_rdv = ?');
+            $stmt->execute([$rdv_post]);
+
+            $bdd->commit();
+
+            // Redirection après suppression pour éviter re-POST
+            header('Location: convocation.php?deleted=1');
+            exit();
+        } catch (Exception $e) {
+            if ($bdd->inTransaction()) {
+                $bdd->rollBack();
+            }
+            error_log('Erreur suppression rendez-vous : ' . $e->getMessage());
+            $errors = 6;
+        }
+    }
+}
+
 if (isset($_POST['transmettre'])) {
     // on reçoit l'id du rdv (et non l'id patient) pour sécuriser l'opération
     $rdv_post = intval($_POST['transmettre']);
@@ -106,6 +149,14 @@ if (isset($_POST['impression'])) {
                                             <li>Dossier patient transmis à la caisse pour paiement. Merci de rediriger le patient vers la caisse.</li>
                                             </div>
                                             ';}
+								if ($errors==6) {
+									echo '
+										<div class="alert alert-danger">
+											<strong>Erreur</strong> <br/>
+											<li>Impossible de supprimer ce rendez-vous. Vérifiez son statut ou s\'il est déjà lié à une affectation.</li>
+										</div>
+									';
+								}
                                         if ($errors==4) {
                                         echo '
                                             <div class="alert alert-danger">
@@ -207,27 +258,30 @@ if (isset($_POST['impression'])) {
 												<label class="col-form-label" for="formGroupExampleInput">Rendez-vous avec le medecin</label>
 												<input type="text" class="form-control" id="formGroupExampleInput" value="'.traitant($id_medecin).'" disabled>
 											</div>
-										</div>';
+										</div>
+                                        </div>';
 										if( $status === 0) { echo'
-										<div class="col-md-4">
-                                            <div class="d-flex gap-2">
-                                                <a href="miseajourdv.php?rdv='.($rendezvous).'" class="btn btn-dark text-center my-4"> <i class="fa fa-edit"></i> mise à jour</a>
-                                                <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?rdv='.$rendezvous.'" method="post" class="d-inline">
-                                                    <input type="hidden" name="transmettre" value="'.$rendezvous.'">
-                                                    <button class="btn btn-info text-center my-4" type="submit"> <i class="fa fa-paper-plane"></i> transmettre le dossier</button>
-                                                </form>
+                                        <div class="row form-group pb-3">
+                                            <div class="col-md-12">
+                                                <div class="d-flex gap-2">
+                                                    <a href="miseajourdv.php?rdv='.($rendezvous).'" class="btn btn-dark text-center my-4"> <i class="fa fa-edit"></i> mettre à jour</a>
+                                                    <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?rdv='.$rendezvous.'" method="post" class="d-inline">
+                                                        <input type="hidden" name="transmettre" value="'.$rendezvous.'">
+                                                        <button class="btn btn-info text-center my-4" type="submit"> <i class="fa fa-paper-plane"></i> transmettre</button>
+                                                    </form>
+                                                    <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?rdv='.$rendezvous.'" method="post" class="d-inline" onsubmit="return confirm(\'Confirmer la suppression de ce rendez-vous ?\');">
+                                                        <input type="hidden" name="suppression" value="'.$rendezvous.'">
+                                                        <button class="btn btn-danger text-center my-4" type="submit"> <i class="fa fa-trash"></i> Annuler</button>
+                                                    </form>';
+                                                if( $type_patient === 1 & $status === 0) { echo'
+                                                    <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?rdv='.$rendezvous.'" method="post">
+                                                        <input type="hidden" name="impression" value="'.$rendezvous.'">
+                                                        <button class="btn btn-success text-center my-4" type="submit"> <i class="fa fa-print"></i> imprimer le dossier</button>
+                                                    </form>';} echo'
+                                                </div>
                                             </div>
-                                        </div>';
-										}
-                                        if( $type_patient === 1 & $status === 0) { echo'
-										<div class="col-md-2 ">
-											<form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?rdv='.$rendezvous.'" method="post">
-                                            	<input type="hidden" name="impression" value="'.$rendezvous.'">
-                                            	<button class="btn btn-success text-center my-4" type="submit"> <i class="fa fa-print"></i> imprimer le dossier</button>
-                                            </form>
-                                        </div>';
-										} echo'
-									</div>
+									    </div>
+                                    ';} echo'
 							</section>
 						</div>
 					</div>';

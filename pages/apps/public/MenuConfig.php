@@ -68,6 +68,23 @@ class MenuConfig {
                     </ul>
                 </li>
             </ul>
+        </li>
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Gestion Trésorerie</a>
+            <ul class="dropdown-menu">
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Paiements</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="annulationpaiementcaisse.php">Annuler paiement caisse</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Bulletin de paie</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="#">Liste des bulletins</a></li>
+                    </ul>
+                </li>
+            </ul>
         </li>';
     }
 

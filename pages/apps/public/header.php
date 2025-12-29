@@ -1,3 +1,8 @@
+<?php
+if (!defined('APP_HEADER_INCLUDED')) {
+	define('APP_HEADER_INCLUDED', true);
+}
+?>
 <!doctype html>
 <html class="fixed has-top-menu" lang="fr">
 	<head>

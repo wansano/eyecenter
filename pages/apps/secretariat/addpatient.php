@@ -2,6 +2,68 @@
 include('../PUBLIC/connect.php');
 session_start();
 
+// Ajout quartier (AJAX) : renvoie JSON et stoppe l'exécution pour ne pas afficher toute la page.
+if (isset($_POST['ajax_add_quartier'])) {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $villeId = isset($_POST['ville_id']) ? (int)$_POST['ville_id'] : 0;
+    $quartier = isset($_POST['quartier']) ? trim((string)$_POST['quartier']) : '';
+
+    if ($villeId <= 0 || $quartier === '') {
+        echo json_encode(['success' => false, 'message' => 'Ville et quartier sont requis.']);
+        exit;
+    }
+
+    try {
+        $bdd->beginTransaction();
+
+        // Vérifier si la ville existe
+        $stVille = $bdd->prepare('SELECT COUNT(*) FROM adresses_villes WHERE id_ville = ?');
+        $stVille->execute([$villeId]);
+        if ((int)$stVille->fetchColumn() <= 0) {
+            throw new Exception('Ville invalide.');
+        }
+
+        // Vérifier doublon (même quartier dans la même ville)
+        $stExists = $bdd->prepare('SELECT id_quartier FROM adresses_quartiers WHERE quartier = ? AND id_ville = ? LIMIT 1');
+        $stExists->execute([$quartier, $villeId]);
+        $existing = $stExists->fetch(PDO::FETCH_ASSOC);
+        if ($existing) {
+            $bdd->rollBack();
+            echo json_encode([
+                'success' => true,
+                'already_exists' => true,
+                'id' => (int)$existing['id_quartier'],
+                'nom' => $quartier,
+                'message' => 'Ce quartier existe déjà.'
+            ]);
+            exit;
+        }
+
+        $stIns = $bdd->prepare('INSERT INTO adresses_quartiers (id_ville, quartier) VALUES (?, ?)');
+        $stIns->execute([$villeId, $quartier]);
+        $newId = (int)$bdd->lastInsertId();
+
+        $bdd->commit();
+
+        echo json_encode([
+            'success' => true,
+            'already_exists' => false,
+            'id' => $newId,
+            'nom' => $quartier,
+            'message' => 'Quartier ajouté.'
+        ]);
+        exit;
+    } catch (Exception $e) {
+        if ($bdd->inTransaction()) {
+            $bdd->rollBack();
+        }
+        error_log('[AJOUT QUARTIER] ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => "Erreur lors de l'ajout du quartier."]); 
+        exit;
+    }
+}
+
 $errors = 0;
 $existe = 0;
 $id_patient = null;
@@ -181,7 +243,7 @@ require('../PUBLIC/header.php');
                                             </select>
                                             <input type="hidden" id="hiddenquartierId" name="quartier_id" value="">
                                         </div>
-                                        <a href="../technologie/ajoutQuartier.php" target="_blank">Quartier manquant ? ajouter</a>
+                                        <a href="#" onclick="return false;" data-bs-toggle="modal" data-bs-target="#ajoutQuartierModal">Quartier manquant ? ajouter</a>
                                     </div>
                                     <div class="col-md-5">
                                         <div class="form-group">
@@ -236,6 +298,174 @@ require('../PUBLIC/header.php');
                 var estAssure = document.querySelector('input[name="estAssure"]:checked').value;
                 assuranceField.style.display = estAssure === "1" ? "block" : "none";
             }
+        </script>
+
+        <!-- Modal: Ajout quartier (formulaire intégré) -->
+        <div class="modal fade" id="ajoutQuartierModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Ajouter un quartier</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="quartierModalAlert" class="alert d-none" role="alert"></div>
+
+                        <form id="ajoutQuartierForm">
+                            <input type="hidden" name="ajax_add_quartier" value="1">
+                            <div class="row g-3">
+                                <div class="col-md-5">
+                                    <label class="col-form-label">Ville</label>
+                                    <select class="form-control" name="ville_id" id="villeQuartierModal" required>
+                                        <option value="">--- Choisir la ville ---</option>
+                                        <?php
+                                        $collModal = $bdd->prepare('SELECT id_ville, nom FROM adresses_villes');
+                                        $collModal->execute();
+                                        while ($ville = $collModal->fetch(PDO::FETCH_ASSOC)) {
+                                            echo '<option value="'.(int)$ville['id_ville'].'">'.htmlspecialchars($ville['nom']).'</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-7">
+                                    <label class="col-form-label">Nom du quartier</label>
+                                    <input type="text" class="form-control" name="quartier" id="quartierNomModal" required>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                        <button type="button" class="btn btn-primary" id="btnSaveQuartier">Ajouter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        // Définir updateQuartier si absent (certaines pages l'ont via scripts globaux)
+        window.updateQuartier = window.updateQuartier || function () {
+            const villeId = document.getElementById('villeSelect') ? document.getElementById('villeSelect').value : '';
+            const quartierSelect = document.getElementById('quartierSelect');
+            const hiddenId = document.getElementById('hiddenquartierId');
+            if (!quartierSelect) return;
+
+            if (!villeId) {
+                quartierSelect.innerHTML = '<option value="">-- vous devez choisir une ville --</option>';
+                if (hiddenId) hiddenId.value = '';
+                if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).val('').trigger('change');
+                return;
+            }
+
+            quartierSelect.innerHTML = '<option value="">Chargement...</option>';
+            fetch(`../public/getQuartiers.php?ville=${encodeURIComponent(villeId)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || !data.success || !Array.isArray(data.quartier)) {
+                        quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                        return;
+                    }
+                    quartierSelect.innerHTML = '<option value="">-- Choisir le quartier --</option>';
+                    for (const q of data.quartier) {
+                        const opt = document.createElement('option');
+                        opt.value = q.id;
+                        opt.textContent = q.nom;
+                        quartierSelect.appendChild(opt);
+                    }
+
+                    if (window.__pendingQuartierSelectId) {
+                        quartierSelect.value = String(window.__pendingQuartierSelectId);
+                        if (hiddenId) hiddenId.value = String(window.__pendingQuartierSelectId);
+                        if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).val(String(window.__pendingQuartierSelectId)).trigger('change');
+                        window.__pendingQuartierSelectId = null;
+                    } else {
+                        if (hiddenId) hiddenId.value = quartierSelect.value || '';
+                        if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).trigger('change');
+                    }
+                })
+                .catch(() => {
+                    quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                });
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const quartierSelect = document.getElementById('quartierSelect');
+            const hiddenId = document.getElementById('hiddenquartierId');
+            if (quartierSelect && hiddenId) {
+                quartierSelect.addEventListener('change', function () {
+                    hiddenId.value = quartierSelect.value || '';
+                });
+            }
+
+            // Pré-remplir la ville du modal à l'ouverture
+            const modalEl = document.getElementById('ajoutQuartierModal');
+            if (modalEl) {
+                modalEl.addEventListener('show.bs.modal', function () {
+                    const villeSelect = document.getElementById('villeSelect');
+                    const villeModal = document.getElementById('villeQuartierModal');
+                    const qNom = document.getElementById('quartierNomModal');
+                    const alertEl = document.getElementById('quartierModalAlert');
+                    if (alertEl) {
+                        alertEl.className = 'alert d-none';
+                        alertEl.textContent = '';
+                    }
+                    if (villeModal && villeSelect && villeSelect.value) {
+                        villeModal.value = villeSelect.value;
+                    }
+                    if (qNom) qNom.value = '';
+                });
+            }
+
+            // Submit AJAX ajout quartier
+            const btn = document.getElementById('btnSaveQuartier');
+            const form = document.getElementById('ajoutQuartierForm');
+            const alertEl = document.getElementById('quartierModalAlert');
+            if (btn && form) {
+                btn.addEventListener('click', async function () {
+                    btn.disabled = true;
+                    try {
+                        const fd = new FormData(form);
+                        const resp = await fetch('<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>', {
+                            method: 'POST',
+                            body: fd
+                        });
+                        const data = await resp.json();
+                        if (!data || !data.success) {
+                            if (alertEl) {
+                                alertEl.className = 'alert alert-danger';
+                                alertEl.textContent = (data && data.message) ? data.message : "Erreur lors de l'ajout.";
+                                alertEl.classList.remove('d-none');
+                            }
+                            return;
+                        }
+
+                        const villeMain = document.getElementById('villeSelect');
+                        const villeModal = document.getElementById('villeQuartierModal');
+                        if (villeMain && villeModal && villeModal.value && villeMain.value !== villeModal.value) {
+                            villeMain.value = villeModal.value;
+                            if (window.$ && $(villeMain).data('select2')) $(villeMain).val(villeModal.value).trigger('change');
+                        }
+
+                        window.__pendingQuartierSelectId = data.id;
+                        window.updateQuartier();
+
+                        const modalEl = document.getElementById('ajoutQuartierModal');
+                        if (modalEl && window.bootstrap) {
+                            const instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                            instance.hide();
+                        }
+                    } catch (e) {
+                        if (alertEl) {
+                            alertEl.className = 'alert alert-danger';
+                            alertEl.textContent = "Erreur lors de l'ajout du quartier.";
+                            alertEl.classList.remove('d-none');
+                        }
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            }
+        });
         </script>
         <?php if ($errors == 2 && $id_patient): ?>
             <script>

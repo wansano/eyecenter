@@ -38,7 +38,9 @@ header('X-Content-Type-Options: nosniff');
 $clinique = getSingleRow($bdd, 'profil_entreprise');
 $devise = $clinique['devise'];
 
-include ('header.php');
+if (!defined('APP_HEADER_INCLUDED')) {
+    include('header.php');
+}
 ?>
 <!-- start: header -->
 <header class="header header-nav-menu header-nav-top-line">

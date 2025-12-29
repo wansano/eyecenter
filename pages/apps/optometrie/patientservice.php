@@ -163,7 +163,7 @@ include('../PUBLIC/header.php');
                                             <input type="hidden" name="traitement" value="'.$traitement.'">
                                             <button type="submit" class="btn btn-sm btn-success"><i class="fa-regular fa-circle-check"></i> traiter</button>
                                         </form>
-                                                                                <button type="button" class="btn btn-sm btn-danger open-refus-modal" data-id="'.$affectation.'"><i class="fa-regular fa-circle-xmark"></i> refuser</button>
+                                        <button type="button" class="btn btn-sm btn-danger open-refus-modal" data-id="'.$affectation.'"><i class="fa-regular fa-circle-xmark"></i> refuser</button>
                                       </div>';
                                   }
                                 }
