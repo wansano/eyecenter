@@ -27,6 +27,7 @@ if (isset($_GET['ajax_history'])) {
                 a.id_affectation,
                 COALESCE(MAX(p.datepaiement), a.date) AS date_passage,
                 COALESCE(MAX(p.types), a.type) AS motif_id,
+                COALESCE(MAX(p.compte), a.type_paiement) AS compte_id,
                 COALESCE(SUM(COALESCE(p.montant_paye, p.montant)), 0) AS montant_paye
             FROM affectations a
             LEFT JOIN paiements p
@@ -43,15 +44,21 @@ if (isset($_GET['ajax_history'])) {
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $out = [];
+        $totalPaye = 0.0;
         foreach ($rows as $r) {
             $motifId = (int)($r['motif_id'] ?? 0);
+            $compteId = (int)($r['compte_id'] ?? 0);
+            $montant = (float)($r['montant_paye'] ?? 0);
+            $totalPaye += $montant;
             $out[] = [
                 'id_affectation' => (int)($r['id_affectation'] ?? 0),
                 'date' => (string)($r['date_passage'] ?? ''),
                 'motif_id' => $motifId,
                 'motif' => (string)model($motifId),
-                'montant_paye' => (float)($r['montant_paye'] ?? 0),
-                'montant_paye_label' => number_format((float)($r['montant_paye'] ?? 0), 0, ',', ' '),
+                'compte_id' => $compteId,
+                'moyen_paiement' => (string)type_paiement($compteId),
+                'montant_paye' => $montant,
+                'montant_paye_label' => number_format($montant, 0, ',', ' '),
             ];
         }
 
@@ -61,6 +68,8 @@ if (isset($_GET['ajax_history'])) {
                 'id_patient' => $idPatient,
                 'nom_patient' => (string)nom_patient($idPatient),
             ],
+            'total_paye' => $totalPaye,
+            'total_paye_label' => number_format($totalPaye, 0, ',', ' '),
             'passages' => $out,
         ]);
         exit;
@@ -125,6 +134,11 @@ include('../PUBLIC/header.php');
                 <div class="modal-body">
                     <div id="historyAlert" class="alert d-none" role="alert"></div>
 
+                    <div class="d-flex justify-content-end mb-2">
+                        <strong>Total payé :</strong>&nbsp;
+                        <span id="historyTotal">0</span>&nbsp;<?= htmlspecialchars($devise); ?>
+                    </div>
+
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0">
                             <thead>
@@ -132,11 +146,12 @@ include('../PUBLIC/header.php');
                                     <th>PASSAGE</th>
                                     <th>DATE</th>
                                     <th>MOTIF</th>
+                                    <th>MOYEN DE PAIEMENT</th>
                                     <th>MONTANT PAYÉ en <?= $devise; ?></th>
                                 </tr>
                             </thead>
                             <tbody id="historyTbody">
-                                <tr><td colspan="4">Saisissez un numéro de dossier.</td></tr>
+                                <tr><td colspan="5">Saisissez un numéro de dossier.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -157,6 +172,7 @@ include('../PUBLIC/header.php');
         const titleEl = document.getElementById('historyModalTitle');
         const alertEl = document.getElementById('historyAlert');
         const tbodyEl = document.getElementById('historyTbody');
+        const totalEl = document.getElementById('historyTotal');
 
         function setAlert(type, msg) {
             if (!alertEl) return;
@@ -171,11 +187,12 @@ include('../PUBLIC/header.php');
         }
 
         function setLoading() {
-            if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="4">Chargement...</td></tr>';
+            if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="5">Chargement...</td></tr>';
         }
 
         function setEmpty() {
-            if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="4">Aucun passage trouvé.</td></tr>';
+            if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="5">Aucun passage trouvé.</td></tr>';
+            if (totalEl) totalEl.textContent = '0';
         }
 
         function showModal() {
@@ -198,6 +215,7 @@ include('../PUBLIC/header.php');
                     '<td>EC_AFF' + String(p.id_affectation ?? '') + '</td>' +
                     '<td>' + (p.date ?? '') + '</td>' +
                     '<td>' + (p.motif ?? '') + '</td>' +
+                    '<td>' + (p.moyen_paiement ?? '') + '</td>' +
                     '<td class="text-end">' + (p.montant_paye_label ?? '0') + '</td>';
                 tbodyEl.appendChild(tr);
             }
@@ -217,6 +235,7 @@ include('../PUBLIC/header.php');
 
             setAlert(null, '');
             setLoading();
+            if (totalEl) totalEl.textContent = '0';
             if (btn) btn.disabled = true;
 
             try {
@@ -228,6 +247,9 @@ include('../PUBLIC/header.php');
                     const patient = data.patient || {};
                     if (titleEl) {
                         titleEl.textContent = 'Historique - PAT-' + String(patient.id_patient || id) + (patient.nom_patient ? (' - ' + patient.nom_patient) : '');
+                    }
+                    if (totalEl) {
+                        totalEl.textContent = (data.total_paye_label != null) ? String(data.total_paye_label) : '0';
                     }
                     renderRows(data.passages || []);
                 }
