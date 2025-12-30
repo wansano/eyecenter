@@ -2,15 +2,15 @@
 header('Content-Type: application/json');
 
 // Inclure la connexion à la base de données
-include('../PUBLIC/connect.php');
+include('../public/connect.php');
 
-// Vérifier si l'ID du service est passé
-if (isset($_GET['service'])) {
-    $serviceId = intval($_GET['service']);
+// Vérifier si l'ID du médecin est passé (compat: param "service" historique)
+if (isset($_GET['medecin']) || isset($_GET['service'])) {
+    $medecinId = isset($_GET['medecin']) ? intval($_GET['medecin']) : intval($_GET['service']);
 
     // Préparer la requête pour récupérer les traitements liés au service
     $query = $bdd->prepare('SELECT id_type, nom_type FROM traitements WHERE model = ? AND status = 1');
-    $query->execute([$serviceId]);
+    $query->execute([$medecinId]);
 
     $motifs = [];
     while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
@@ -27,7 +27,7 @@ if (isset($_GET['service'])) {
 } else {
     echo json_encode([
         'success' => false,
-        'message' => 'Service ID manquant'
+        'message' => 'Identifiant médecin manquant'
     ]);
 }
 ?>

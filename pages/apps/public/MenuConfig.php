@@ -93,6 +93,7 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Gestion Patients</a>
             <ul class="dropdown-menu">
+                <li><a class="nav-link" href="historiquedossier.php">Historique des passages</a></li>
                 <li><a class="nav-link" href="rechercheinformation.php">Recherche</a></li>
                 <li><a class="nav-link" href="addpatient.php?ap=default">Ajout</a></li>
                 <li><a class="nav-link" href="editpatient.php?ep=default">Modification</a></li>
@@ -133,6 +134,7 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle" href="#">Vérification</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="verificationprix.php">Prix de prestation</a></li>
+                <li><a class="nav-link" href="historiquedossier.php">Historique des passages</a></li>
             </ul>
         </li>
         <li class="dropdown">
@@ -438,6 +440,7 @@ class MenuConfig {
             <ul class="dropdown-menu">
                 <li class="dropdown-submenu">
                     <li><a class="nav-link" href="verificationprix.php">Prix de prestation</a></li>
+                    <li><a class="nav-link" href="historiquedossier.php">Historique des passages</a></li>
                 </li>
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Rapport Clinique</a>

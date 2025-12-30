@@ -57,7 +57,8 @@ require('../PUBLIC/header.php');
                                         <li><?php echo htmlspecialchars($error); ?></li>
                                     <?php endforeach; ?>
                                 </div>
-                            <?php endif; ?>                            <form class="form-horizontal" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+                            <?php endif; ?>
+                            <form class="form-horizontal" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
                                 <div class="row form-group pb-3">
                                     <div class="col-md-8">
                                         <div class="form-group">
@@ -82,39 +83,62 @@ require('../PUBLIC/header.php');
                         </div>
                     </section>
                 </div>
-                
-                <?php if (!empty($resultats)): ?>
-                <div class="col-md-12">
-                    <header class="card-header">
-                        Résultats de la recherche
-                    </header>
-                    <div class="card-body">
-                        <table class="table table-responsive-md table-striped mb-0">
-                            <thead>
-                                <tr>
-                                    <th>DOSSIER</th>
-                                    <th>PATIENT</th>
-                                    <th>CONTACT</th>
-                                    <th>ADRESSE</th>
-                                    <th>RESPONSABLE</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($resultats as $patient): ?>
-                                    <tr>
-                                        <td>PAT-<?php echo htmlspecialchars($patient['id_patient']); ?></td>
-                                        <td><?php echo htmlspecialchars($patient['nom_patient']); ?></td>
-                                        <td><?php echo htmlspecialchars($patient['phone']); ?></td>
-                                        <td><?php echo htmlspecialchars(adress($patient['adresse'])?: $patient['adresse']) ?></td>
-                                        <td><?php echo htmlspecialchars($patient['responsable']); ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <?php endif; ?>
                 <!-- end: page -->
             </section>
         </div>
+
+        <?php if (!empty($resultats)): ?>
+        <!-- Modal: Résultats de recherche -->
+        <div class="modal fade" id="resultatsRechercheModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Résultats de la recherche</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-responsive-md table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>DOSSIER</th>
+                                        <th>PATIENT</th>
+                                        <th>PROFESSION</th>
+                                        <th>CONTACT</th>
+                                        <th>ADRESSE</th>
+                                        <th>RESPONSABLE</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($resultats as $patient): ?>
+                                        <tr>
+                                            <td>PAT-<?php echo htmlspecialchars($patient['id_patient']); ?></td>
+                                            <td><?php echo htmlspecialchars($patient['nom_patient']); ?></td>
+                                            <td><?php echo htmlspecialchars($patient['profession']); ?></td>
+                                            <td><?php echo htmlspecialchars($patient['phone']); ?></td>
+                                            <td><?php echo htmlspecialchars(adress($patient['adresse']) ?: $patient['adresse']); ?></td>
+                                            <td><?php echo htmlspecialchars($patient['responsable']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalEl = document.getElementById('resultatsRechercheModal');
+            if (modalEl && window.bootstrap) {
+                const instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                instance.show();
+            }
+        });
+        </script>
+        <?php endif; ?>
         <?php include('../PUBLIC/footer.php'); ?>
