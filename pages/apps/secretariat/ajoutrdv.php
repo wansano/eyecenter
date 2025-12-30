@@ -37,7 +37,7 @@ if (isset($_GET['ajax_check_rdv'])) {
             $stmt = $bdd->prepare(
                 'SELECT id_rdv, id_patient, id_service, motif, traitant, prochain_rdv, status
                  FROM dmd_rendez_vous
-                 WHERE id_patient = ? AND prochain_rdv >= NOW()
+                  WHERE id_patient = ? AND prochain_rdv >= CURDATE()
                  ORDER BY prochain_rdv ASC
                  LIMIT 20'
             );
@@ -66,7 +66,7 @@ if (isset($_GET['ajax_check_rdv'])) {
             $sql =
                 'SELECT id_rdv, id_patient, id_service, motif, traitant, prochain_rdv, status
                  FROM dmd_rendez_vous
-                 WHERE id_patient IN (' . $placeholders . ') AND prochain_rdv >= NOW()
+                 WHERE id_patient IN (' . $placeholders . ') AND prochain_rdv >= CURDATE()
                  ORDER BY prochain_rdv ASC
                  LIMIT 50';
 
