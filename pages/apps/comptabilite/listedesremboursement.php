@@ -1,5 +1,6 @@
 <?php
 include('../PUBLIC/connect.php');
+include('../PUBLIC/fonction.php');
 session_start();
 
 $errors=0;
@@ -29,10 +30,6 @@ $errors=0;
 						<div class="row">
 							<div class="col">
 								<section class="card">
-									<header class="card-header">
-										<h2 class="card-title">Liste des remboursements éffectués
-										</h2>
-									</header>
 									<div class="card-body">
 									<?php
                                             if ($errors==3) {
@@ -69,7 +66,7 @@ $errors=0;
                                                     <td>'.$donnees1['patient'].'</td>
 													<td>'.patient($donnees1['patient']).'</td>
 													<td>'.contact($donnees1['patient']).'</td>
-													<td>'.type($donnees1['types']).'</td>
+													<td>'.type_traitement($donnees1['types']).'</td>
 													<td>'.number_format($donnees1['montant_paye']).' '.$devise.'</td>
                                                     <td>'.compte($donnees1['compte']).'</td>
 													<td>
@@ -77,7 +74,7 @@ $errors=0;
                                                     </td>';
                                                     }
 												?>
-											</tbody>
+											</tbody
 										</table>
 									</div>
 								</section>
