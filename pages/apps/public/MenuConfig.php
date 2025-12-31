@@ -102,9 +102,10 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Documentation</a>
+            <a href="#" class="nav-link dropdown-toggle">Edition</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression dossier</a></li>
+                <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Impression dossier</a></li>
+                <li><a class="nav-link" href="reimpressioncarte.php">Impression carte adhesion</a></li>
             </ul>
         </li>
         <li class="dropdown">

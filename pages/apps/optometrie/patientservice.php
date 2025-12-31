@@ -53,10 +53,15 @@ try {
                 $stmtUpd = $bdd->prepare('UPDATE affectations SET status = 99 WHERE id_affectation = ?');
                 $stmtUpd->execute([$affectationRefus]);
 
-                $payeur = isset($_SESSION['id_user']) ? (int)$_SESSION['id_user'] : 0;
-                $stmtInsert = $bdd->prepare('INSERT INTO remboursements (paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, payeur) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?)');
+                $payeur = 0;
+                if (isset($_SESSION['auth'])) {
+                    $payeur = (int)$_SESSION['auth'];
+                } elseif (isset($_SESSION['id_user'])) {
+                    $payeur = (int)$_SESSION['id_user'];
+                }
+                $stmtInsert = $bdd->prepare('INSERT INTO remboursements (paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, refererpar) VALUES (?,?,?,?,0,NULL,NULL,?,CURDATE(),?)');
                 $null = null;
-                $stmtInsert->execute([$null, $affectationRefus, $patientId, $typeId, $null, $null, $null, $motifRefus, $payeur]);
+                $stmtInsert->execute([$null, $affectationRefus, $patientId, $typeId, $motifRefus, $payeur]);
                 $bdd->commit();
                 $errors = 8;
             } catch (Exception $ex) {

@@ -41,11 +41,15 @@ try {
 
     // Récupérer le remboursement créé lors du refus pour afficher le motif (clé: id_affectation)
     $motif_initial = '';
+    $refererpar_initial = 0;
     try {
-        $rembSelInit = $bdd->prepare('SELECT id_remboursement, motif FROM remboursements WHERE id_affectation = ? ORDER BY id_remboursement DESC LIMIT 1');
+        $rembSelInit = $bdd->prepare('SELECT id_remboursement, motif, refererpar FROM remboursements WHERE id_affectation = ? ORDER BY id_remboursement DESC LIMIT 1');
         $rembSelInit->execute([$affectation]);
         $rembInit = $rembSelInit->fetch(PDO::FETCH_ASSOC);
-        if ($rembInit) { $motif_initial = (string)$rembInit['motif']; }
+        if ($rembInit) {
+            $motif_initial = (string)$rembInit['motif'];
+            $refererpar_initial = (int)($rembInit['refererpar'] ?? 0);
+        }
     } catch (Exception $ie) {
         // ignore affichage motif si indisponible
     }
@@ -88,8 +92,9 @@ try {
 
             try {
                 // Mise à jour du remboursement existant
+                // refererpar = médecin ayant refusé (ne pas écraser lors du paiement)
                 $upd = $bdd->prepare('UPDATE remboursements 
-                    SET paye_a = ?, montant_paye = ?, montant_remboursse = ?, compte = ?, date_ajout = ?, payeur = ?, types = ?
+                    SET paye_a = ?, montant_paye = ?, montant_remboursse = ?, compte = ?, date_ajout = ?, types = ?, payeur = ?
                     WHERE id_remboursement = ?');
                 $upd->execute([
                     $_POST['payea'],
@@ -97,8 +102,8 @@ try {
                     $montant_remb,
                     $_POST['compte'],
                     $_POST['dateajout'],
-                    $_SESSION['auth'],
                     $typesc,
+                    $_SESSION['auth'] ?? 0,
                     (int)$remb['id_remboursement'],
                 ]);
 
@@ -220,6 +225,14 @@ include('../public/header.php');
                                         </div>
                                     </div>
                                 </div>
+                                <div class="row form-group pb-3">
+                                    <div class="col-md-12">
+                                        <div class="form-group">
+                                            <label class="col-form-label">Référé par (médecin du refus)</label>
+                                            <input type="text" class="form-control" value="<?php echo htmlspecialchars($refererpar_initial ? traitant($refererpar_initial) : '—'); ?>" disabled>
+                                        </div>
+                                    </div>
+                                </div>
                                 <?php if (!isset($_GET['success'])): ?>
                                 <form class="form-horizontal" novalidate="novalidate" method="POST" action="payementreval.php?id_affectation=<?php echo $affectation;?>" enctype="multipart/form-data">
                                 <input type="hidden" name="payer" value="<?php echo $affectation;?>">
@@ -262,7 +275,7 @@ include('../public/header.php');
                                         <div class="col-md-12">
                                             <div class="form-group">
                                                 <label class="col-form-label" for="formGroupExampleInput">Motif du remboursement</label>
-                                                <textarea class="form-control" rows="3" disabled><?php echo htmlspecialchars($motif_initial); ?></textarea>
+                                                <textarea class="form-control" rows="3" disabled><?php echo htmlspecialchars($motif_initial !== '' ? $motif_initial : '—'); ?></textarea>
                                             </div>
                                         </div>
 								    </div>

@@ -56,55 +56,58 @@ try {
             exit;
         }
 
-        if (isset($_POST['remboursement'])) 
-            {
-                $affectationRefus = (int) $_POST['remboursement'];
-                $motifRefus = isset($_POST['motif_refus']) ? trim($_POST['motif_refus']) : '';
+        if (isset($_POST['remboursement'])) {
+            $affectationRefus = (int) $_POST['remboursement'];
+            $motifRefus = isset($_POST['motif_refus']) ? trim($_POST['motif_refus']) : '';
 
-                try {
-                    // Démarrer une transaction pour garantir cohérence
-                    $bdd->beginTransaction();
+            try {
+                // Démarrer une transaction pour garantir cohérence
+                $bdd->beginTransaction();
 
-                    // Récupérer infos nécessaires de l'affectation
-                    $stmtInfo = $bdd->prepare('SELECT id_patient, type FROM affectations WHERE id_affectation = ? LIMIT 1');
-                    $stmtInfo->execute([$affectationRefus]);
-                    $affInfo = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+                // Récupérer infos nécessaires de l'affectation
+                $stmtInfo = $bdd->prepare('SELECT id_patient, type FROM affectations WHERE id_affectation = ? LIMIT 1');
+                $stmtInfo->execute([$affectationRefus]);
+                $affInfo = $stmtInfo->fetch(PDO::FETCH_ASSOC);
 
-                    if ($affInfo) {
-                        $patientId = (int) $affInfo['id_patient'];
-                        $typeId = (int) $affInfo['type'];
-                    } else {
-                        throw new Exception('Affectation introuvable pour remboursement.');
-                    }
-
-                    // Mettre à jour le statut de l'affectation (99 = refus / remboursement)
-                    $stmtUpd = $bdd->prepare('UPDATE affectations SET status = 99 WHERE id_affectation = ?');
-                    $stmtUpd->execute([$affectationRefus]);
-
-                    // Déterminer payeur (id utilisateur session si disponible)
-                    $payeur = isset($_SESSION['id_user']) ? (int) $_SESSION['id_user'] : 0;
-
-                    // Préparer insertion dans remboursements
-                    // Colonnes attendues: paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, payeur
-                    // Valeurs NULL demandées: montant_paye, montant_remboursse, compte, paye_a
-                    $stmtInsert = $bdd->prepare('INSERT INTO remboursements (paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, payeur) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?)');
-                    $paye_a = null; // Attention: colonne définie NOT NULL dans le schéma fourni; si c'est le cas, adapter.
-                    $montant_paye = null; // Peut nécessiter valeur par défaut si NOT NULL.
-                    $montant_remboursse = null; // Idem.
-                    $compte = null; // Idem.
-
-                    $stmtInsert->execute([$paye_a, $affectationRefus, $patientId, $typeId, $montant_paye, $montant_remboursse, $compte, $motifRefus, $payeur]);
-
-                    $bdd->commit();
-                    $errors = 8; // Code succès insertion remboursement
-                } catch (Exception $ex) {
-                    if ($bdd->inTransaction()) {
-                        $bdd->rollBack();
-                    }
-                    error_log('Erreur refus/remboursement: ' . $ex->getMessage());
-                    $errors = 7; // Conserver ancien code d'alerte problème
+                if (!$affInfo) {
+                    throw new Exception('Affectation introuvable pour remboursement.');
                 }
+
+                $patientId = (int) $affInfo['id_patient'];
+                $typeId = (int) $affInfo['type'];
+
+                // Mettre à jour le statut de l'affectation (99 = refus / remboursement)
+                $stmtUpd = $bdd->prepare('UPDATE affectations SET status = 99 WHERE id_affectation = ?');
+                $stmtUpd->execute([$affectationRefus]);
+
+                // Harmoniser l'identifiant utilisateur : ailleurs c'est $_SESSION['auth']
+                $payeur = 0;
+                if (isset($_SESSION['auth'])) {
+                    $payeur = (int) $_SESSION['auth'];
+                } elseif (isset($_SESSION['id_user'])) {
+                    $payeur = (int) $_SESSION['id_user'];
+                }
+
+                if ($motifRefus === '') {
+                    throw new Exception('Motif obligatoire.');
+                }
+
+                // Schéma BDD: montant_paye est NOT NULL => au refus on initialise à 0.
+                // Les autres champs restent NULL (autorisés) et seront complétés en comptabilité si besoin.
+                $stmtInsert = $bdd->prepare('INSERT INTO remboursements (paye_a, id_affectation, patient, types, montant_paye, montant_remboursse, compte, motif, date_ajout, refererpar) VALUES (?,?,?,?,0,NULL,NULL,?,CURDATE(),?)');
+                $payeA = null;
+                $stmtInsert->execute([$payeA, $affectationRefus, $patientId, $typeId, $motifRefus, $payeur]);
+
+                $bdd->commit();
+                $errors = 8; // Code succès insertion remboursement
+            } catch (Throwable $ex) {
+                if ($bdd->inTransaction()) {
+                    $bdd->rollBack();
+                }
+                error_log('Erreur refus/remboursement ophtalmologie: ' . $ex->getMessage());
+                $errors = 7; // Conserver ancien code d'alerte problème
             }
+        }
         
 } catch (PDOException $e) {
     error_log("Erreur lors de la mise à jour du statut : " . $e->getMessage());
