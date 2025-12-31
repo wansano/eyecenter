@@ -259,12 +259,12 @@ if (isset($_POST['goin'])) {
                                         <?php endif; ?>
                                     </div>
                                     <div class="input-group">
-                                        <input name="code" type="password" class="form-control form-control-lg" 
+                                        <input id="otp-code" name="code" type="password" class="form-control form-control-lg" 
                                                required minlength="6" maxlength="20"
                                                autocomplete="one-time-code" />
-                                        <span class="input-group-text">
-                                            <i class="bx bx-lock text-4"></i>
-                                        </span>
+                                        <button class="input-group-text" type="button" id="toggle-otp-code" aria-label="Afficher le code" aria-pressed="false">
+                                            <i class="bx bx-show text-4"></i>
+                                        </button>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -311,6 +311,26 @@ if (isset($_POST['goin'])) {
 
 		<!-- Theme Initialization Files -->
 		<script src="js/theme.init.js"></script>
+
+        <script>
+            (function () {
+                var input = document.getElementById('otp-code');
+                var btn = document.getElementById('toggle-otp-code');
+                if (!input || !btn) return;
+
+                btn.addEventListener('click', function () {
+                    var isHidden = input.type === 'password';
+                    input.type = isHidden ? 'text' : 'password';
+                    btn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+                    btn.setAttribute('aria-label', isHidden ? 'Masquer le code' : 'Afficher le code');
+                    var icon = btn.querySelector('i');
+                    if (icon) {
+                        icon.classList.toggle('bx-show', !isHidden);
+                        icon.classList.toggle('bx-hide', isHidden);
+                    }
+                });
+            })();
+        </script>
 
 	</body>
 </html>
