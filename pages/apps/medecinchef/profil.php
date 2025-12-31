@@ -160,17 +160,6 @@ include('../PUBLIC/header.php');
             <section role="main" class="content-body">
                 <header class="page-header">
                     <h2>Profil de l'utilisateur</h2>
-                    <div class="right-wrapper text-end">
-                        <ol class="breadcrumbs">
-                            <li>
-                                <a href="welcome.php?profil=ecv2">
-                                    <i class="bx bx-home-alt"></i>
-                                </a>
-                            </li>
-                            <li><span>Accueil</span></li>
-                        </ol>
-                        <a class="sidebar-right-toggle" data-open="sidebar-right"></a>
-                    </div>
                 </header>
 
                 <!-- start: page -->
@@ -197,7 +186,7 @@ include('../PUBLIC/header.php');
                                 <?php endif; ?>
 
                                 <div id="info" class="tab-pane active">
-                                    <form action="profil.php?id=<?php echo htmlspecialchars($_GET['id']); ?>" method="POST" class="p-3">
+                                    <div class="p-3">
                                         
                                         <div class="row form-group pb-3">
                                             <div class="col-lg-6">
@@ -228,38 +217,23 @@ include('../PUBLIC/header.php');
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <div class="row form-group pb-3">
-                                            <div class="form-group col-md-6">
-                                                <label>Nouveau mot de passe</label>
-                                                <input type="password" name="mdp" class="form-control" placeholder="Mot de passe" minlength="8">
-                                            </div>
-                                            <div class="col-md-6">
-                                                <label>Confirmer le nouveau mot de passe</label>
-                                                <input type="password" name="confirm" class="form-control" placeholder="Confirmation mot de passe" minlength="8">
-                                            </div>
-                                        </div>
-
-                                        <div class="row form-group pb-3">
-                                            <div class="form-group col-md-6">
-                                                <label>Nouveau code</label>
-                                                <input type="password" name="code" class="form-control" placeholder="Code confidentiel" pattern="\d{4,6}" title="4 à 6 chiffres">
-                                            </div>
-                                            <div class="col-md-6">
-                                                <label>Confirmer le nouveau code</label>
-                                                <input type="password" name="code_confirm" class="form-control" placeholder="Confirmation code confidentiel" pattern="\d{4,6}" title="4 à 6 chiffres">
-                                            </div>
-                                        </div>
-
                                         <div class="row">
-											<div class="col-sm-6 text-begin">
-                                                <button type="submit" name="mdpupdate" class="btn btn-primary">Mettre à jour mon mot de passe</button>
+										<div class="col-sm-6 text-begin">
+                                                <button type="button" class="btn btn-primary"
+                                                        data-bs-toggle="modal" data-bs-target="#modalUpdatePassword"
+                                                        data-toggle="modal" data-target="#modalUpdatePassword">
+                                                    Mettre à jour mon mot de passe
+                                                </button>
                                             </div>
                                             <div class="col-sm-6 text-end">
-                                                <button type="submit" name="codeupdate" class="btn btn-success">Mettre à jour mon code secret</button>
+                                                <button type="button" class="btn btn-success"
+                                                        data-bs-toggle="modal" data-bs-target="#modalUpdateCode"
+                                                        data-toggle="modal" data-target="#modalUpdateCode">
+                                                    Mettre à jour mon code secret
+                                                </button>
                                             </div>
                                         </div>
-                                    </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -301,4 +275,65 @@ include('../PUBLIC/header.php');
                 <!-- end: page -->
             </section>
         </div>
+
+        <!-- Modal: Mise à jour mot de passe -->
+        <div class="modal fade" id="modalUpdatePassword" tabindex="-1" role="dialog" aria-labelledby="modalUpdatePasswordLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalUpdatePasswordLabel">Mettre à jour mon mot de passe</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <form action="profil.php?id=<?php echo htmlspecialchars($_GET['id']); ?>" method="POST" class="p-3" autocomplete="off">
+                        <div class="modal-body">
+                            <div class="row form-group pb-3">
+                                <div class="form-group col-md-6">
+                                    <label>Nouveau mot de passe</label>
+                                    <input type="password" name="mdp" class="form-control" placeholder="Mot de passe" minlength="8" required autocomplete="new-password">
+                                </div>
+                                <div class="col-md-6">
+                                    <label>Confirmer le nouveau mot de passe</label>
+                                    <input type="password" name="confirm" class="form-control" placeholder="Confirmation" minlength="8" required autocomplete="new-password">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-bs-dismiss="modal" data-dismiss="modal">Annuler</button>
+                            <button type="submit" name="mdpupdate" class="btn btn-primary">Valider</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Mise à jour code secret -->
+        <div class="modal fade" id="modalUpdateCode" tabindex="-1" role="dialog" aria-labelledby="modalUpdateCodeLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalUpdateCodeLabel">Mettre à jour mon code secret</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <form action="profil.php?id=<?php echo htmlspecialchars($_GET['id']); ?>" method="POST" class="p-3" autocomplete="off">
+                        <div class="modal-body">
+                            <div class="row form-group pb-3">
+                                <div class="form-group col-md-6">
+                                    <label>Nouveau code</label>
+                                    <input type="password" name="code" class="form-control" placeholder="Code confidentiel" pattern="\d{4,6}" title="4 à 6 chiffres" required inputmode="numeric" autocomplete="one-time-code">
+                                </div>
+                                <div class="col-md-6">
+                                    <label>Confirmer le nouveau code</label>
+                                    <input type="password" name="code_confirm" class="form-control" placeholder="Confirmation" pattern="\d{4,6}" title="4 à 6 chiffres" required inputmode="numeric" autocomplete="one-time-code">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-bs-dismiss="modal" data-dismiss="modal">Annuler</button>
+                            <button type="submit" name="codeupdate" class="btn btn-success">Valider</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <?php include('../PUBLIC/footer.php'); ?>
