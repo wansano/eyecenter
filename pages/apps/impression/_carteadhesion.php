@@ -413,35 +413,43 @@ class DossierPatientPDF extends PDF {
     }
 
     public function generateHealthCardPage() {
-        // Format carte bancaire (ID-1) : 85.6 x 54 mm, orientation paysage.
-        $cardWmm = 80.0;
-        $cardHmm = 47.0;
-        $this->AddPage('L', [$cardWmm, $cardHmm]);
+        // Papier A5 paysage pour une carte plus lisible à l'impression.
+        // On dessine une "carte" agrandie et centrée sur la page.
+        $this->AddPage('P', 'A5');
         $this->SetAutoPageBreak(false);
 
-        $margin = 2.5;
-        $x = $margin;
-        $y = $margin;
-        $w = $cardWmm - ($margin * 2);
-        $h = $cardHmm - ($margin * 2);
+        $pageW = $this->w;
+        $pageH = $this->h;
+
+        // Dimensions de la carte (format carte bancaire ~ 85.6 x 54 mm)
+        $cardWmm = 93.0;
+        $cardHmm = 50.0;
+        $cardX = ($pageW - $cardWmm) / 2;
+        $cardY = ($pageH - $cardHmm) / 2;
+
+        // Scale visuel basé sur l'ancienne carte (80x47)
+        // On prend le minimum des 2 ratios (largeur/hauteur) pour limiter les débordements.
+        $scaleW = $cardWmm / 80.0;
+        $scaleH = $cardHmm / 47.0;
+        $scale = min($scaleW, $scaleH);
 
         $this->SetDrawColor(0, 0, 0);
-        $this->Rect($x, $y, $w, $h);
+        $this->Rect($cardX, $cardY, $cardWmm, $cardHmm);
 
         // Entête (entreprise) adaptée au format carte
-        $innerPad = 2.5;
-        $headerTop = $y + $innerPad;
+        $innerPad = 2.5 * $scale;
+        $headerTop = $cardY + $innerPad;
         $logoPath = realpath('../img/logo.jpg');
-        $logoW = 14;
-        $logoH = 10;
+        $logoW = 14 * $scale;
+        $logoH = 10 * $scale;
         if ($logoPath && file_exists($logoPath)) {
-            $this->Image($logoPath, $x + $innerPad, $headerTop, $logoW, $logoH);
+            $this->Image($logoPath, $cardX + $innerPad, $headerTop, $logoW, $logoH);
         }
 
-        $textX = $x + $innerPad + $logoW + 2.5;
-        $textW = ($x + $w) - $textX - $innerPad;
+        $textX = $cardX + $innerPad + $logoW + (2.5 * $scale);
+        $textW = ($cardX + $cardWmm) - $textX - $innerPad;
         $this->SetXY($textX, $headerTop);
-        $this->SetFont('CenturyGothic', 'B', 6.5);
+        $this->SetFont('CenturyGothic', 'B', 9 * $scale);
         if (!empty($this->data['denomination'])) {
             $this->Cell($textW, 3.5, pdf_text(strtoupper($this->data['denomination'])), 0, 1, 'L');
         } else {
@@ -449,7 +457,7 @@ class DossierPatientPDF extends PDF {
         }
 
         $this->SetX($textX);
-        $this->SetFont('CenturyGothic', '', 5.5);
+        $this->SetFont('CenturyGothic', '', 7 * $scale);
         if (!empty($this->data['adresse'])) {
             // Limiter l'adresse entreprise à 2 lignes pour préserver l'espace de la carte
             $addrLines = $this->splitTextToLines($this->data['adresse'], $textW);
@@ -465,7 +473,7 @@ class DossierPatientPDF extends PDF {
             }
             foreach ($addrLines as $ln) {
                 $this->SetX($textX);
-                $this->Cell($textW, 3.2, $ln, 0, 1, 'L');
+                $this->Cell($textW, 3.2 * $scale, $ln, 0, 1, 'L');
             }
         }
         $this->SetX($textX);
@@ -476,13 +484,13 @@ class DossierPatientPDF extends PDF {
             $contactLine = $contactLine !== '' ? ($contactLine . ' | ' . $email) : $email;
         }
         if ($contactLine !== '') {
-            $this->Cell($textW, 3.2, pdf_text($contactLine), 0, 1, 'L');
+            $this->Cell($textW, 3.2 * $scale, pdf_text($contactLine), 0, 1, 'L');
         }
 
         // Séparateur sous entête
         $separatorY = max($this->y, $headerTop + $logoH) + 1.5;
-        $this->Line($x + $innerPad, $separatorY, $x + $w - $innerPad, $separatorY);
-        $this->SetY($separatorY + 2);
+        $this->Line($cardX + $innerPad, $separatorY, $cardX + $cardWmm - $innerPad, $separatorY);
+        $this->SetY($separatorY + (2 * $scale));
 
         $dossier = (string)($this->patient['id_patient'] ?? '');
         $fullName = $this->getPatientFullName();
@@ -492,23 +500,23 @@ class DossierPatientPDF extends PDF {
         $adhesion = $this->getPatientAdhesion();
 
         // Réserver une zone à droite pour le code-barres
-        $barcodeAreaW = 12.0;
-        $contentX = $x + $innerPad;
-        $contentW = $w - ($innerPad * 2) - $barcodeAreaW;
+        $barcodeAreaW = 12.0 * $scale;
+        $contentX = $cardX + $innerPad;
+        $contentW = $cardWmm - ($innerPad * 2) - $barcodeAreaW;
 
         $this->SetX($contentX);
-        $this->SetFont('CenturyGothic', 'B', 7);
-        $this->Cell($contentW, 4.0, $this->pdfText('CARTE D\'ADHESION PATIENT N° ' . $dossier), 0, 1, 'C');
+        $this->SetFont('CenturyGothic', 'B', 8 * $scale);
+        $this->Cell($contentW, 5.0 * $scale, $this->pdfText('CARTE D\'ADHESION PATIENT N° ' . $dossier), 0, 1, 'C');
 
-        $lineH = 3.4;
-        $fontSize = 6.2;
+        $lineH = 3.8 * $scale;
+        $fontSize = 7 * $scale;
         $this->writeLabelValue($contentX, $contentW, 'Date d\'adhésion :', $adhesion, $lineH, $fontSize, false);
         $this->writeLabelValue($contentX, $contentW, 'Patient :', $fullName, $lineH, $fontSize, false);
         $this->writeLabelValue($contentX, $contentW, 'Année de naissance :', $year, $lineH, $fontSize, false);
         $this->writeLabelValue($contentX, $contentW, 'Contact :', $contact, $lineH, $fontSize, false);
 
         // Limiter l'adresse à l'espace restant pour éviter tout débordement
-        $bottomLimitY = $y + $h - $innerPad;
+        $bottomLimitY = $cardY + $cardHmm - $innerPad;
         $availableH = $bottomLimitY - $this->y;
         $maxLines = (int)floor($availableH / $lineH);
         if ($maxLines < 1) {
@@ -520,17 +528,17 @@ class DossierPatientPDF extends PDF {
         if (method_exists($this, 'Codabar') && $dossier !== '') {
             // Plus court (moins de caractères => code-barres moins long)
             $barcodeValue = (string)$dossier;
-            $barcodeTopY = $separatorY + 2;
-            $barcodeAnchorX = $x + $w - $innerPad; // bord interne droit
-            $barThickness = max(8.5, $barcodeAreaW - 2.0); // largeur visible du code-barres dans la carte
+            $barcodeTopY = $separatorY + (2 * $scale);
+            $barcodeAnchorX = $cardX + $cardWmm - $innerPad; // bord interne droit
+            $barThickness = max(8.5 * $scale, $barcodeAreaW - (2.0 * $scale)); // largeur visible du code-barres
 
             // Ajuster automatiquement l'épaisseur pour éviter tout débordement (selon la hauteur disponible)
-            $bottomLimitY = $y + $h - $innerPad;
+            $bottomLimitY = $cardY + $cardHmm - $innerPad;
             $maxLen = $bottomLimitY - $barcodeTopY;
             if ($maxLen > 0) {
                 // Légèrement moins compact => code-barres un peu plus long (plus lisible)
-                $baseMax = 0.24;
-                $baseMin = 0.07;
+                $baseMax = 0.24 * $scale;
+                $baseMin = 0.07 * $scale;
                 $lenAt1 = $this->estimateCodabarLengthMm($barcodeValue, 'A', 'B', 1.0);
                 $basewidth = $baseMax;
                 if ($lenAt1 > 0) {
@@ -541,7 +549,7 @@ class DossierPatientPDF extends PDF {
                 // Si malgré tout c'est trop long, forcer une basewidth encore plus petite (dernier recours)
                 $lenEst = $this->estimateCodabarLengthMm($barcodeValue, 'A', 'B', $basewidth);
                 if ($lenEst > $maxLen && $lenAt1 > 0) {
-                    $basewidth = max(0.05, $maxLen / $lenAt1);
+                    $basewidth = max(0.05 * $scale, $maxLen / $lenAt1);
                 }
 
                 // Rotation -90° : le code-barres devient vertical; il s'étend vers le bas
@@ -550,6 +558,10 @@ class DossierPatientPDF extends PDF {
                 $this->Rotate(0);
             }
         }
+    }
+
+    private function generatePatientTable() {
+        return '';
     }
 }
 
