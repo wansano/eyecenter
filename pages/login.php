@@ -221,10 +221,10 @@ if (isset($_POST['goverif'])) {
                                             <label class="float-start">Mot de passe</label>
                                         </div>
                                         <div class="input-group">
-                                            <input name="pwd" type="password" class="form-control form-control-lg" />
-                                            <span class="input-group-text">
-                                                <i class="bx bx-lock text-4"></i>
-                                            </span>
+                                            <input id="loginPassword" name="pwd" type="password" class="form-control form-control-lg" autocomplete="current-password" />
+                                            <button type="button" class="input-group-text" id="togglePassword" aria-label="Afficher le mot de passe" aria-pressed="false">
+                                                <i class="bx bx-show text-4" id="togglePasswordIcon"></i>
+                                            </button>
                                         </div>
                                     </div>
                                     <div class="row">
@@ -277,6 +277,24 @@ if (isset($_POST['goverif'])) {
 
 		<!-- Theme Initialization Files -->
 		<script src="js/theme.init.js"></script>
+
+        <script>
+            (function(){
+                var input = document.getElementById('loginPassword');
+                var btn = document.getElementById('togglePassword');
+                var icon = document.getElementById('togglePasswordIcon');
+                if (!input || !btn || !icon) return;
+
+                btn.addEventListener('click', function(){
+                    var isHidden = input.getAttribute('type') === 'password';
+                    input.setAttribute('type', isHidden ? 'text' : 'password');
+                    btn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+                    btn.setAttribute('aria-label', isHidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+                    icon.classList.remove(isHidden ? 'bx-show' : 'bx-hide');
+                    icon.classList.add(isHidden ? 'bx-hide' : 'bx-show');
+                });
+            })();
+        </script>
 
 	</body>
 </html>
