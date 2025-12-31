@@ -125,6 +125,12 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Edition</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="editionpaiement.php">Editer un paiement</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Documentation</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression reçu</a></li>
