@@ -57,8 +57,7 @@ class MenuConfig {
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Employés</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="#">Ajouter un employé</a></li>
-                        <li><a class="nav-link" href="#">Liste des employés</a></li>
+                        <li><a class="nav-link" href="listeemployes.php">Liste des employés</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">
@@ -76,6 +75,12 @@ class MenuConfig {
                     <a class="nav-link" href="#">Paiements</a>
                     <ul class="dropdown-menu">
                         <li><a class="nav-link" href="annulationpaiementcaisse.php">Annuler paiement caisse</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Preuve de caisse</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="modificationpreuvecaisse.php">Modification preuve</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">

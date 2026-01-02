@@ -28,13 +28,16 @@ try {
             exit;
         }
 
-        // Vérifier que l'utilisateur existe
-        $stmt = $bdd->prepare('SELECT id FROM users WHERE id = ? LIMIT 1');
+        // Vérifier que l'utilisateur existe (et récupérer l'email courant pour garder la liaison employé)
+        $stmt = $bdd->prepare('SELECT id, email FROM users WHERE id = ? LIMIT 1');
         $stmt->execute([$editId]);
-        if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $existingUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$existingUser) {
             header('Location: ' . $_SERVER['PHP_SELF'] . '?ok=7');
             exit;
         }
+
+        $oldEmail = trim((string)($existingUser['email'] ?? ''));
 
         // Email unique (sauf pour l'utilisateur courant)
         $stmt = $bdd->prepare('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1');
@@ -49,6 +52,43 @@ try {
 
         $stmt = $bdd->prepare('UPDATE users SET pseudo = ?, email = ?, id_service = ?, date_engagement = ?, responsable = ?, plage_connexion = ? WHERE id = ?');
         $stmt->execute([$pseudo, $email, $idService, $dateEngagement, $responsable, $plageConnexion, $editId]);
+
+        // Garder la liaison employé<->user via email
+        if ($oldEmail !== '' && strcasecmp($oldEmail, $email) !== 0) {
+            $stmt = $bdd->prepare('UPDATE employes SET email = ? WHERE email = ?');
+            $stmt->execute([$email, $oldEmail]);
+        }
+
+        // Synchroniser la hiérarchie: users.responsable -> employes.superieur_hierarchique
+        // Règle: si cet utilisateur a une fiche employé (par email), alors on renseigne son supérieur via l'employé correspondant au responsable.
+        $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? LIMIT 1');
+        $stmt->execute([$email]);
+        $empId = (int)($stmt->fetchColumn() ?: 0);
+
+        if ($empId > 0) {
+            $superieurEmployeId = null;
+            if ($responsable > 0) {
+                $stmt = $bdd->prepare('SELECT email FROM users WHERE id = ? LIMIT 1');
+                $stmt->execute([$responsable]);
+                $responsableEmail = trim((string)($stmt->fetchColumn() ?? ''));
+                if ($responsableEmail !== '' && filter_var($responsableEmail, FILTER_VALIDATE_EMAIL)) {
+                    $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? LIMIT 1');
+                    $stmt->execute([$responsableEmail]);
+                    $tmp = (int)($stmt->fetchColumn() ?: 0);
+                    if ($tmp > 0) {
+                        $superieurEmployeId = $tmp;
+                    }
+                }
+            }
+
+            // Éviter l'auto-référence
+            if ($superieurEmployeId !== null && $superieurEmployeId === $empId) {
+                $superieurEmployeId = null;
+            }
+
+            $stmt = $bdd->prepare('UPDATE employes SET superieur_hierarchique = ? WHERE id_employe = ?');
+            $stmt->execute([$superieurEmployeId, $empId]);
+        }
 
         if (trim($newPassword) !== '') {
             $stmt = $bdd->prepare('UPDATE users SET mdp = ? WHERE id = ?');

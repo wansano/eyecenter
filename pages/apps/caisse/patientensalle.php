@@ -3,22 +3,30 @@ include('../PUBLIC/connect.php');
 session_start();
 $errors = 0;
 
-// Vérifier si l'utilisateur a déjà effectué sa preuve/clôture de caisse aujourd'hui
+// Vérifier les preuves de caisse du jour (par compte)
 try {
     $proofStmt = $bdd->prepare('SELECT COUNT(*) FROM preuvedecaisse WHERE date_rapportement = ? AND id_user = ?');
     $proofStmt->execute([date('Y-m-d'), $_SESSION['auth']]);
-    $hasClotureCaisse = $proofStmt->fetchColumn() > 0;
+    $closedCount = (int)$proofStmt->fetchColumn();
+
+    $totalStmt = $bdd->prepare('SELECT COUNT(*) FROM comptes WHERE defaut = 1 AND compte_pour = ? AND status = 1');
+    $totalStmt->execute([1]);
+    $totalCount = (int)$totalStmt->fetchColumn();
+
+    $hasClotureCaisse = ($closedCount > 0);
+    $allComptesClotures = ($totalCount > 0) && ($closedCount >= $totalCount);
 } catch (Exception $e) {
     error_log('Erreur vérification clôture caisse: ' . $e->getMessage());
-    $hasClotureCaisse = false; // En cas d'erreur, on laisse l'accès pour éviter blocage
+    $hasClotureCaisse = false;
+    $allComptesClotures = false;
 }                 
 
 include('../PUBLIC/header.php');
 ?>
 
-<?php if (!$hasClotureCaisse): ?>
+<?php if (!$allComptesClotures): ?>
 <script>
-    // Actualisation seulement si la clôture n'est pas encore effectuée
+    // Actualisation seulement si tous les comptes ne sont pas clôturés
     setTimeout(function() { location.reload(); }, 60000);
 </script>
 <?php endif; ?>
@@ -34,16 +42,16 @@ include('../PUBLIC/header.php');
 
                 <!-- start: page -->
                 <div class="col-md-12">
-                    <?php if ($hasClotureCaisse): ?>
-                        <div class="alert alert-info">
-                            <strong>Information</strong><br>
-                            La cloture de caisse est déjà éffectuée pour votre compte.
-                        </div>
-                    <?php else: ?>
                     <div class="row">
                         <div class="col">
                             <section class="card">
                                 <div class="card-body">
+                                <?php if ($hasClotureCaisse): ?>
+                                    <div class="alert alert-info">
+                                        <strong>Information</strong><br>
+                                        Une ou plusieurs preuves de caisse ont déjà été effectuées aujourd'hui. Les comptes clôturés ne seront plus proposés pour de nouveaux paiements.
+                                    </div>
+                                <?php endif; ?>
                                 <?php 
                                 if (isset($types) && $types == "caisse" && $errors == 7) {
                                     echo '<div class="alert alert-success"><li><strong>Succès !</strong><br>Le paiement des frais de traitement a été annulé.</li></div>';
@@ -103,7 +111,6 @@ include('../PUBLIC/header.php');
                             </section>
                         </div>
                     </div>
-                    <?php endif; ?>
                 </div>
             </section>
         </div>
@@ -245,6 +252,13 @@ include('../PUBLIC/header.php');
 
                 setSelectOptions(typeEl, comptes.map(function (c) { return { id: c.id, label: c.label }; }), 'Sélectionner…');
                 setSelectOptions(tauxEl, taux.map(function (t) { return { value: t.value, label: t.label }; }), null);
+
+                if (data.blocked || comptes.length === 0) {
+                    showAlert((data && data.blocked_message) ? data.blocked_message : "Aucun compte disponible.", 'warning');
+                    submitEl.disabled = true;
+                    submitEl.textContent = 'Valider le paiement';
+                    return;
+                }
 
                 if (data.already_paid) {
                     showAlert('Paiement déjà effectué pour cette affectation.', 'warning');

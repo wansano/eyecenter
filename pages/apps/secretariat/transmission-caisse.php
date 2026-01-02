@@ -61,57 +61,20 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                     </div>
                 <?php endif; ?>
 
-                <div class="row form-group pb-3">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label class="col-form-label">Prénoms &amp; Nom</label>
-                            <input type="text" class="form-control" value="<?php echo htmlspecialchars($patient, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label class="col-form-label">Genre</label>
-                            <select class="form-control populate" disabled>
-                                <option value="<?php echo htmlspecialchars($sexe, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($sexe, ENT_QUOTES, 'UTF-8'); ?></option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label class="col-form-label">Date de naissance</label>
-                            <input type="date" class="form-control" value="<?php echo htmlspecialchars($age, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label class="col-form-label">Profession</label>
-                            <input type="text" class="form-control" value="<?php echo htmlspecialchars($profession, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label class="col-form-label">Adresse</label>
-                            <input type="text" class="form-control" value="<?php echo htmlspecialchars((adress($adresse) ?: $adresse), ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label class="col-form-label">Contact</label>
-                            <input type="number" class="form-control" value="<?php echo htmlspecialchars($telephone, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label class="col-form-label">Type de patient</label>
-                            <input type="text" class="form-control" value="<?php echo htmlspecialchars(determinerStatutAssurance($assure), ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label class="col-form-label">Responsable</label>
-                            <input type="text" class="form-control" value="<?php echo htmlspecialchars($responsable, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered mb-0">
+                        <tbody>
+                            <tr><th style="width: 35%">Dossier</th><td><?php echo htmlspecialchars('PAT-' . $id_patient, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Nom</th><td><?php echo htmlspecialchars($patient, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Genre</th><td><?php echo htmlspecialchars($sexe, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Date de naissance</th><td><?php echo htmlspecialchars($age, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Profession</th><td><?php echo htmlspecialchars($profession, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Téléphone</th><td><?php echo htmlspecialchars($telephone, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Adresse</th><td><?php echo htmlspecialchars((adress($adresse) ?: $adresse), ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Responsable</th><td><?php echo htmlspecialchars($responsable, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Type de patient</th><td><?php echo htmlspecialchars(determinerStatutAssurance($assure), ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <form id="tcAffectationForm" class="form-horizontal" novalidate="novalidate" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>?id_patient=<?php echo urlencode($id_patient); ?>" enctype="multipart/form-data">

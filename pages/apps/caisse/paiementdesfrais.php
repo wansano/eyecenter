@@ -67,8 +67,19 @@ if (isset($_GET['ajax_payment_form'])) {
 
         // Options de paiement
         $comptes = [];
-        $stC = $bdd->prepare('SELECT id_compte, types FROM comptes WHERE defaut=1 AND compte_pour=?');
-        $stC->execute([1]);
+                // Ne pas proposer un compte déjà clôturé (preuve de caisse effectuée aujourd'hui pour ce compte)
+                $stC = $bdd->prepare('
+                        SELECT c.id_compte, c.types
+                        FROM comptes c
+                        WHERE c.defaut = 1 AND c.compte_pour = ?
+                            AND NOT EXISTS (
+                                SELECT 1 FROM preuvedecaisse p
+                                WHERE p.date_rapportement = ?
+                                    AND p.id_user = ?
+                                    AND p.compte = c.id_compte
+                            )
+                ');
+                $stC->execute([1, date('Y-m-d'), $_SESSION['auth']]);
         while ($c = $stC->fetch(PDO::FETCH_ASSOC)) {
             $comptes[] = ['id' => (int)$c['id_compte'], 'label' => (string)$c['types']];
         }
@@ -96,6 +107,8 @@ if (isset($_GET['ajax_payment_form'])) {
         echo json_encode([
             'success' => true,
             'already_paid' => $alreadyPaid,
+            'blocked' => empty($comptes),
+            'blocked_message' => empty($comptes) ? "Aucun compte de paiement disponible : la preuve de caisse a déjà été effectuée aujourd'hui pour ce(s) compte(s)." : null,
             'patient' => [
                 'id_patient' => $pid,
                 'nom_patient' => (string)($p['nom_patient'] ?? ''),
@@ -138,6 +151,17 @@ if (isset($_POST['ajax_payment'])) {
     }
 
     try {
+        // Interdire un paiement sur un compte déjà clôturé aujourd'hui par cet utilisateur
+        $stClosed = $bdd->prepare('SELECT 1 FROM preuvedecaisse WHERE date_rapportement = ? AND id_user = ? AND compte = ? LIMIT 1');
+        $stClosed->execute([date('Y-m-d'), $_SESSION['auth'], $type_paiement_ajax]);
+        if ($stClosed->fetchColumn()) {
+            echo json_encode([
+                'success' => false,
+                'message' => "Ce compte est déjà clôturé (preuve de caisse effectuée aujourd'hui). Veuillez choisir un autre compte.",
+            ]);
+            exit;
+        }
+
         // Vérifier l'affectation
         $stA = $bdd->prepare('SELECT id_patient, type, id_rdv FROM affectations WHERE id_affectation = ? LIMIT 1');
         $stA->execute([$aff]);
