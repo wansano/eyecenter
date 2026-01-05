@@ -26,6 +26,7 @@ if (isset($_GET['ajax_check_rdv'])) {
 
     try {
         $rows = [];
+        $hasIdDemande = dbTableHasColumn($bdd, 'dmd_rendez_vous', 'id_demande');
 
         if ($mode === 'dossier') {
             $idPatient = (int)$qRaw;
@@ -35,7 +36,7 @@ if (isset($_GET['ajax_check_rdv'])) {
             }
 
             $stmt = $bdd->prepare(
-                'SELECT id_rdv, id_patient, id_service, motif, traitant, prochain_rdv, status
+                'SELECT id_rdv, id_patient, ' . ($hasIdDemande ? 'id_demande,' : '') . ' id_service, motif, traitant, prochain_rdv, status
                  FROM dmd_rendez_vous
                   WHERE id_patient = ? AND prochain_rdv >= CURDATE()
                  ORDER BY prochain_rdv ASC
@@ -57,21 +58,40 @@ if (isset($_GET['ajax_check_rdv'])) {
             $stmt->execute([$phone]);
             $patientIds = array_map(fn($r) => (int)$r['id_patient'], $stmt->fetchAll(PDO::FETCH_ASSOC));
 
-            if (empty($patientIds)) {
+            $demandeIds = [];
+            if ($hasIdDemande) {
+                $stD = $bdd->prepare('SELECT id_demande FROM dossier_en_attente WHERE phone = ? LIMIT 20');
+                $stD->execute([$phone]);
+                $demandeIds = array_map(fn($r) => (int)$r['id_demande'], $stD->fetchAll(PDO::FETCH_ASSOC));
+            }
+
+            if (empty($patientIds) && empty($demandeIds)) {
                 echo json_encode(['success' => true, 'rdvs' => []]);
                 exit;
             }
 
-            $placeholders = implode(',', array_fill(0, count($patientIds), '?'));
+            $whereParts = [];
+            $args = [];
+            if (!empty($patientIds)) {
+                $phP = implode(',', array_fill(0, count($patientIds), '?'));
+                $whereParts[] = 'id_patient IN (' . $phP . ')';
+                $args = array_merge($args, $patientIds);
+            }
+            if ($hasIdDemande && !empty($demandeIds)) {
+                $phD = implode(',', array_fill(0, count($demandeIds), '?'));
+                $whereParts[] = 'id_demande IN (' . $phD . ')';
+                $args = array_merge($args, $demandeIds);
+            }
+
             $sql =
-                'SELECT id_rdv, id_patient, id_service, motif, traitant, prochain_rdv, status
+                'SELECT id_rdv, id_patient, ' . ($hasIdDemande ? 'id_demande,' : '') . ' id_service, motif, traitant, prochain_rdv, status
                  FROM dmd_rendez_vous
-                 WHERE id_patient IN (' . $placeholders . ') AND prochain_rdv >= CURDATE()
+                 WHERE (' . implode(' OR ', $whereParts) . ') AND prochain_rdv >= CURDATE()
                  ORDER BY prochain_rdv ASC
                  LIMIT 50';
 
             $stmt = $bdd->prepare($sql);
-            $stmt->execute($patientIds);
+            $stmt->execute($args);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
@@ -84,9 +104,14 @@ if (isset($_GET['ajax_check_rdv'])) {
         $out = [];
         foreach ($rows as $r) {
             $status = (int)($r['status'] ?? 0);
+            $idPatient = (int)($r['id_patient'] ?? 0);
+            $idDemande = (int)($r['id_demande'] ?? 0);
+            $dossierLabel = $idPatient > 0 ? ('PAT-' . $idPatient) : ($idDemande > 0 ? ('DEM-' . $idDemande) : 'N/A');
             $out[] = [
                 'id_rdv' => (int)$r['id_rdv'],
-                'id_patient' => (int)($r['id_patient'] ?? 0),
+                'id_patient' => $idPatient,
+                'id_demande' => $idDemande,
+                'dossier_label' => $dossierLabel,
                 'prochain_rdv' => (string)($r['prochain_rdv'] ?? ''),
                 'service' => (string)service($r['id_service'] ?? 0),
                 'motif' => (string)model($r['motif'] ?? 0),
@@ -170,6 +195,7 @@ if (isset($_POST['ajax_add_quartier'])) {
 $errors = 0;            // 0 aucun, 2 RDV interne OK, 4 RDV externe OK, 3 erreur
 $existe = 0;            // RDV déjà existant
 $id_patient = null;     // identifiant patient
+$pending_demande_id = null; // identifiant dans dossier_en_attente (RDV externe en attente)
 $error_messages = array();
 $emailSent = false;     // notification envoyée ?
 $emailError = '';       // log interne en cas d'échec
@@ -295,40 +321,41 @@ if (isset($_POST['ajouter'])) {
                     $errors = 2;
                 }
             } else {
-                // Insertion du patient
-                $assure = $_POST['estAssure'] == 1 ? 1 : 0;
+                // Nouveau flux : pour un patient externe inconnu, ne pas créer de dossier tout de suite.
+                // On enregistre d'abord dans dossier_en_attente, puis on crée le dossier (patients) au moment de "transmettre".
+                if (!dbTableHasColumn($bdd, 'dmd_rendez_vous', 'id_demande')) {
+                    throw new Exception("Configuration BD manquante : ajoutez dmd_rendez_vous.id_demande (NULL) pour enregistrer les RDV externes en attente sans créer de patient.");
+                }
+
+                $assure = isset($_POST['estAssure']) && $_POST['estAssure'] == 1 ? 1 : 0;
                 $responsable = !empty($_POST['responsable']) ? $_POST['responsable'] : null;
-                $entrepriseAssurance = $assure ? $_POST['entrepriseAssurance'] : 0;
+                $entrepriseAssurance = $assure ? (int)($_POST['entrepriseAssurance'] ?? 0) : 0;
 
-                $req = $bdd->prepare('INSERT INTO patients (nom_patient, sexe, profession, age, adresse, phone, responsable, assure, assurance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $req->execute([
-                    $_POST['nom_patient'], 
-                    $_POST['sexe'], 
-                    $_POST['profession'], 
-                    $_POST['age'], 
-                    $_POST['adresse'], 
-                    $_POST['phone'], 
-                    $responsable,
-                    $assure, 
-                    $entrepriseAssurance
+                $pending_demande_id = findOrCreateDemandeEnAttente($bdd, [
+                    'nom_patient' => $_POST['nom_patient'] ?? '',
+                    'sexe' => $_POST['sexe'] ?? '',
+                    'profession' => $_POST['profession'] ?? '',
+                    'age' => $_POST['age'] ?? null,
+                    'adresse' => $_POST['adresse'] ?? '',
+                    'phone' => $_POST['phone'] ?? null,
+                    'responsable' => $responsable,
+                    'assure' => $assure,
+                    'assurance' => $entrepriseAssurance,
                 ]);
-                // Récupérer le dernier id_patient
-                $id_patient = $bdd->lastInsertId();
 
-                // Vérification: pas de RDV le même jour pour le même traitement
-                $verifJour3 = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_patient = ? AND id_service = ? AND motif = ? AND DATE(prochain_rdv) = ? LIMIT 1');
+                $verifJour3 = $bdd->prepare('SELECT id_rdv FROM dmd_rendez_vous WHERE id_demande = ? AND id_service = ? AND motif = ? AND DATE(prochain_rdv) = ? LIMIT 1');
                 $verifJour3->execute([
-                    (int) $id_patient,
-                    (int) $_POST['service'],
-                    (int) $_POST['type'],
+                    (int)$pending_demande_id,
+                    (int)$_POST['service'],
+                    (int)$_POST['type'],
                     $dateChoisie
                 ]);
 
                 if ($verifJour3->fetch()) {
                     $existe = 1;
                 } else {
-                    insererRendezVousExterne($bdd, $id_patient, $_POST['service'], $_POST['type'], $_POST['medecin'], $creneauFinal, $type_patient = 1);
-                    $errors = 4;
+                    insererRendezVousExterneEnAttente($bdd, (int)$pending_demande_id, $_POST['service'], $_POST['type'], $_POST['medecin'], $creneauFinal, $type_patient = 1);
+                    $errors = 2;
                 }
             }
         }
@@ -403,6 +430,7 @@ if (isset($_POST['ajouter'])) {
             $bdd->rollBack();
             $errors = 3;
             error_log("Erreur lors de l'insertion du patient/rendez-vous: " . $e->getMessage());
+            $error_messages[] = $e->getMessage();
         }
     }
 }
@@ -441,6 +469,9 @@ require('../PUBLIC/header.php');
                                 <div class="alert alert-success">
                                     <strong>Succès</strong><br/>
                                     <li>Le rendez-vous a été ajouté avec succès.</li>
+                                    <?php if (!empty($pending_demande_id)): ?>
+                                        <li>Demande enregistrée en attente : <strong>DEM-<?= (int)$pending_demande_id ?></strong> (le dossier patient sera créé à la transmission).</li>
+                                    <?php endif; ?>
                                     <?php if ($emailSent): ?>
                                         <li>Notification email envoyée au médecin.</li>
                                     <?php else: ?>
@@ -1087,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const detailsUrl = 'convocationdetails.php?rdv=' + encodeURIComponent(r.id_rdv);
                     tr.innerHTML =
                         '<td>RDV-' + String(r.id_rdv) + '</td>' +
-                        '<td>PAT-' + String(r.id_patient) + '</td>' +
+                        '<td>' + String(r.dossier_label || ('PAT-' + String(r.id_patient))) + '</td>' +
                         '<td>' + (r.prochain_rdv || '') + '</td>' +
                         '<td>' + (r.service || '') + '</td>' +
                         '<td>' + (r.motif || '') + '</td>' +

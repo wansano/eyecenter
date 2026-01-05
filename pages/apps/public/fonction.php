@@ -1050,6 +1050,124 @@ function insererRendezVousExterne($bdd, $id_patient, $service, $motif, $medecin,
     ]);
 }
 
+// Helpers DB : vérifie l'existence d'une colonne (utile pour déploiement progressif)
+function dbTableHasColumn(PDO $bdd, string $table, string $column): bool {
+    static $cache = [];
+    $key = $table . ':' . $column;
+    if (array_key_exists($key, $cache)) {
+        return (bool)$cache[$key];
+    }
+    try {
+        // Utilise information_schema pour éviter les soucis de droits/quoting sur SHOW COLUMNS
+        $stmt = $bdd->prepare(
+            'SELECT 1
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = ?
+               AND COLUMN_NAME = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$table, $column]);
+        $cache[$key] = (bool)$stmt->fetchColumn();
+        return (bool)$cache[$key];
+    } catch (Throwable $e) {
+        error_log('[dbTableHasColumn] ' . $table . '.' . $column . ' => ' . $e->getMessage());
+        $cache[$key] = false;
+        return false;
+    }
+}
+
+function getDemandeEnAttenteById(PDO $bdd, int $id_demande): ?array {
+    $stmt = $bdd->prepare('SELECT * FROM dossier_en_attente WHERE id_demande = ? LIMIT 1');
+    $stmt->execute([$id_demande]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function findPatientIdByExternalIdentity(PDO $bdd, array $data): ?int {
+    $stmt = $bdd->prepare('SELECT id_patient FROM patients WHERE phone = ? AND profession = ? AND sexe = ? AND adresse = ? LIMIT 1');
+    $stmt->execute([
+        $data['phone'] ?? null,
+        $data['profession'] ?? null,
+        $data['sexe'] ?? null,
+        $data['adresse'] ?? null,
+    ]);
+    $id = $stmt->fetchColumn();
+    if ($id === false || $id === null || $id === '') {
+        return null;
+    }
+    return (int)$id;
+}
+
+function findOrCreateDemandeEnAttente(PDO $bdd, array $data): int {
+    $stmt = $bdd->prepare('SELECT id_demande FROM dossier_en_attente WHERE phone = ? AND profession = ? AND sexe = ? AND adresse = ? LIMIT 1');
+    $stmt->execute([
+        $data['phone'] ?? null,
+        $data['profession'] ?? null,
+        $data['sexe'] ?? null,
+        $data['adresse'] ?? null,
+    ]);
+    $existing = $stmt->fetchColumn();
+    if ($existing !== false && $existing !== null && $existing !== '') {
+        return (int)$existing;
+    }
+
+    $stmt = $bdd->prepare('INSERT INTO dossier_en_attente (nom_patient, sexe, profession, age, adresse, phone, responsable, assure, assurance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([
+        $data['nom_patient'] ?? '',
+        $data['sexe'] ?? '',
+        $data['profession'] ?? '',
+        $data['age'] ?? null,
+        $data['adresse'] ?? '',
+        $data['phone'] ?? null,
+        $data['responsable'] ?? null,
+        (int)($data['assure'] ?? 0),
+        (int)($data['assurance'] ?? 0),
+    ]);
+    return (int)$bdd->lastInsertId();
+}
+
+function createOrFindPatientFromDemandeWithStatus(PDO $bdd, array $demandeRow): array {
+    $existingId = findPatientIdByExternalIdentity($bdd, $demandeRow);
+    if ($existingId) {
+        return ['id_patient' => (int)$existingId, 'created' => false];
+    }
+
+    $stmt = $bdd->prepare('INSERT INTO patients (nom_patient, sexe, profession, age, adresse, phone, responsable, assure, assurance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([
+        $demandeRow['nom_patient'] ?? '',
+        $demandeRow['sexe'] ?? '',
+        $demandeRow['profession'] ?? '',
+        $demandeRow['age'] ?? null,
+        $demandeRow['adresse'] ?? '',
+        $demandeRow['phone'] ?? null,
+        $demandeRow['responsable'] ?? null,
+        (int)($demandeRow['assure'] ?? 0),
+        (int)($demandeRow['assurance'] ?? 0),
+    ]);
+    return ['id_patient' => (int)$bdd->lastInsertId(), 'created' => true];
+}
+
+function createOrFindPatientFromDemande(PDO $bdd, array $demandeRow): int {
+    $res = createOrFindPatientFromDemandeWithStatus($bdd, $demandeRow);
+    return (int)($res['id_patient'] ?? 0);
+}
+
+function insererRendezVousExterneEnAttente(PDO $bdd, int $id_demande, $service, $motif, $medecin, $prochain_rdv, $type_patient): void {
+    if (!dbTableHasColumn($bdd, 'dmd_rendez_vous', 'id_demande')) {
+        throw new Exception("La colonne dmd_rendez_vous.id_demande est requise pour stocker un RDV externe en attente.");
+    }
+    $req = $bdd->prepare('INSERT INTO dmd_rendez_vous (id_patient, id_demande, id_service, motif, traitant, prochain_rdv, type_patient) VALUES (NULL, ?, ?, ?, ?, ?, ?)');
+    $req->execute([
+        $id_demande,
+        $service,
+        $motif,
+        $medecin,
+        $prochain_rdv,
+        $type_patient
+    ]);
+}
+
 // date en français
 
 /*
@@ -1088,7 +1206,10 @@ function getPatientIdByRdv(PDO $bdd, $rdv_id) {
         $stmt = $bdd->prepare('SELECT id_patient FROM dmd_rendez_vous WHERE id_rdv = ?');
         $stmt->execute([$rdv_id]);
         $result = $stmt->fetchColumn();
-        return $result !== false ? (int)$result : null;
+        if ($result === false || $result === null || $result === '') {
+            return null;
+        }
+        return (int)$result;
     } catch (PDOException $e) {
         error_log("Erreur lors de la récupération de l'id_patient pour le rdv $rdv_id : " . $e->getMessage());
         return null;

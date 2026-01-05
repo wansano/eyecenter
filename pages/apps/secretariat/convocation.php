@@ -105,23 +105,36 @@ $errors=0;
 			events: [
 				<?php
 				
+					$hasIdDemande = dbTableHasColumn($bdd, 'dmd_rendez_vous', 'id_demande');
 					$reponse1 = $bdd->prepare('SELECT * FROM dmd_rendez_vous WHERE prochain_rdv >= :datejour AND status IN (0,1,2) ORDER BY prochain_rdv');
 					$reponse1->execute(['datejour' => date('Y-m-d')]);
 					while ($donnees1 = $reponse1->fetch(PDO::FETCH_ASSOC)) {
 						$status = $donnees1['status'];
 						$color = ($status === 1) ? 'red' : (($status === 2) ? 'green' : '');
+						$idPatient = (int)($donnees1['id_patient'] ?? 0);
+						$patientTitle = '';
+						if ($idPatient > 0) {
+							$patientTitle = addslashes(nom_patient($idPatient));
+						} else {
+							$patientTitle = 'Externe en attente';
+							if ($hasIdDemande && !empty($donnees1['id_demande'])) {
+								$stN = $bdd->prepare('SELECT nom_patient FROM dossier_en_attente WHERE id_demande = ? LIMIT 1');
+								$stN->execute([(int)$donnees1['id_demande']]);
+								$nm = $stN->fetchColumn();
+								if ($nm) {
+									$patientTitle = addslashes($nm . ' (attente)');
+								}
+							}
+						}
 						if ($status === 1) {
-							$patientTitle = addslashes(nom_patient($donnees1['id_patient']));
 							$start = $donnees1['prochain_rdv'];
 							$rdvId = $donnees1['id_rdv'];
 							echo "{\n\ttitle: '" . $patientTitle . "',\n\tstart: '" . $start . "',\n\turl: 'convocationdetails.php?rdv=" . $rdvId . "',\n\tcolor: '" . $color . "',\n\t},\n";
 						} elseif ($status === 2) {
-							$patientTitle = addslashes(nom_patient($donnees1['id_patient']));
 							$start = $donnees1['prochain_rdv'];
 							$rdvId = $donnees1['id_rdv'];
 							echo "{\n\ttitle: '" . $patientTitle . "',\n\tstart: '" . $start . "',\n\turl: 'convocationdetails.php?rdv=" . $rdvId . "',\n\tcolor: '" . $color . "',\n\t},\n";
 						} else {
-							$patientTitle = addslashes(nom_patient($donnees1['id_patient']));
 							$start = $donnees1['prochain_rdv'];
 							$rdvId = $donnees1['id_rdv'];
 							echo "{\n\ttitle: '" . $patientTitle . "',\n\tstart: '" . $start . "',\n\turl: 'convocationdetails.php?rdv=" . $rdvId . "',\n\tcolor: '" . $color . "',\n\t},\n";

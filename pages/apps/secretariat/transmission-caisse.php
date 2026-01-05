@@ -14,6 +14,7 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
     $heuresRestantes = (int)($state['heuresRestantes'] ?? 0);
     $minutesRestantes = (int)($state['minutesRestantes'] ?? 0);
     $selectedType = $state['selectedType'] ?? null;
+    $bypassCaisse = (int)($state['bypassCaisse'] ?? 0);
 
     $patient = nom_patient($id_patient);
     $telephone = return_phone($id_patient);
@@ -32,7 +33,11 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                 <?php if ($errors === 2): ?>
                     <div class="alert alert-success">
                         <strong>Succès</strong><br>
-                        <li>Dossier patient transmis à la caisse pour paiement. Merci de rediriger le patient vers la caisse.</li>
+                        <?php if ($bypassCaisse === 1): ?>
+                            <li>Avis médical : affectation enregistrée. Merci de rediriger le patient vers le médecin (sans passage caisse).</li>
+                        <?php else: ?>
+                            <li>Dossier patient transmis à la caisse pour paiement. Merci de rediriger le patient vers la caisse.</li>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
@@ -128,10 +133,16 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
 
     $id_patient = (string)$id_patient;
 
+    // Le traitement réellement affecté est celui stocké dans affectations.type (souvent motif_id)
+    $traitementId = (int)($post['motif_id'] ?? 0);
+    if ($traitementId <= 0) {
+        $traitementId = (int)($post['type'] ?? 0);
+    }
+
     try {
         // Bloquer l'affectation uniquement si le patient a un rendez-vous aujourd'hui
         // pour le même motif/type de traitement sélectionné.
-        $selectedType = $post['type'] ?? null;
+        $selectedType = $traitementId > 0 ? $traitementId : ($post['type'] ?? null);
         if (!empty($selectedType)) {
             $stRdv = $bdd->prepare('SELECT id_rdv, prochain_rdv, motif FROM dmd_rendez_vous WHERE id_patient = ? AND motif = ? AND DATE(prochain_rdv) = CURDATE() AND status IN (0,1,2) ORDER BY prochain_rdv ASC LIMIT 1');
             $stRdv->execute([$id_patient, $selectedType]);
@@ -177,15 +188,32 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
     }
 
     try {
-        $model = null;
-        $reponse1 = $bdd->prepare('SELECT * FROM traitements WHERE id_type = ?');
-        $reponse1->execute([$post['type']]);
-        while ($donnees1 = $reponse1->fetch(PDO::FETCH_ASSOC)) {
-            $model = $donnees1['id_organigramme'];
+        if ($traitementId <= 0) {
+            $state['errors'] = 4;
+            return $state;
         }
 
-        $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
-        $req->execute([$id_patient, $model, $post['motif_id']]);
+        $stT = $bdd->prepare('SELECT id_organigramme, operation FROM traitements WHERE id_type = ? LIMIT 1');
+        $stT->execute([$traitementId]);
+        $tRow = $stT->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $model = isset($tRow['id_organigramme']) ? (int)$tRow['id_organigramme'] : 0;
+        $op = isset($tRow['operation']) ? (int)$tRow['operation'] : 0;
+
+        if ($model <= 0) {
+            $state['errors'] = 4;
+            return $state;
+        }
+
+        // Réforme: avis médical (operation=8) => pas de caisse, visible médecin directement
+        if ($op === 8) {
+            $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES(?, ?, ?, 1, 0, 0, 0)');
+            $req->execute([$id_patient, $model, $traitementId]);
+            $state['bypassCaisse'] = 1;
+        } else {
+            $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
+            $req->execute([$id_patient, $model, $traitementId]);
+        }
 
         $state['errors'] = 2;
         return $state;
@@ -333,7 +361,11 @@ include('../PUBLIC/header.php');
                                 // Bloquer l'affectation uniquement si le patient a un rendez-vous aujourd'hui
                                 // pour le même motif/type de traitement sélectionné.
                                 try {
-                                    $selectedType = $_POST['type'] ?? null;
+                                    $traitementIdLegacy = (int)($_POST['motif_id'] ?? 0);
+                                    if ($traitementIdLegacy <= 0) {
+                                        $traitementIdLegacy = (int)($_POST['type'] ?? 0);
+                                    }
+                                    $selectedType = $traitementIdLegacy > 0 ? $traitementIdLegacy : ($_POST['type'] ?? null);
                                     if (!empty($selectedType)) {
                                         $stRdv = $bdd->prepare('SELECT id_rdv, prochain_rdv, motif FROM dmd_rendez_vous WHERE id_patient = ? AND motif = ? AND DATE(prochain_rdv) = CURDATE() AND status IN (0,1,2) ORDER BY prochain_rdv ASC LIMIT 1');
                                         $stRdv->execute([$id_patient, $selectedType]);
@@ -376,17 +408,28 @@ include('../PUBLIC/header.php');
 
                                 if ($existe == 0) {
                                 
-                                $reponse1 = $bdd->prepare('SELECT * FROM traitements WHERE id_type = ?');
-                                $reponse1->execute([$_POST['type']]);
-                                    while ($donnees1 = $reponse1->fetch(PDO::FETCH_ASSOC))
-                                    {
-                                    $model = $donnees1['id_organigramme'];
-                                    }
-                            
-                                $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
-                                $req->execute([$id_patient, $model, $_POST['motif_id']]);
+                                $traitementIdLegacy = (int)($_POST['motif_id'] ?? 0);
+                                if ($traitementIdLegacy <= 0) {
+                                    $traitementIdLegacy = (int)($_POST['type'] ?? 0);
+                                }
 
-                                $errors=2; 
+                                $stT = $bdd->prepare('SELECT id_organigramme, operation FROM traitements WHERE id_type = ? LIMIT 1');
+                                $stT->execute([$traitementIdLegacy]);
+                                $tRow = $stT->fetch(PDO::FETCH_ASSOC) ?: [];
+                                $model = isset($tRow['id_organigramme']) ? (int)$tRow['id_organigramme'] : 0;
+                                $op = isset($tRow['operation']) ? (int)$tRow['operation'] : 0;
+
+                                if ($op === 8) {
+                                    $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES(?, ?, ?, 1, 0, 0, 0)');
+                                    $req->execute([$id_patient, $model, $traitementIdLegacy]);
+                                    $bypassCaisseLegacy = 1;
+                                } else {
+                                    $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
+                                    $req->execute([$id_patient, $model, $traitementIdLegacy]);
+                                    $bypassCaisseLegacy = 0;
+                                }
+
+                                $errors=2;
                                 }
                                 }
                             }
@@ -395,11 +438,16 @@ include('../PUBLIC/header.php');
 							<section class="card">
 								<div class="card-body">';
                                         if ($errors==2) {
+                                        $bypassCaisseLegacy = isset($bypassCaisseLegacy) ? (int)$bypassCaisseLegacy : 0;
                                         echo '
                                             <div class="alert alert-success">
-                                            <strong>Succès</strong> <br/>  
-                                            <li>Dossier patient transmis à la caisse pour paiement. Merci de rediriger le patient vers la caisse.</li>
-                                            </div>
+                                            <strong>Succès</strong> <br/>';
+                                            if ($bypassCaisseLegacy === 1) {
+                                                echo '<li>Avis médical : affectation enregistrée. Merci de rediriger le patient vers le médecin (sans passage caisse).</li>';
+                                            } else {
+                                                echo '<li>Dossier patient transmis à la caisse pour paiement. Merci de rediriger le patient vers la caisse.</li>';
+                                            }
+                                            echo '</div>
                                             ';
                                                 }
                                         if ($errors==4) {
