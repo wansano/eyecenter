@@ -70,16 +70,16 @@ include('../public/header.php');
                                                     <td>';
                                                 
                                                 if ($status == 6 ) {
-                                                    echo '<button class="btn btn-sm btn-danger">en attente de paiement</button>';
+                                                    echo '<button class="btn btn-sm btn-danger">paiement en attente</button>';
                                                 }
                                                  elseif ($status == 2) {
-                                                    echo '<button class="btn btn-sm btn-info">accepté en attente d\'être vu</button>';
+                                                    echo '<button class="btn btn-sm btn-info">accepté en attente</button>';
                                                 } elseif ($status == 1) {
-                                                    echo '<button class="btn btn-sm btn-warning">payé en attente d\'être vu</button>';
+                                                    echo '<button class="btn btn-sm btn-warning">payé en attente</button>';
                                                 } elseif ($status == 99) {
-                                                    echo '<button class="btn btn-sm btn-dark">reféré est à rembourser</button>';
+                                                    echo '<button class="btn btn-sm btn-dark">est à rembourser</button>';
                                                 } elseif ($status == 7 || $status == 8 || $status == 9) {
-                                                    echo '<button class="btn btn-sm btn-dark">en procedure de chirurgie</button>';
+                                                    echo '<button class="btn btn-sm btn-dark">en chirurgie</button>';
                                                 }                                                
                                                 echo '</td></tr>';
                                             }

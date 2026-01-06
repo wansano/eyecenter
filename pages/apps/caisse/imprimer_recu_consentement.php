@@ -1,12 +1,12 @@
 <?php
-$id_patient = isset($_GET['id_patient']) ? intval($_GET['id_patient']) : 0;
+$affectation = isset($_GET['affectation']) ? (int)$_GET['affectation'] : 0;
 $autoPrint = !isset($_GET['autoprint']) || (int)$_GET['autoprint'] !== 0;
-$pdf_url = "../impression/_dossierpatient.php?id_patient=" . $id_patient;
+$pdf_url = "../impression/_recudecaisse_consentement.php?affectation=" . $affectation;
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Impression dossier patient</title>
+    <title>Impression reçu + consentement</title>
 </head>
 <body style="margin:0">
     <iframe id="pdfFrame" src="<?php echo $pdf_url; ?>" style="width:100vw; height:100vh;" frameborder="0"></iframe>
@@ -23,7 +23,7 @@ $pdf_url = "../impression/_dossierpatient.php?id_patient=" . $id_patient;
             if (!auto) return;
             setTimeout(function() {
                 printPdf();
-            }, 1000); // attendre que le PDF charge
+            }, 1000);
         };
     </script>
 </body>

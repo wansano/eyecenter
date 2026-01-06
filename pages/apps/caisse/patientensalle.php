@@ -27,7 +27,11 @@ include('../PUBLIC/header.php');
 <?php if (!$allComptesClotures): ?>
 <script>
     // Actualisation seulement si tous les comptes ne sont pas clôturés
-    setTimeout(function() { location.reload(); }, 60000);
+    setInterval(function() {
+        // Ne pas recharger pendant qu'un modal est ouvert (sinon on perd l'impression)
+        if (document.querySelector('.modal.show')) return;
+        location.reload();
+    }, 60000);
 </script>
 <?php endif; ?>
 
@@ -146,7 +150,7 @@ include('../PUBLIC/header.php');
                                     </select>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label" for="paiementTaux">Taux</label>
+                                    <label class="form-label" for="paiementTaux">Remise</label>
                                     <select class="form-control" name="taux" id="paiementTaux" required>
                                         <option value="0">Non Appliqué</option>
                                     </select>
@@ -154,13 +158,32 @@ include('../PUBLIC/header.php');
                             </div>
 
                             <div class="d-flex justify-content-end gap-2">
-                                <a id="paiementRecuBtn" href="#" target="_blank" class="btn btn-light d-none">Imprimer le reçu</a>
+                                <a id="paiementRecuBtn" href="#" class="btn btn-light d-none">Voir / Imprimer</a>
                                 <button type="submit" id="paiementSubmit" class="btn btn-success">
                                     <i class="fa-regular fa-credit-card"></i> Valider le paiement
                                 </button>
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Reçu (aperçu + impression) -->
+        <div class="modal fade" id="recuModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reçu de paiement</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-0" style="height:80vh;">
+                        <iframe id="recuFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="recuPrintBtn" class="btn btn-primary">Imprimer</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
                     </div>
                 </div>
             </div>
@@ -174,6 +197,27 @@ include('../PUBLIC/header.php');
             const submitEl = document.getElementById('paiementSubmit');
             const recuBtnEl = document.getElementById('paiementRecuBtn');
 
+            const recuModalEl = document.getElementById('recuModal');
+            const recuFrameEl = document.getElementById('recuFrame');
+            const recuPrintBtnEl = document.getElementById('recuPrintBtn');
+
+            let pendingReload = false;
+
+            function tryReloadSoon(delayMs) {
+                const delay = typeof delayMs === 'number' ? delayMs : 500;
+                setTimeout(function () {
+                    // Attendre la fermeture des modals pour ne pas interrompre l'impression
+                    if (document.querySelector('.modal.show')) {
+                        pendingReload = true;
+                        return;
+                    }
+                    if (pendingReload) {
+                        pendingReload = false;
+                    }
+                    window.location.reload();
+                }, delay);
+            }
+
             const patientEl = document.getElementById('paiementPatient');
             const examenEl = document.getElementById('paiementExamen');
             const montantEl = document.getElementById('paiementMontant');
@@ -183,6 +227,18 @@ include('../PUBLIC/header.php');
             const tauxEl = document.getElementById('paiementTaux');
 
             if (!modalEl || !formEl || !submitEl || !typeEl || !tauxEl) return;
+
+            function withAutoPrintDisabled(url) {
+                if (!url) return url;
+                return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+            }
+
+            function openReceiptModal(receiptUrl) {
+                if (!recuModalEl || !recuFrameEl || !receiptUrl || !window.bootstrap) return;
+                recuFrameEl.src = withAutoPrintDisabled(receiptUrl);
+                const instance = window.bootstrap.Modal.getInstance(recuModalEl) || new window.bootstrap.Modal(recuModalEl);
+                instance.show();
+            }
 
             function showAlert(message, kind) {
                 if (!alertEl) return;
@@ -263,9 +319,9 @@ include('../PUBLIC/header.php');
                 if (data.already_paid) {
                     showAlert('Paiement déjà effectué pour cette affectation.', 'warning');
                     submitEl.disabled = true;
-                    if (aff.id_affectation) {
+                    if (data.receipt_url) {
                         recuBtnEl.classList.remove('d-none');
-                        recuBtnEl.setAttribute('href', 'imprimer_recu.php?affectation=' + encodeURIComponent(aff.id_affectation));
+                        recuBtnEl.setAttribute('href', data.receipt_url);
                     }
                 } else {
                     submitEl.disabled = false;
@@ -324,11 +380,14 @@ include('../PUBLIC/header.php');
                     if (data.receipt_url) {
                         recuBtnEl.classList.remove('d-none');
                         recuBtnEl.setAttribute('href', data.receipt_url);
-                        window.open(data.receipt_url, '_blank');
-                    }
+                        openReceiptModal(data.receipt_url);
 
-                    // Rafraîchir la liste (statuts/montants) après succès
-                    setTimeout(function () { window.location.reload(); }, 800);
+                        // Recharger après fermeture du reçu (pour ne pas perdre l'impression)
+                        pendingReload = true;
+                    } else {
+                        // Pas de reçu à afficher : reload normal
+                        tryReloadSoon(800);
+                    }
                 } catch (err) {
                     showAlert('Erreur lors du paiement.', 'danger');
                     submitEl.disabled = false;
@@ -347,7 +406,60 @@ include('../PUBLIC/header.php');
                 montantEl.textContent = '—';
                 typeEl.innerHTML = '<option value="">Sélectionner…</option>';
                 tauxEl.innerHTML = '<option value="0">Non Appliqué</option>';
+
+                // Si un reload était en attente (après impression), le faire après fermeture du modal paiement
+                if (pendingReload) {
+                    tryReloadSoon(100);
+                }
             });
+
+            // Ouvrir le reçu dans un modal (sans nouvelle fenêtre)
+            recuBtnEl.addEventListener('click', function (e) {
+                if (!recuBtnEl || recuBtnEl.classList.contains('d-none')) return;
+                e.preventDefault();
+                const href = recuBtnEl.getAttribute('href');
+                if (href && href !== '#') {
+                    openReceiptModal(href);
+                }
+            });
+
+            // Impression depuis le modal reçu
+            if (recuPrintBtnEl) {
+                recuPrintBtnEl.addEventListener('click', function () {
+                    try {
+                        const win = recuFrameEl && recuFrameEl.contentWindow ? recuFrameEl.contentWindow : null;
+                        if (win && typeof win.printPdf === 'function') {
+                            win.printPdf();
+                            return;
+                        }
+                        if (win && typeof win.print === 'function') {
+                            win.print();
+                        }
+                    } catch (e) {
+                        // fallback silencieux
+                    }
+                });
+            }
+
+            // Nettoyer l'iframe à la fermeture
+            if (recuModalEl) {
+                recuModalEl.addEventListener('hidden.bs.modal', function () {
+                    if (recuFrameEl) recuFrameEl.src = 'about:blank';
+
+                    // Fermer aussi le modal de paiement pour revenir à la liste
+                    if (window.bootstrap) {
+                        const payInstance = window.bootstrap.Modal.getInstance(modalEl);
+                        if (payInstance) {
+                            payInstance.hide();
+                        }
+                    }
+
+                    // Si un reload est en attente, le faire maintenant
+                    if (pendingReload) {
+                        tryReloadSoon(100);
+                    }
+                });
+            }
         });
         </script>
 </body>

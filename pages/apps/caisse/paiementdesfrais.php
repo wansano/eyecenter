@@ -58,6 +58,15 @@ if (isset($_GET['ajax_payment_form'])) {
         $motifId = (int)($a['type'] ?? 0);
         $rdvId = (int)($a['id_rdv'] ?? 0);
 
+        $needsConsent = false;
+        if (function_exists('consentement')) {
+            $needsConsent = ((int)consentement($motifId) === 1);
+        }
+
+        $printUrl = $needsConsent
+            ? ('imprimer_recu_consentement.php?affectation=' . urlencode((string)$aff))
+            : ('imprimer_recu.php?affectation=' . urlencode((string)$aff));
+
         $montant = 0.0;
         if ($motifId > 0) {
             $stT = $bdd->prepare('SELECT montant FROM traitements WHERE id_type = ? LIMIT 1');
@@ -109,6 +118,8 @@ if (isset($_GET['ajax_payment_form'])) {
             'already_paid' => $alreadyPaid,
             'blocked' => empty($comptes),
             'blocked_message' => empty($comptes) ? "Aucun compte de paiement disponible : la preuve de caisse a déjà été effectuée aujourd'hui pour ce(s) compte(s)." : null,
+            'needs_consent' => $needsConsent,
+            'receipt_url' => $printUrl,
             'patient' => [
                 'id_patient' => $pid,
                 'nom_patient' => (string)($p['nom_patient'] ?? ''),
@@ -174,6 +185,15 @@ if (isset($_POST['ajax_payment'])) {
         $motifAjax = (int)($a['type'] ?? 0);
         $rdvAjax = (int)($a['id_rdv'] ?? 0);
 
+        $needsConsent = false;
+        if (function_exists('consentement')) {
+            $needsConsent = ((int)consentement($motifAjax) === 1);
+        }
+
+        $printUrl = $needsConsent
+            ? ('imprimer_recu_consentement.php?affectation=' . urlencode((string)$aff))
+            : ('imprimer_recu.php?affectation=' . urlencode((string)$aff));
+
         // Montant du traitement
         $montAjax = 0.0;
         if ($motifAjax > 0) {
@@ -191,7 +211,8 @@ if (isset($_POST['ajax_payment'])) {
                 'success' => false,
                 'already_paid' => true,
                 'message' => 'Paiement déjà effectué.',
-                'receipt_url' => 'imprimer_recu.php?affectation=' . urlencode((string)$aff),
+                'receipt_url' => $printUrl,
+                'needs_consent' => $needsConsent,
             ]);
             exit;
         }
@@ -240,7 +261,8 @@ if (isset($_POST['ajax_payment'])) {
             echo json_encode([
                 'success' => true,
                 'message' => 'Paiement effectué.',
-                'receipt_url' => 'imprimer_recu.php?affectation=' . urlencode((string)$aff),
+                'receipt_url' => $printUrl,
+                'needs_consent' => $needsConsent,
             ]);
             exit;
         } catch (Throwable $txe) {
@@ -512,7 +534,11 @@ require('../PUBLIC/header.php');
     <?php if ($errors == 3 && $affectation): ?>
         <script>
             window.onload = function() {
-                window.open('imprimer_recu.php?affectation=<?= $affectation ?>', '_blank');
+                <?php if (function_exists('consentement') && (int)consentement((int)$motif) === 1): ?>
+                    window.open('imprimer_recu_consentement.php?affectation=<?= $affectation ?>', '_blank');
+                <?php else: ?>
+                    window.open('imprimer_recu.php?affectation=<?= $affectation ?>', '_blank');
+                <?php endif; ?>
             };
         </script>
     <?php endif; ?>

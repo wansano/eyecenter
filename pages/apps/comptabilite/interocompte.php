@@ -152,7 +152,7 @@ include('../PUBLIC/header.php');
 														echo '<td>' . number_format($entreePreuve) . ' ' . htmlspecialchars($devise) . ' </td>';
 														echo '<td>' . number_format($solde) . ' ' . htmlspecialchars($devise) . ' </td>';
 														echo '<td>
-															'.($entreePreuve > 0 ? '<a href="../impression/_rapportinterrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" target="_blank" class="btn btn-sm btn-success"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
+																					'.($entreePreuve > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
 															<a href="cumulationdesfaits.php?debut='.$_GET['debut'].'&fin='.$_GET['fin'].'" class="btn btn-sm btn-info">cumul global</a></td>';
 														echo '</tr>';
 													}
@@ -214,7 +214,7 @@ include('../PUBLIC/header.php');
 														echo '<td>' . number_format($solde) . ' ' . htmlspecialchars($devise) . '</td>';
 														if ($rowIndex === 0) {
 															echo '<td rowspan="' . $rowCount . '" class="align-middle text-center">
-																	'.($entreePreuveTotal > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$montanttotal.'&rapportcaisse='.$entreePreuveTotal.'&solde='.$soldetotal.'" target="_blank" class="btn btn-sm btn-success"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
+																				'.($entreePreuveTotal > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$montanttotal.'&rapportcaisse='.$entreePreuveTotal.'&solde='.$soldetotal.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
 															<a href="cumulationdesfaits.php?debut=' . htmlspecialchars($_GET['debut']) . '&fin=' . htmlspecialchars($_GET['fin']) . '" class="btn btn-sm btn-info">cumul global</a>
 															</td>';
 														}
@@ -231,5 +231,85 @@ include('../PUBLIC/header.php');
 						</div>';
 					} }
 				?>
+
+					<!-- end: page -->
+				</section>
+			</div>
+		</section>
+
+	<!-- Modal Rapport (aperçu + impression) -->
+	<div class="modal fade" id="rapportModal" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-xl modal-dialog-scrollable">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Rapport d'interrogation</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body p-0" style="height:80vh;">
+					<iframe id="rapportFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+				</div>
+				<div class="modal-footer">
+					<button type="button" id="rapportPrintBtn" class="btn btn-primary">Imprimer</button>
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		const rapportModalEl = document.getElementById('rapportModal');
+		const rapportFrameEl = document.getElementById('rapportFrame');
+		const rapportPrintBtnEl = document.getElementById('rapportPrintBtn');
+
+		function withAutoPrintDisabled(url) {
+			if (!url) return url;
+			return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+		}
+
+		function openRapportModal(url) {
+			if (!url) return;
+			if (!window.bootstrap || !rapportModalEl || !rapportFrameEl) {
+				window.open(url, '_blank');
+				return;
+			}
+			rapportFrameEl.src = withAutoPrintDisabled(url);
+			const instance = window.bootstrap.Modal.getInstance(rapportModalEl) || new window.bootstrap.Modal(rapportModalEl);
+			instance.show();
+		}
+
+		document.addEventListener('click', function (e) {
+			const btn = e.target.closest('.js-open-rapport');
+			if (!btn) return;
+			const href = btn.getAttribute('href');
+			if (!href || href === '#') return;
+			e.preventDefault();
+			openRapportModal(href);
+		});
+
+		if (rapportPrintBtnEl) {
+			rapportPrintBtnEl.addEventListener('click', function () {
+				try {
+					const win = rapportFrameEl && rapportFrameEl.contentWindow ? rapportFrameEl.contentWindow : null;
+					if (win && typeof win.printPdf === 'function') {
+						win.printPdf();
+						return;
+					}
+					if (win && typeof win.print === 'function') {
+						win.print();
+					}
+				} catch (err) {
+					// noop
+				}
+			});
+		}
+
+		if (rapportModalEl) {
+			rapportModalEl.addEventListener('hidden.bs.modal', function () {
+				if (rapportFrameEl) rapportFrameEl.src = 'about:blank';
+			});
+		}
+	});
+	</script>
 
    <?php include('../public/footer.php'); ?>
