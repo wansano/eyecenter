@@ -88,6 +88,25 @@ $errors=0;
 		</div>
 	</div>
 
+	<!-- Modal Impression (aperçu + impression) -->
+	<div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-xl modal-dialog-scrollable">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="printModalTitle">Impression</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body p-0" style="height:80vh;">
+					<iframe id="printFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+				</div>
+				<div class="modal-footer">
+					<button type="button" id="printBtn" class="btn btn-primary">Imprimer</button>
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
 <script>
 (function($) {
 	'use strict';
@@ -150,6 +169,65 @@ $errors=0;
 
 	$(function() {
 				initCalendar();
+				// Modal d'impression (iframe)
+				var printModalEl = document.getElementById('printModal');
+				var printFrameEl = document.getElementById('printFrame');
+				var printBtnEl = document.getElementById('printBtn');
+				var printTitleEl = document.getElementById('printModalTitle');
+
+				function withAutoPrintDisabled(url) {
+					if (!url) return url;
+					return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+				}
+
+				function openPrintModal(url, titleText) {
+					if (!url) return;
+					if (printTitleEl) printTitleEl.textContent = titleText || 'Impression';
+					if (!printModalEl || !printFrameEl) {
+						window.open(url, '_blank');
+						return;
+					}
+					printFrameEl.src = withAutoPrintDisabled(url);
+					if (window.bootstrap && window.bootstrap.Modal) {
+						var instance = window.bootstrap.Modal.getInstance(printModalEl) || new window.bootstrap.Modal(printModalEl);
+						instance.show();
+						return;
+					}
+					if (window.jQuery && typeof jQuery(printModalEl).modal === 'function') {
+						jQuery(printModalEl).modal('show');
+						return;
+					}
+					window.open(url, '_blank');
+				}
+
+				if (printBtnEl) {
+					printBtnEl.addEventListener('click', function () {
+						try {
+							var win = printFrameEl && printFrameEl.contentWindow ? printFrameEl.contentWindow : null;
+							if (win && typeof win.printPdf === 'function') {
+								win.printPdf();
+								return;
+							}
+							if (win && typeof win.print === 'function') {
+								win.print();
+							}
+						} catch (err) {
+							// noop
+						}
+					});
+				}
+
+				if (printModalEl) {
+					printModalEl.addEventListener('hidden.bs.modal', function () {
+						if (printFrameEl) printFrameEl.src = 'about:blank';
+					});
+					if (window.jQuery && typeof jQuery(printModalEl).on === 'function') {
+						jQuery(printModalEl).on('hidden.bs.modal', function () {
+							if (printFrameEl) printFrameEl.src = 'about:blank';
+						});
+					}
+				}
+
 				// Impression RDV du jour par médecin
 				var btn = document.getElementById('btnPrintRdvListe');
 				var btnRapport = document.getElementById('btnRapportRdv');
@@ -161,7 +239,7 @@ $errors=0;
 						if (!med) { alert('Veuillez choisir un médecin.'); return; }
 						var d = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().slice(0,10);
 						var url = 'imprimer_listerdv.php?date='+encodeURIComponent(d)+'&medecin='+encodeURIComponent(med);
-						window.open(url, '_blank');
+						openPrintModal(url, 'Impression liste des rendez-vous');
 					});
 				}
 
@@ -229,6 +307,17 @@ $errors=0;
 							printEl.href = 'imprimer_rapport_rdv.php?date=' + encodeURIComponent(selectedDate);
 							openModal(modalEl);
 						}
+					});
+				}
+
+				// Impression du PDF du rapport via le modal d'impression
+				var rapportPrintEl = document.getElementById('rapportRdvPrint');
+				if (rapportPrintEl) {
+					rapportPrintEl.addEventListener('click', function (e) {
+						var href = rapportPrintEl.getAttribute('href');
+						if (!href) return;
+						e.preventDefault();
+						openPrintModal(href, 'Impression rapport rendez-vous');
 					});
 				}
 
