@@ -112,7 +112,7 @@ try {
                 $nom     = (string)nom_patient($idPatient);
                 $tel     = formatPhoneDisplayConvocation(return_phone($idPatient));
             } elseif ($idDemande > 0) {
-                $dossier = 'DEM-' . (string)$idDemande;
+                $dossier = '';
                 $demande = getDemandeEnAttenteById($bdd, $idDemande);
                 $nom     = (string)($demande['nom_patient'] ?? '');
                 $tel     = formatPhoneDisplayConvocation((string)($demande['phone'] ?? ''));
