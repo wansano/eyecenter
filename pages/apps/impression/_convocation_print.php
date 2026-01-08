@@ -54,7 +54,8 @@ try {
     }
 
     // Récupération des RDV
-    $sql = "SELECT id_patient, prochain_rdv, motif FROM dmd_rendez_vous
+    $hasIdDemande = dbTableHasColumn($bdd, 'dmd_rendez_vous', 'id_demande');
+    $sql = 'SELECT id_patient, ' . ($hasIdDemande ? 'id_demande, ' : '') . "prochain_rdv, motif FROM dmd_rendez_vous
             WHERE DATE(prochain_rdv) = ? AND traitant = ? AND status IN (0,1,2,4)
             ORDER BY prochain_rdv";
     $st = $bdd->prepare($sql);
@@ -95,7 +96,7 @@ try {
         // En-têtes
         $pdf->SetFont('CenturyGothic','B',11);
         $pdf->Cell(20,8,pdf_text('Heure'),1,0,'C');
-        $pdf->Cell(20,8,pdf_text('PAT-N°'),1,0,'C');
+        $pdf->Cell(20,8,pdf_text('DOSSIER'),1,0,'C');
         $pdf->Cell(70,8,pdf_text('Patient'),1,0,'C');
         $pdf->Cell(30,8,pdf_text('Contact'),1,0,'C');
         $pdf->Cell(50,8,pdf_text('Motif'),1,1,'C');
@@ -103,9 +104,23 @@ try {
 
         foreach ($rdvs as $r) {
             $heure   = substr($r['prochain_rdv'],11,5);
-            $dossier = $r['id_patient'];
-            $nom     = nom_patient($r['id_patient']);
-            $tel     = formatPhoneDisplayConvocation(return_phone($r['id_patient']));
+            $idPatient = (int)($r['id_patient'] ?? 0);
+            $idDemande = (int)($r['id_demande'] ?? 0);
+
+            if ($idPatient > 0) {
+                $dossier = (string)$idPatient;
+                $nom     = (string)nom_patient($idPatient);
+                $tel     = formatPhoneDisplayConvocation(return_phone($idPatient));
+            } elseif ($idDemande > 0) {
+                $dossier = 'DEM-' . (string)$idDemande;
+                $demande = getDemandeEnAttenteById($bdd, $idDemande);
+                $nom     = (string)($demande['nom_patient'] ?? '');
+                $tel     = formatPhoneDisplayConvocation((string)($demande['phone'] ?? ''));
+            } else {
+                $dossier = 'N/A';
+                $nom     = '';
+                $tel     = '';
+            }
             $motif   = type_traitement($r['motif']);
 
             // Respecte les largeurs d'en-tête: 20 | 30 | 70 | 40 | 50
