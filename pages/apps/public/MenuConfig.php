@@ -151,7 +151,38 @@ class MenuConfig {
             </ul>
         </li>';
     }
-
+    private static function getCaisseOptiqueMenu($user_data) {
+        return '
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Ventes</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="ventedelunette.php">Enregistrer une vente</a></li>
+                <li><a class="nav-link" href="#.php">Modifier une vente</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Edition</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="findingproduct.php">Verifier une monture</a></li>
+                <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Reimpression document</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Gestion monture</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="addproduct.php">Ajouter une monture</a></li>
+                <li><a class="nav-link" href="#.php">Modifier une monture</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Situation</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="rapportjournalier.php?rdp=' . $user_data['type'] . '">Proof de caisse</a></li>
+                <li><a class="nav-link" href="mesrapportdecaisse.php?rdp=' . $user_data['type'] . '">Mes proofs du mois</a></li>
+                <li><a class="nav-link" href="listetotaldesventes.php">Liste des ventes</a></li>
+            </ul>
+        </li>';
+    }
     private static function getMedecinMenu($user_data) {
         return '
         <li class="dropdown">
@@ -240,37 +271,6 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle" href="#">Realisations</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="mesrealisations.php?rdp=' . $user_data['type'] . '">Mes réalisations</a></li>
-            </ul>
-        </li>';
-    }
-
-
-    private static function getCaisseOptiqueMenu($user_data) {
-        return '
-        <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Clients en salle</a>
-            <ul class="dropdown-menu">
-                <li><a class="nav-link" href="listeclientensalle.php?lpeap=' . $user_data['type'] . '">Liste des clients</a></li>
-            </ul>
-        </li>
-        <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Ventes</a>
-            <ul class="dropdown-menu">
-                <li><a class="nav-link" href="findingproduct.php">Verifier une monture</a></li>
-                <li><a class="nav-link" href="listetotaldesventes.php">Liste des ventes</a></li>
-                <li><a class="nav-link" href="#">Situation des ventes</a></li>
-            </ul>
-        </li>
-        <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Fonction</a>
-            <ul class="dropdown-menu">
-                <li><a class="nav-link" href="addproduct.php">Ajouter une monture</a></li>
-            </ul>
-        </li>
-        <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Réimpression</a>
-            <ul class="dropdown-menu">
-                <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Reçu ou ordonance</a></li>
             </ul>
         </li>';
     }

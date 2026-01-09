@@ -99,17 +99,29 @@ if (isset($_POST['ajouter']) && $rendezvous > 0) {
 
                 <!-- start: page -->
                 <?php
-                        $id_patient = $rendezvous > 0 ? getPatientIdByRdv($bdd, $rendezvous) : null;
-                        if (isset($id_patient)) {
-                            $patient = nom_patient($id_patient);
-                            $telephone = return_phone($id_patient);
-                            $adresse = return_adresse($id_patient);
-                            $responsable = return_responsable($id_patient);
-                            $profession = return_profession($id_patient);
-                            $age = return_age($id_patient);
-                            $sexe = return_sexe($id_patient);
-                            $assure = return_assure($id_patient);
-                            $assurance = return_assurance($id_patient);
+                        // Valeurs par défaut pour éviter les warnings si aucun dossier n'est encore lié au RDV
+                        $id_patient = null;
+                        $patient = '';
+                        $telephone = '';
+                        $adresse = '';
+                        $responsable = '';
+                        $profession = '';
+                        $age = '';
+                        $sexe = '';
+                        $assure = '';
+                        $assurance = '';
+
+                        $id_patient = $rendezvous > 0 ? (int) getPatientIdByRdv($bdd, $rendezvous) : 0;
+                        if ($id_patient > 0) {
+                            $patient = (string) nom_patient($id_patient);
+                            $telephone = (string) return_phone($id_patient);
+                            $adresse = (string) return_adresse($id_patient);
+                            $responsable = (string) return_responsable($id_patient);
+                            $profession = (string) return_profession($id_patient);
+                            $age = (string) return_age($id_patient);
+                            $sexe = (string) return_sexe($id_patient);
+                            $assure = (string) return_assure($id_patient);
+                            $assurance = (string) return_assurance($id_patient);
                         }
 
                         $userData = getRdvInfo($bdd, $rendezvous);
@@ -170,13 +182,17 @@ if (isset($_POST['ajouter']) && $rendezvous > 0) {
 										<div class="col-md-2">
 											<div class="form-group">
 												<label class="col-form-label" for="formGroupExampleInput">Genre</label>
-												<select class="form-control populate" disabled>
-                                                    <option value="'.$sexe.'">'.$sexe.'</option>';
+                                                <select class="form-control populate" disabled>';
+                                                    if (!empty($sexe)) {
+                                                        echo '<option value="'.$sexe.'">'.$sexe.'</option>';
                                                         if ($sexe=="Homme") {
                                                             echo '<option value="Feminin">Feminin</option>';
                                                         } else {
                                                             echo '<option value="Masculin">Masculin</option>';
                                                         }
+                                                    } else {
+                                                        echo '<option value="">---</option>';
+                                                    }
                                                 echo '</select>
 											</div>
 										</div>

@@ -7,24 +7,38 @@ session_start();
 $message = '';
 $messageType = '';
 
+// Flash message (pattern PRG)
+if (!empty($_SESSION['flash_message'])) {
+    $message = (string)$_SESSION['flash_message'];
+    $messageType = !empty($_SESSION['flash_message_type']) ? (string)$_SESSION['flash_message_type'] : 'info';
+    unset($_SESSION['flash_message'], $_SESSION['flash_message_type']);
+}
+
 // Traitement de l'annulation
 if (isset($_POST['annulation'])) {
     try {
-        $bdd->beginTransaction();
-        
-        $stmt = $bdd->prepare('UPDATE affectations SET status = ?, montant = 0, taux = 0, type_paiement = 0 WHERE id_affectation = ?');
-        if ($stmt->execute([5, $_POST['annulation']])) {
-            $bdd->commit();
-            $message = 'Processus de vente annulé avec succès.';
-            $messageType = 'success';
-        } else {
-            throw new Exception("Échec de l'annulation");
+        $idAffectation = filter_input(INPUT_POST, 'annulation', FILTER_VALIDATE_INT);
+        if (!$idAffectation) {
+            throw new Exception("Identifiant d'annulation invalide");
         }
+
+        $stmt = $bdd->prepare('UPDATE affectations SET status = ?, montant = 0, taux = 0, type_paiement = 0 WHERE id_affectation = ?');
+        $stmt->execute([5, $idAffectation]);
+
+        if ($stmt->rowCount() < 1) {
+            throw new Exception("Aucune ligne modifiée (affectation introuvable ou déjà mise à jour)");
+        }
+
+        $_SESSION['flash_message'] = 'Processus de vente annulé avec succès.';
+        $_SESSION['flash_message_type'] = 'success';
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
     } catch (Exception $e) {
-        $bdd->rollBack();
         error_log("Erreur lors de l'annulation : " . $e->getMessage());
-        $message = "Une erreur est survenue lors de l'annulation.";
-        $messageType = 'danger';
+        $_SESSION['flash_message'] = "Une erreur est survenue lors de l'annulation.";
+        $_SESSION['flash_message_type'] = 'danger';
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
     }
 }
 
@@ -32,28 +46,12 @@ include('../PUBLIC/header.php');
 ?>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    let reloadTimer;
-    
-    function setupAutoReload() {
-        clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(function() {
-            if (!document.hidden) {
-                window.location.reload();
-            }
-        }, 60000);
-    }
-    
-    document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) {
-            setupAutoReload();
-        } else {
-            clearTimeout(reloadTimer);
-        }
-    });
-    
-    setupAutoReload();
-});
+    // Même comportement que caisse/patientensalle.php
+    // Rechargement toutes les 60s, mais jamais pendant qu'un modal est ouvert.
+    setInterval(function() {
+        if (document.querySelector('.modal.show')) return;
+        location.reload();
+    }, 60000);
 </script>
 
 <body>
@@ -64,17 +62,6 @@ document.addEventListener('DOMContentLoaded', function() {
             <section role="main" class="content-body">
                 <header class="page-header">
                     <h2>Liste des clients en salle</h2>
-                    <div class="right-wrapper text-end">
-                        <ol class="breadcrumbs">
-                            <li>
-                                <a href="welcome.php?profil=ecv2">
-                                    <i class="bx bx-home-alt"></i>
-                                </a>
-                            </li>
-                            <li><span>Accueil</span></li>
-                        </ol>
-                        <a class="sidebar-right-toggle" data-open="sidebar-right"></a>
-                    </div>
                 </header>
 
                 <!-- start: page -->
@@ -103,38 +90,49 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <tbody>
                                         <?php
                                         try {
-                                            $stmt = $bdd->prepare('SELECT * FROM affectations WHERE status = ? ORDER BY id_affectation');
-                                            $stmt->execute([6]); // Status EN_SALLE = 6
+                                            // Filtrage côté SQL pour éviter des appels inutiles et accélérer l'affichage
+                                            $sql = "SELECT id_affectation, id_patient, id_service, type, date, status
+                                                    FROM affectations
+                                                    WHERE status IN (6, 3)
+                                                      AND id_service = 14
+                                                      AND type <> 0
+                                                    ORDER BY id_affectation";
+                                            $stmt = $bdd->prepare($sql);
+                                            $stmt->execute();
                                             
                                             while ($affectation = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                                                if (service($affectation['id_service']) == "Boutique" && $affectation['type'] != 0) {
-                                                    $type_consultation = operation($affectation['type']);
-                                                    $motif = model($affectation['type']);
-                                                    $patient_nom = nom_patient($affectation['id_patient']);
-                                                    $patient_contact = return_phone($affectation['id_patient']);
+                                                $typeId = (int)$affectation['type'];
+                                                $patientId = (int)$affectation['id_patient'];
+                                                $affectationId = (int)$affectation['id_affectation'];
+
+                                                // operation() renvoie souvent une chaîne: on caste pour que les comparaisons strictes (===) fonctionnent
+                                                $type_consultation = (int)operation($typeId);
+                                                $motif = model($typeId);
+                                                $patient_nom = nom_patient($patientId);
+                                                $patient_contact = return_phone($patientId);
                                                     ?>
                                                     <tr>
-                                                        <td>PAT-<?php echo htmlspecialchars($affectation['id_patient']); ?></td>
-                                                        <td><?php echo htmlspecialchars($affectation['date']); ?></td>
-                                                        <td><?php echo htmlspecialchars($patient_nom); ?></td>
-                                                        <td><?php echo htmlspecialchars($patient_contact); ?></td>
-                                                        <td><?php echo htmlspecialchars($motif); ?></td>
+                                                        <td>PAT-<?php echo htmlspecialchars((string)$patientId, ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars((string)$affectation['date'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars((string)$patient_nom, ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars((string)$patient_contact, ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars((string)$motif, ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td>
                                                             <form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) ?>" method="post" class="d-inline">
-                                                                <input type="hidden" name="annulation" value="<?php echo $affectation['id_affectation']; ?>">
+                                                                <input type="hidden" name="annulation" value="<?php echo htmlspecialchars((string)$affectationId, ENT_QUOTES, 'UTF-8'); ?>">
                                                                 
                                                                 <?php if ($type_consultation === 10): ?>
-                                                                    <a href="ventedelunette.php?client=<?php echo $affectation['id_patient']; ?>&affectation=<?php echo $affectation['id_affectation']; ?>" 
+                                                                    <a href="ventedelunette.php?client=<?php echo urlencode((string)$patientId); ?>&affectation=<?php echo urlencode((string)$affectationId); ?>" 
                                                                        class="btn btn-sm btn-success">vente lunettes</a>
                                                                 <?php endif; ?>
                                                                 
                                                                 <?php if ($type_consultation === 11): ?>
-                                                                    <a href="ventedeverres.php?client=<?php echo $affectation['id_patient']; ?>&affectation=<?php echo $affectation['id_affectation']; ?>" 
+                                                                    <a href="ventedeverres.php?client=<?php echo urlencode((string)$patientId); ?>&affectation=<?php echo urlencode((string)$affectationId); ?>" 
                                                                        class="btn btn-sm btn-warning">vente de verres</a>
                                                                 <?php endif; ?>
 
                                                                 <?php if ($type_consultation === 12): ?>
-                                                                    <a href="ventedemonture.php?client=<?php echo $affectation['id_patient']; ?>&affectation=<?php echo $affectation['id_affectation']; ?>" 
+                                                                    <a href="ventedemonture.php?client=<?php echo urlencode((string)$patientId); ?>&affectation=<?php echo urlencode((string)$affectationId); ?>" 
                                                                        class="btn btn-sm btn-info">vente monture</a>
                                                                 <?php endif; ?>
                                                                 
@@ -146,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                                         </td>
                                                     </tr>
                                                     <?php
-                                                }
                                             }
                                         } catch (PDOException $e) {
                                             error_log("Erreur SQL : " . $e->getMessage());
