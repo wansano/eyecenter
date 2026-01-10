@@ -53,7 +53,7 @@ function resolveRdvPatientDisplay(PDO $bdd, array $r): array {
         if (trim($nom) === '' && $idDemande > 0) {
             $demande = getDemandeEnAttenteById($bdd, $idDemande);
             $nm = (string)($demande['nom_patient'] ?? '');
-            $nom = trim($nm) !== '' ? ($nm . ' (attente)') : 'Externe en attente';
+            $nom = trim($nm) !== '' ? ($nm) : 'Externe en attente';
         }
         if (trim($nom) === '') {
             $nom = 'Patient #' . $dossier;
@@ -62,10 +62,10 @@ function resolveRdvPatientDisplay(PDO $bdd, array $r): array {
     }
 
     if ($idDemande > 0) {
-        $dossier = 'DEM-' . (string)$idDemande;
+        $dossier = '';
         $demande = getDemandeEnAttenteById($bdd, $idDemande);
         $nm = (string)($demande['nom_patient'] ?? '');
-        $nom = trim($nm) !== '' ? ($nm . ' (attente)') : 'Externe en attente';
+        $nom = trim($nm) !== '' ? ($nm) : 'Externe en attente';
         return ['dossier' => $dossier, 'nom' => $nom];
     }
 
