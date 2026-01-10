@@ -40,7 +40,39 @@ function formatPhoneDisplayRapportRdv($raw) {
     return trim(chunk_split($digits, 2, ' '));
 }
 
-function renderRdvTable(PDF $pdf, string $title, array $rows): void {
+function resolveRdvPatientDisplay(PDO $bdd, array $r): array {
+    $idPatient = (int)($r['id_patient'] ?? 0);
+    $idDemande = (int)($r['id_demande'] ?? 0);
+
+    $dossier = '';
+    $nom = '';
+
+    if ($idPatient > 0) {
+        $dossier = (string)$idPatient;
+        $nom = (string)nom_patient($idPatient);
+        if (trim($nom) === '' && $idDemande > 0) {
+            $demande = getDemandeEnAttenteById($bdd, $idDemande);
+            $nm = (string)($demande['nom_patient'] ?? '');
+            $nom = trim($nm) !== '' ? ($nm . ' (attente)') : 'Externe en attente';
+        }
+        if (trim($nom) === '') {
+            $nom = 'Patient #' . $dossier;
+        }
+        return ['dossier' => $dossier, 'nom' => $nom];
+    }
+
+    if ($idDemande > 0) {
+        $dossier = 'DEM-' . (string)$idDemande;
+        $demande = getDemandeEnAttenteById($bdd, $idDemande);
+        $nm = (string)($demande['nom_patient'] ?? '');
+        $nom = trim($nm) !== '' ? ($nm . ' (attente)') : 'Externe en attente';
+        return ['dossier' => $dossier, 'nom' => $nom];
+    }
+
+    return ['dossier' => '', 'nom' => '—'];
+}
+
+function renderRdvTable(PDO $bdd, PDF $pdf, string $title, array $rows): void {
     $pdf->SetFont('CenturyGothic', 'B', 11);
     $pdf->Cell(0, 7, pdf_text($title.' ('.count($rows).')'), 0, 1, 'L');
     $pdf->Ln(1);
@@ -65,8 +97,9 @@ function renderRdvTable(PDF $pdf, string $title, array $rows): void {
     $pdf->SetFont('CenturyGothic', '', 9);
     foreach ($rows as $r) {
         $heure = isset($r['prochain_rdv']) ? substr((string)$r['prochain_rdv'], 11, 5) : '';
-        $dossier = (string)($r['id_patient'] ?? '');
-        $nom = nom_patient($r['id_patient'] ?? null);
+        $patient = resolveRdvPatientDisplay($bdd, $r);
+        $dossier = (string)($patient['dossier'] ?? '');
+        $nom = (string)($patient['nom'] ?? '');
         $medecin = '';
         if (isset($r['traitant']) && $r['traitant'] !== null && $r['traitant'] !== '') {
             $medecin = traitant($r['traitant']);
@@ -148,7 +181,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$date)) {
 
 try {
     // Détails RDV du jour
-    $stmtList = $bdd->prepare('SELECT id_rdv, id_patient, prochain_rdv, motif, traitant, status
+    $stmtList = $bdd->prepare('SELECT id_rdv, id_patient, id_demande, prochain_rdv, motif, traitant, status
         FROM dmd_rendez_vous
         WHERE DATE(prochain_rdv) = :d AND status IN (0,1,2,4)
         ORDER BY prochain_rdv');
@@ -237,11 +270,11 @@ try {
     }
 
     $pdf->Ln(6);
-    renderRdvTable($pdf, 'LISTE DES PRÉSENTS', $presents);
-    renderRdvTable($pdf, 'LISTE DES ABSENTS', $absents);
-    renderRdvTable($pdf, 'LISTE DE CEUX QUI ONT PAYÉ', $payeRows);
-    renderRdvTable($pdf, 'LISTE DE CEUX QUI N\'ONT PAS PAYÉ', $nonPayeRows);
-    renderRdvTable($pdf, 'LISTE DE CEUX QUI ONT ÉTÉ VUS PAR LE MÉDECIN', $vusRows);
+    renderRdvTable($bdd, $pdf, 'LISTE DES PRÉSENTS', $presents);
+    renderRdvTable($bdd, $pdf, 'LISTE DES ABSENTS', $absents);
+    renderRdvTable($bdd, $pdf, 'LISTE DE CEUX QUI ONT PAYÉ', $payeRows);
+    renderRdvTable($bdd, $pdf, 'LISTE DE CEUX QUI N\'ONT PAS PAYÉ', $nonPayeRows);
+    renderRdvTable($bdd, $pdf, 'LISTE DE CEUX QUI ONT ÉTÉ VUS PAR LE MÉDECIN', $vusRows);
 
     $pdf->Ln(10);
     $pdf->SetFont('CenturyGothic','',8);
