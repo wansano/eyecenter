@@ -11,7 +11,7 @@ if (isset($_POST['recherche'])) {
     $req1 = $bdd->prepare('SELECT * FROM produits WHERE code_produit=? AND vendu=0');
     $req1->execute([$productCode]);
     if ($req1->fetch()) {
-        echo '<script>document.location.href="ventedelunette.php?client=' . $_GET['client'] . '&affectation=' . $_GET['affectation'] . '&codeproduit=' . $productCode . '"</script>';
+        echo '<script>document.location.href="ventelunette.php?client=' . $_GET['client'] . '&affectation=' . $_GET['affectation'] . '&codeproduit=' . $productCode . '"</script>';
     } else {
         $existe = 1;
     }

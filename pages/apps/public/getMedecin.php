@@ -1,6 +1,7 @@
 <?php
 // ../public/getMedecin.php
-// Objectif: retourner les médecins du service demandé + tous les médecins "globaux" (type = 4)
+// Objectif: retourner les médecins du service demandé + tous les médecins "globaux".
+// Règle métier: les médecins de type=4 et type=6 doivent être visibles dans tous les services.
 header('Content-Type: application/json; charset=utf-8');
 include('../public/connect.php');
 
@@ -16,13 +17,13 @@ try {
 
     $serviceId = (int) $_GET['service'];
 
-    // Sélection: tous status=1 où (type = service OU type = 4 (médecins globaux))
+        // Sélection: tous status=1 où (type = service OU type IN (4,6) (médecins globaux))
     // On renvoie aussi le type pour distinguer visuellement si besoin côté front.
     $query = $bdd->prepare("
         SELECT id, pseudo, type
         FROM users
         WHERE status = 1
-          AND (type = :serviceId OR type = 4)
+                    AND (type = :serviceId OR type IN (4, 6))
         ORDER BY pseudo ASC
     ");
     $query->execute(['serviceId' => $serviceId]);

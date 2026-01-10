@@ -8,6 +8,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 $errors = 0;
 $existe = 0;
 $errorMessage = '';
+$presentationSuccess = false;
+$presentationError = '';
 
 function h($value): string {
 	return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -24,6 +26,51 @@ $sigle = '';
 $dg = '';
 $exploitation = '';
 $agrement = '';
+
+// Contenu public (affiché sur les home dashboards)
+$presentation = '';
+$mission = '';
+$vision = '';
+$valeur = '';
+
+try {
+	$stInfo = $bdd->prepare('SELECT presentation, mission, vision, valeur FROM infoacceuille LIMIT 1');
+	$stInfo->execute();
+	$info = $stInfo->fetch(PDO::FETCH_ASSOC);
+	if ($info) {
+		$presentation = $info['presentation'] ?? '';
+		$mission = $info['mission'] ?? '';
+		$vision = $info['vision'] ?? '';
+		$valeur = $info['valeur'] ?? '';
+	}
+} catch (PDOException $e) {
+	// table/colonnes absentes: ignorer (le modal affichera vide)
+}
+
+// Mise à jour de la présentation (modal)
+if (isset($_POST['maj_presentation'])) {
+	$nextPresentation = trim((string)($_POST['presentation'] ?? ''));
+	$nextMission = trim((string)($_POST['mission'] ?? ''));
+	$nextVision = trim((string)($_POST['vision'] ?? ''));
+	$nextValeur = trim((string)($_POST['valeur'] ?? ''));
+
+	if ($nextPresentation === '' || $nextMission === '' || $nextVision === '' || $nextValeur === '') {
+		$presentationError = "Merci de renseigner la présentation, la mission, la vision et les valeurs.";
+	} else {
+		try {
+			$stUp = $bdd->prepare('UPDATE infoacceuille SET presentation = ?, mission = ?, vision = ?, valeur = ? LIMIT 1');
+			$stUp->execute([$nextPresentation, $nextMission, $nextVision, $nextValeur]);
+
+			$presentation = $nextPresentation;
+			$mission = $nextMission;
+			$vision = $nextVision;
+			$valeur = $nextValeur;
+			$presentationSuccess = true;
+		} catch (PDOException $e) {
+			$presentationError = "Enregistrement non effectué, merci de vérifier les informations saisies.";
+		}
+	}
+}
 
 // Logo standard utilisé partout dans l'app (../img/logo.jpg depuis pages/apps/*)
 $logoTargetPath = __DIR__ . '/../img/logo.jpg';
@@ -196,6 +243,21 @@ include('../PUBLIC/header.php');
 							<section class="card">
 								<div class="card-body">
                                     <?php
+									if (!empty($presentationSuccess)) {
+										echo '
+											<div class="alert alert-success">
+												<strong>Succès</strong> <br/>
+												<li>Présentation de l\'entreprise mise à jour avec succès.</li>
+											</div>
+										';
+									}
+									if (!empty($presentationError)) {
+										echo '
+											<div class="alert alert-danger">
+												<li>' . h($presentationError) . '</li>
+											</div>
+										';
+									}
                                         if ($errors==2) {
                                         echo '
                                             <div class="alert alert-success">
@@ -219,6 +281,9 @@ include('../PUBLIC/header.php');
                                             ';
                                                 }
                                     ?>
+									<div class="mb-3 text-end">
+										<button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#presentationModal">Présentation de l'entreprise</button>
+									</div>
                                     <form class="form-horizontal" novalidate="novalidate" method="POST" action="profilentreprise.php?pe=entreprise" enctype="multipart/form-data">
                                         <input type="hidden" name="profil" value="1" >
 									<div class="row form-group pb-3">
@@ -316,3 +381,50 @@ include('../PUBLIC/header.php');
 				</section>
 			</div>
             <?php include('../PUBLIC/footer.php');?>
+
+			<!-- Modal Présentation -->
+			<div class="modal fade" id="presentationModal" tabindex="-1" aria-hidden="true">
+				<div class="modal-dialog modal-lg modal-dialog-scrollable">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h5 class="modal-title">Présentation de l'entreprise</h5>
+							<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+						</div>
+						<form method="POST" action="profilentreprise.php?pe=entreprise">
+							<div class="modal-body">
+								<input type="hidden" name="maj_presentation" value="1">
+								<div class="row form-group pb-3">
+									<div class="col-md-12">
+										<div class="form-group">
+											<label class="col-form-label">Présentation</label>
+											<textarea class="form-control" name="presentation" rows="4" required><?php echo h($presentation); ?></textarea>
+										</div>
+									</div>
+									<div class="col-md-12">
+										<div class="form-group">
+											<label class="col-form-label">Mission</label>
+											<textarea class="form-control" name="mission" rows="3" required><?php echo h($mission); ?></textarea>
+										</div>
+									</div>
+									<div class="col-md-12">
+										<div class="form-group">
+											<label class="col-form-label">Vision</label>
+											<textarea class="form-control" name="vision" rows="3" required><?php echo h($vision); ?></textarea>
+										</div>
+									</div>
+									<div class="col-md-12">
+										<div class="form-group">
+											<label class="col-form-label">Valeurs</label>
+											<textarea class="form-control" name="valeur" rows="3" required><?php echo h($valeur); ?></textarea>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+								<button type="submit" class="btn btn-primary">Enregistrer</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>

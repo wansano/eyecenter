@@ -156,7 +156,7 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Ventes</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="ventedelunette.php">Enregistrer une vente</a></li>
+                <li><a class="nav-link" href="infopatientvente.php">Enregistrer une vente</a></li>
                 <li><a class="nav-link" href="#.php">Modifier une vente</a></li>
             </ul>
         </li>

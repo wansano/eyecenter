@@ -11,6 +11,99 @@ $existe = 0;
 $showReprintModalOnLoad = false;
 $bypassCaisseAfterTransmit = false;
 
+// RDV courant (utilisé pour action du formulaire et sécurisation)
+$rendezvous = (int)($_GET['rdv'] ?? 0);
+
+// Mise à jour du rendez-vous (depuis le modal)
+if (isset($_POST['maj_rdv'])) {
+    $rdv_post = (int)$_POST['maj_rdv'];
+
+    // Sécuriser : le POST doit viser le même RDV que la page
+    if ($rdv_post <= 0 || $rendezvous <= 0 || $rdv_post !== $rendezvous) {
+        $errors = 7;
+    } else {
+        $dateRdv = isset($_POST['date_rdv']) ? trim((string)$_POST['date_rdv']) : '';
+        $creneauRaw = isset($_POST['prochain_rdv']) ? trim((string)$_POST['prochain_rdv']) : '';
+        $service = isset($_POST['service']) ? (int)$_POST['service'] : 0;
+        $medecin = isset($_POST['medecin']) ? (int)$_POST['medecin'] : 0;
+        $motif = isset($_POST['motif']) ? (int)$_POST['motif'] : 0;
+
+        // Extraire l'heure du créneau (peut être ISO 2025-10-01T08:00:00 ou "08:00")
+        $creneau = '';
+        if ($creneauRaw !== '') {
+            if (strpos($creneauRaw, 'T') !== false) {
+                $parts = explode('T', $creneauRaw);
+                $creneau = $parts[1] ?? '';
+            } elseif (strpos($creneauRaw, ' ') !== false) {
+                $parts = explode(' ', $creneauRaw);
+                $creneau = $parts[1] ?? '';
+            } else {
+                $creneau = $creneauRaw;
+            }
+        }
+
+        $validDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRdv);
+        $validTime = preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $creneau);
+
+        if ($validDate && $validTime && $service > 0 && $medecin > 0 && $motif > 0) {
+            if (strlen($creneau) === 5) {
+                $creneau .= ':00';
+            }
+            $nouveauRdv = $dateRdv . ' ' . $creneau;
+
+            try {
+                // Refuser la mise à jour si le RDV est déjà transmis/traité
+                $userDataPost = getRdvInfo($bdd, $rdv_post);
+                if (!$userDataPost) {
+                    throw new Exception('Rendez-vous introuvable.');
+                }
+                if ((int)($userDataPost['status'] ?? -1) !== 0) {
+                    throw new Exception('Mise à jour refusée : ce rendez-vous est déjà en cours de traitement.');
+                }
+
+                // Vérifier que le service (département) existe
+                $stService = $bdd->prepare('SELECT COUNT(*) FROM organigramme WHERE id_organigramme = ?');
+                $stService->execute([$service]);
+                if ((int)$stService->fetchColumn() <= 0) {
+                    throw new Exception('Service invalide.');
+                }
+
+                // Sécuriser: le motif choisi doit appartenir au service sélectionné
+                $stMotif = $bdd->prepare('SELECT id_organigramme FROM traitements WHERE id_type = ? AND status = 1 LIMIT 1');
+                $stMotif->execute([$motif]);
+                $motifService = (int)$stMotif->fetchColumn();
+                if ($motifService !== $service) {
+                    throw new Exception('Motif invalide pour ce service.');
+                }
+
+                // Sécuriser: le médecin doit appartenir au service sélectionné (ou être global type 4/6)
+                $stMed = $bdd->prepare('SELECT COUNT(*) FROM users WHERE id = ? AND status = 1 AND (type = ? OR type IN (4, 6))');
+                $stMed->execute([$medecin, $service]);
+                if ((int)$stMed->fetchColumn() <= 0) {
+                    throw new Exception('Médecin invalide pour ce service.');
+                }
+
+                // Vérifier si le créneau est libre (exclure le RDV en cours)
+                $check = $bdd->prepare('SELECT COUNT(*) FROM dmd_rendez_vous WHERE traitant = ? AND prochain_rdv = ? AND id_rdv != ?');
+                $check->execute([$medecin, $nouveauRdv, $rdv_post]);
+
+                if ((int)$check->fetchColumn() > 0) {
+                    $errors = 9; // Créneau déjà occupé
+                } else {
+                    $stmt = $bdd->prepare('UPDATE dmd_rendez_vous SET prochain_rdv = ?, traitant = ?, motif = ?, id_service = ? WHERE id_rdv = ?');
+                    $stmt->execute([$nouveauRdv, $medecin, $motif, $service, $rdv_post]);
+                    $errors = 8; // Succès maj
+                }
+            } catch (Throwable $e) {
+                error_log('Erreur mise à jour RDV (modal): ' . $e->getMessage());
+                $errors = 7;
+            }
+        } else {
+            $errors = 7;
+        }
+    }
+}
+
 if (isset($_POST['suppression'])) {
     // on reçoit l'id du rdv (et non l'id patient) pour sécuriser l'opération
     $rdv_post = intval($_POST['suppression']);
@@ -187,7 +280,6 @@ if (isset($_POST['impression'])) {
 
                 <!-- start: page -->
                 <?php
-                        $rendezvous = (int)($_GET['rdv'] ?? 0);
                         $userData = $rendezvous ? getRdvInfo($bdd, $rendezvous) : null;
 
                         $id_patient = $rendezvous ? getPatientIdByRdv($bdd, $rendezvous) : null;
@@ -241,6 +333,30 @@ if (isset($_POST['impression'])) {
                         <div class="col-md-12">
 							<section class="card">
 								<div class="card-body">';
+                                        if ($errors==8) {
+                                            echo '
+                                                <div class="alert alert-success">
+                                                    <strong>Succès</strong> <br/>
+                                                    <li>Rendez-vous mis à jour avec succès.</li>
+                                                </div>
+                                            ';
+                                        }
+                                        if ($errors==9) {
+                                            echo '
+                                                <div class="alert alert-warning">
+                                                    <strong>Attention</strong> <br/>
+                                                    <li>Ce créneau est déjà occupé. Merci de choisir un autre créneau.</li>
+                                                </div>
+                                            ';
+                                        }
+                                        if ($errors==7) {
+                                            echo '
+                                                <div class="alert alert-danger">
+                                                    <strong>Erreur</strong> <br/>
+                                                    <li>Impossible de mettre à jour ce rendez-vous. Vérifiez les champs ou le statut.</li>
+                                                </div>
+                                            ';
+                                        }
 								if ($errors==2) {
                                         echo '
                                             <div class="alert alert-success">
@@ -366,7 +482,7 @@ if (isset($_POST['impression'])) {
                                         <div class="row form-group pb-3">
                                             <div class="col-md-12">
                                                 <div class="d-flex gap-2">
-                                                    <a href="miseajourdv.php?rdv='.($rendezvous).'" class="btn btn-dark text-center my-4"> <i class="fa fa-edit"></i> mettre à jour</a>
+    												<button type="button" class="btn btn-dark text-center my-4" data-bs-toggle="modal" data-bs-target="#majRdvModal"> <i class="fa fa-edit"></i> mettre à jour</button>
                                                     <form action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?rdv='.$rendezvous.'" method="post" class="d-inline">
                                                         <input type="hidden" name="transmettre" value="'.$rendezvous.'">
                                                         <button class="btn btn-info text-center my-4" type="submit"> <i class="fa fa-paper-plane"></i> transmettre</button>
@@ -401,6 +517,95 @@ if (isset($_POST['impression'])) {
                 <!-- end: page -->
             </section>
         </div>
+
+                            <!-- Modal: Mise à jour rendez-vous -->
+                            <div class="modal fade" id="majRdvModal" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Mise à jour du rendez-vous</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?rdv=<?php echo (int)$rendezvous; ?>" method="post" id="formMajRdvModal">
+                                            <div class="modal-body">
+                                                <div class="row form-group pb-3">
+                                                    <div class="col-md-3">
+                                                        <div class="form-group">
+                                                            <label class="col-form-label">Département concerné</label>
+                                                            <select name="service" class="form-control" id="serviceSelectMaj" required>
+                                                                <?php
+                                                                $currentService = !empty($id_service) ? (int)$id_service : 0;
+                                                                $allowed = [1, 2, 3];
+
+                                                                // Charger les services (inspiré de ajoutrdv.php)
+                                                                $ids = $allowed;
+                                                                if ($currentService > 0 && !in_array($currentService, $ids, true)) {
+                                                                    $ids[] = $currentService;
+                                                                }
+                                                                $ids = array_values(array_unique($ids));
+
+                                                                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                                                                $stSrv = $bdd->prepare('SELECT id_organigramme, celulle FROM organigramme WHERE id_organigramme IN (' . $placeholders . ')');
+                                                                $stSrv->execute($ids);
+                                                                $rowsSrv = $stSrv->fetchAll(PDO::FETCH_ASSOC);
+
+                                                                // Conserver un ordre stable: ids
+                                                                $srvById = [];
+                                                                foreach ($rowsSrv as $r) {
+                                                                    $srvById[(int)$r['id_organigramme']] = (string)$r['celulle'];
+                                                                }
+                                                                foreach ($ids as $sid) {
+                                                                    $sid = (int)$sid;
+                                                                    if (empty($srvById[$sid])) continue;
+                                                                    $selected = ($currentService > 0 && $sid === $currentService) ? 'selected' : '';
+                                                                    echo '<option value="' . $sid . '" ' . $selected . '>' . htmlspecialchars($srvById[$sid]) . '</option>';
+                                                                }
+                                                                ?>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="form-group">
+                                                            <label class="col-form-label">Motif</label>
+                                                            <select name="motif" class="form-control" id="motifSelectMaj" required>
+                                                                <option value="">-- Choisir un motif --</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="form-group">
+                                                            <label class="col-form-label">Médecin</label>
+                                                            <select name="medecin" class="form-control" id="medecinSelect" required>
+                                                                <option value="">-- Sélectionner un médecin --</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="form-group">
+                                                            <label class="col-form-label">Nouvelle date</label>
+                                                            <input type="date" class="form-control" name="date_rdv" id="dateRdvInput" min="<?php echo date('Y-m-d'); ?>" required>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="form-group">
+                                                            <label class="col-form-label">Créneau disponible</label>
+                                                            <select name="prochain_rdv" class="form-control" id="creneauSelect" required disabled>
+                                                                <option value="">-- Choisir date et médecin --</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <input type="hidden" name="maj_rdv" value="<?php echo (int)$rendezvous; ?>">
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                                                <button class="btn btn-primary" type="submit">Mettre à jour</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
 
                 <!-- Modal: Réimpression documents (dossier + carte) -->
                 <div class="modal fade" id="patientInfoModal" tabindex="-1" aria-hidden="true">
@@ -440,6 +645,162 @@ if (isset($_POST['impression'])) {
                         if (btnDossier) btnDossier.href = 'imprimer_dossier.php?id_patient=' + encodeURIComponent(pid);
                         if (btnCarte) btnCarte.href = 'imprimer_carte.php?id_patient=' + encodeURIComponent(pid);
                     });
+                });
+                </script>
+
+                <script>
+                // Chargement des créneaux dans le modal via la fonction genererCreneaux (custom.js)
+                function resetSelect(selectEl, placeholder) {
+                    if (!selectEl) return;
+                    selectEl.innerHTML = '';
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = placeholder || '---';
+                    selectEl.appendChild(opt);
+                    if (window.jQuery && window.jQuery(selectEl).data('select2')) {
+                        window.jQuery(selectEl).val('').trigger('change');
+                    }
+                }
+
+                function updateCreneaux() {
+                    const medecinSelect = document.getElementById('medecinSelect');
+                    const dateInput = document.getElementById('dateRdvInput');
+                    const creneauSelect = document.getElementById('creneauSelect');
+
+                    const medecin = medecinSelect ? medecinSelect.value : '';
+                    const date = dateInput ? dateInput.value : '';
+
+                    if (!medecin || !date) {
+                        resetSelect(creneauSelect, '------ Choisir médecin et date -----');
+                        if (creneauSelect) creneauSelect.disabled = true;
+                        return;
+                    }
+
+                    const rdvId = <?php echo (int)$rendezvous; ?>;
+                    if (typeof genererCreneaux === 'function') {
+                        genererCreneaux(date, medecin, rdvId);
+                    } else {
+                        console.error('Fonction genererCreneaux non trouvée. Vérifiez que custom.js est chargé.');
+                        resetSelect(creneauSelect, 'Erreur de chargement');
+                        if (creneauSelect) creneauSelect.disabled = true;
+                    }
+                }
+
+                document.addEventListener('DOMContentLoaded', function () {
+                    const serviceSelect = document.getElementById('serviceSelectMaj');
+                    const medecinSelect = document.getElementById('medecinSelect');
+                    const dateInput = document.getElementById('dateRdvInput');
+                    const modalEl = document.getElementById('majRdvModal');
+                    const motifSelect = document.getElementById('motifSelectMaj');
+
+                    const initialService = <?php echo !empty($id_service) ? (int)$id_service : 0; ?>;
+                    const initialMotif = <?php echo !empty($motifrdv) ? (int)$motifrdv : 0; ?>;
+                    const initialMedecin = <?php echo !empty($id_medecin) ? (int)$id_medecin : 0; ?>;
+
+                    function getSelectedServiceId() {
+                        if (!serviceSelect) return initialService;
+                        const v = parseInt(serviceSelect.value || '0', 10);
+                        return Number.isFinite(v) ? v : 0;
+                    }
+
+                    function loadMotifsForService(keepInitialSelection) {
+                        const serviceId = getSelectedServiceId();
+                        if (!motifSelect) return;
+                        if (!serviceId) {
+                            motifSelect.innerHTML = '<option value="">-- Service introuvable --</option>';
+                            return;
+                        }
+
+                        const selectedMotif = keepInitialSelection ? initialMotif : 0;
+                        motifSelect.innerHTML = '<option value="">Chargement…</option>';
+
+                        fetch(`../public/getMotifs.php?service=${encodeURIComponent(serviceId)}`)
+                            .then(r => {
+                                if (!r.ok) throw new Error('HTTP ' + r.status);
+                                return r.json();
+                            })
+                            .then(data => {
+                                motifSelect.innerHTML = '<option value="">-- Choisir un motif --</option>';
+                                if (data && data.success && Array.isArray(data.motifs)) {
+                                    for (const m of data.motifs) {
+                                        const opt = document.createElement('option');
+                                        opt.value = m.id;
+                                        opt.textContent = m.nom;
+                                        if (selectedMotif && String(m.id) === String(selectedMotif)) {
+                                            opt.selected = true;
+                                        }
+                                        motifSelect.appendChild(opt);
+                                    }
+                                } else {
+                                    motifSelect.innerHTML = '<option value="">Aucun motif</option>';
+                                }
+                            })
+                            .catch(err => {
+                                console.error('Erreur chargement motifs:', err);
+                                motifSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                            });
+                    }
+
+                    function loadMedecinsForService(keepInitialSelection) {
+                        const serviceId = getSelectedServiceId();
+                        if (!medecinSelect) return;
+                        resetSelect(medecinSelect, 'Chargement…');
+
+                        if (!serviceId) {
+                            resetSelect(medecinSelect, '------ Choisir un département -----');
+                            return;
+                        }
+
+                        const selectedMedecin = keepInitialSelection ? initialMedecin : 0;
+
+                        fetch(`../public/getMedecin.php?service=${encodeURIComponent(serviceId)}`)
+                            .then(r => {
+                                if (!r.ok) throw new Error('HTTP ' + r.status);
+                                return r.json();
+                            })
+                            .then(data => {
+                                resetSelect(medecinSelect, data && data.medecins && data.medecins.length ? '-- Sélectionner un médecin --' : 'Aucun médecin pour ce service');
+                                if (data && data.success && Array.isArray(data.medecins)) {
+                                    for (const m of data.medecins) {
+                                        const opt = document.createElement('option');
+                                        opt.value = m.id;
+                                        opt.textContent = m.pseudo;
+                                        if (selectedMedecin && String(m.id) === String(selectedMedecin)) {
+                                            opt.selected = true;
+                                        }
+                                        medecinSelect.appendChild(opt);
+                                    }
+                                }
+                                // Mettre à jour les créneaux si date déjà choisie
+                                updateCreneaux();
+                            })
+                            .catch(err => {
+                                console.error('Erreur chargement médecins:', err);
+                                resetSelect(medecinSelect, 'Erreur de chargement');
+                            });
+                    }
+
+                    function onServiceChange() {
+                        loadMotifsForService(false);
+                        loadMedecinsForService(false);
+                        const creneauSelect = document.getElementById('creneauSelect');
+                        resetSelect(creneauSelect, '------ Choisir médecin et date -----');
+                        if (creneauSelect) creneauSelect.disabled = true;
+                    }
+
+                    if (serviceSelect) serviceSelect.addEventListener('change', onServiceChange);
+                    if (medecinSelect) medecinSelect.addEventListener('change', updateCreneaux);
+                    if (dateInput) dateInput.addEventListener('change', updateCreneaux);
+
+                    // Quand le modal s'ouvre, réinitialiser et préparer les créneaux
+                    if (modalEl) {
+                        modalEl.addEventListener('shown.bs.modal', function () {
+                            // Initialiser motifs & médecins en fonction du service sélectionné
+                            loadMotifsForService(true);
+                            loadMedecinsForService(true);
+                            updateCreneaux();
+                        });
+                    }
                 });
                 </script>
 
