@@ -219,7 +219,6 @@ include('../PUBLIC/header.php');
             </div>
             <div class="modal-body">
                 <div id="mpAlert" class="alert d-none" role="alert"></div>
-
                 <div class="table-responsive">
                     <table class="table table-bordered mb-0">
                         <tbody>
@@ -304,6 +303,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const editForm = document.getElementById('mpEditForm');
     const saveBtn = document.getElementById('mpSaveBtn');
 
+    function resetModalView() {
+        setAlert(null, '');
+        if (editSection) editSection.classList.add('d-none');
+        if (saveBtn) saveBtn.disabled = true;
+        setText('mp_id', '—');
+        setText('mp_date', '—');
+        setText('mp_compte', '—');
+        setText('mp_user', '—');
+        setText('mp_montant', '—');
+        setText('mp_expected', '—');
+        setText('mp_status', '—');
+    }
+
     function setAlert(kind, msg) {
         if (!alertEl) return;
         if (!msg) {
@@ -348,9 +360,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadProof(idPreuve) {
-        setAlert(null, '');
-        if (saveBtn) saveBtn.disabled = true;
-        if (editSection) editSection.classList.add('d-none');
+        resetModalView();
+        setAlert('info', 'Chargement…');
 
         const url = 'modificationpreuvecaisse.php?ajax_preuve=1&id_preuve=' + encodeURIComponent(idPreuve);
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -358,6 +369,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!data || !data.success || !data.proof) {
             setAlert('warning', (data && data.message) ? data.message : 'Preuve introuvable.');
+            setText('mp_status', '—');
             return;
         }
 
@@ -400,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
             e.preventDefault();
             const id = String(idInput.value || '').trim();
             if (!id) return;
+            resetModalView();
             openModal();
             loadProof(id).catch(function () {
                 setAlert('danger', 'Erreur lors du chargement.');
@@ -469,15 +482,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (modalEl) {
         modalEl.addEventListener('hidden.bs.modal', function () {
-            setAlert(null, '');
-            if (editSection) editSection.classList.add('d-none');
-            setText('mp_id', '—');
-            setText('mp_date', '—');
-            setText('mp_compte', '—');
-            setText('mp_user', '—');
-            setText('mp_montant', '—');
-            setText('mp_expected', '—');
-            setText('mp_status', '—');
+            resetModalView();
         });
     }
 });
