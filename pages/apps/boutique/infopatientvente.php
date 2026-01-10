@@ -421,7 +421,7 @@ include('../PUBLIC/header.php');
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
 
                         <?php if ($lastOrdonnanceAffectation > 0): ?>
-                            <a class="btn btn-info" target="_blank" rel="noopener" href="../optometrie/imprimer_mesure.php?affectation=<?php echo (int)$lastOrdonnanceAffectation; ?>">Imprimer l'ordonnance</a>
+                            <button type="button" class="btn btn-info" id="btnOpenOrdonnancePrint" data-affectation="<?php echo (int)$lastOrdonnanceAffectation; ?>">Imprimer l'ordonnance</button>
                         <?php else: ?>
                             <button type="button" class="btn btn-info" disabled>Imprimer l'ordonnance</button>
                         <?php endif; ?>
@@ -435,6 +435,25 @@ include('../PUBLIC/header.php');
                         <?php else: ?>
                             <button type="button" class="btn btn-primary" disabled>Effectuer une vente</button>
                         <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Impression (aperçu + impression) -->
+        <div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="printModalTitle">Impression</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-0" style="height:80vh;">
+                        <iframe id="printFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="printBtn" class="btn btn-primary">Imprimer</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
                     </div>
                 </div>
             </div>
@@ -469,6 +488,87 @@ include('../PUBLIC/header.php');
                     document.querySelector('input[name="acompte"]').value = '';
                 }
             }
+
+            // Modal d'impression (iframe) — utilisé pour l'ordonnance des lunettes
+            (function() {
+                var printModalEl = document.getElementById('printModal');
+                var printFrameEl = document.getElementById('printFrame');
+                var printBtnEl = document.getElementById('printBtn');
+                var printTitleEl = document.getElementById('printModalTitle');
+
+                function openPrintModal(url, titleText) {
+                    if (!url) return;
+                    if (printTitleEl) printTitleEl.textContent = titleText || 'Impression';
+                    if (!printModalEl || !printFrameEl) {
+                        window.open(url, '_blank');
+                        return;
+                    }
+                    printFrameEl.src = url;
+                    if (window.bootstrap && window.bootstrap.Modal) {
+                        var instance = window.bootstrap.Modal.getInstance(printModalEl) || new window.bootstrap.Modal(printModalEl);
+                        instance.show();
+                        return;
+                    }
+                    if (window.jQuery && typeof jQuery(printModalEl).modal === 'function') {
+                        jQuery(printModalEl).modal('show');
+                        return;
+                    }
+                    window.open(url, '_blank');
+                }
+
+                // Bouton "Imprimer l'ordonnance" depuis le modal patient
+                var btnOpenOrd = document.getElementById('btnOpenOrdonnancePrint');
+                if (btnOpenOrd) {
+                    btnOpenOrd.addEventListener('click', function () {
+                        var affectation = this.getAttribute('data-affectation');
+                        if (!affectation) return;
+
+                        // Fermer le modal patient avant d'ouvrir celui d'impression
+                        try {
+                            var patientEl = document.getElementById('patientVenteModal');
+                            if (patientEl && window.bootstrap && window.bootstrap.Modal) {
+                                var patientInstance = window.bootstrap.Modal.getInstance(patientEl);
+                                if (patientInstance) patientInstance.hide();
+                            }
+                        } catch (e) {
+                            // noop
+                        }
+
+                        var url = '../impression/_mesure.php?affectation=' + encodeURIComponent(affectation);
+                        openPrintModal(url, 'Ordonnance des lunettes');
+                    });
+                }
+
+                // Bouton Imprimer du modal impression
+                if (printBtnEl) {
+                    printBtnEl.addEventListener('click', function () {
+                        try {
+                            var win = printFrameEl && printFrameEl.contentWindow ? printFrameEl.contentWindow : null;
+                            if (win && typeof win.printPdf === 'function') {
+                                win.printPdf();
+                                return;
+                            }
+                            if (win && typeof win.print === 'function') {
+                                win.print();
+                            }
+                        } catch (err) {
+                            // noop
+                        }
+                    });
+                }
+
+                // Reset iframe à la fermeture
+                if (printModalEl) {
+                    printModalEl.addEventListener('hidden.bs.modal', function () {
+                        if (printFrameEl) printFrameEl.src = 'about:blank';
+                    });
+                    if (window.jQuery && typeof jQuery(printModalEl).on === 'function') {
+                        jQuery(printModalEl).on('hidden.bs.modal', function () {
+                            if (printFrameEl) printFrameEl.src = 'about:blank';
+                        });
+                    }
+                }
+            })();
 
             document.addEventListener('DOMContentLoaded', function() {
             const montantInput = document.getElementById('acompte');
