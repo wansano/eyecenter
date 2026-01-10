@@ -467,12 +467,119 @@ require('../PUBLIC/header.php');
             }
         });
         </script>
+
+        <!-- Modal Impression dossier (aperçu + impression) -->
+        <div class="modal fade" id="dossierPrintModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dossierPrintModalTitle">Impression dossier</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-0" style="height:80vh;">
+                        <iframe id="dossierPrintFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="dossierPrintBtn" class="btn btn-primary">Imprimer</button>
+                        <button type="button" id="dossierTransmitBtn" class="btn btn-success">Transmettre</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function () {
+            var modalEl = document.getElementById('dossierPrintModal');
+            var frameEl = document.getElementById('dossierPrintFrame');
+            var printBtnEl = document.getElementById('dossierPrintBtn');
+            var transmitBtnEl = document.getElementById('dossierTransmitBtn');
+
+            var currentPatientId = null;
+
+            function withAutoPrintDisabled(url) {
+                if (!url) return url;
+                return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+            }
+
+            function showModal() {
+                if (window.bootstrap && window.bootstrap.Modal) {
+                    var instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                    instance.show();
+                    return true;
+                }
+                if (window.jQuery && modalEl && typeof jQuery(modalEl).modal === 'function') {
+                    jQuery(modalEl).modal('show');
+                    return true;
+                }
+                return false;
+            }
+
+            function openDossierPrintModal(url, idPatient) {
+                currentPatientId = idPatient ? String(idPatient) : null;
+
+                if (!modalEl || !frameEl) {
+                    // Fallback sans modal
+                    if (url) window.open(url, '_blank');
+                    return;
+                }
+
+                frameEl.src = withAutoPrintDisabled(url);
+                if (!showModal()) {
+                    window.open(url, '_blank');
+                }
+            }
+
+            // Bouton Imprimer
+            if (printBtnEl) {
+                printBtnEl.addEventListener('click', function () {
+                    try {
+                        var win = frameEl && frameEl.contentWindow ? frameEl.contentWindow : null;
+                        if (win && typeof win.printPdf === 'function') {
+                            win.printPdf();
+                            return;
+                        }
+                        if (win && typeof win.print === 'function') {
+                            if (typeof win.focus === 'function') win.focus();
+                            win.print();
+                        }
+                    } catch (e) {
+                        // noop
+                    }
+                });
+            }
+
+            // Bouton Transmettre : redirige vers transmission-caisse en gardant l'id_patient (la page ouvrira son modal)
+            if (transmitBtnEl) {
+                transmitBtnEl.addEventListener('click', function () {
+                    if (!currentPatientId) return;
+                    window.location.href = 'transmission-caisse.php?id_patient=' + encodeURIComponent(currentPatientId);
+                });
+            }
+
+            // Reset iframe à la fermeture
+            if (modalEl) {
+                modalEl.addEventListener('hidden.bs.modal', function () {
+                    if (frameEl) frameEl.src = 'about:blank';
+                });
+                if (window.jQuery && typeof jQuery(modalEl).on === 'function') {
+                    jQuery(modalEl).on('hidden.bs.modal', function () {
+                        if (frameEl) frameEl.src = 'about:blank';
+                    });
+                }
+            }
+
+            // Expose pour le script PHP ci-dessous
+            window.openDossierPrintModal = openDossierPrintModal;
+        })();
+        </script>
+
         <?php if ($errors == 2 && $id_patient): ?>
             <script>
-                window.onload = function() {
-                    window.open('imprimer_dossier.php?id_patient=<?= $id_patient ?>', '_blank');
-                    window.location.href = 'transmission-caisse.php?id_patient=<?= $id_patient ?>';
-                };
+                document.addEventListener('DOMContentLoaded', function () {
+                    if (typeof window.openDossierPrintModal !== 'function') return;
+                    window.openDossierPrintModal('imprimer_dossier.php?id_patient=<?= (int)$id_patient ?>', <?= (int)$id_patient ?>);
+                });
             </script>
         <?php endif; ?>
         <?php include('../PUBLIC/footer.php');?>

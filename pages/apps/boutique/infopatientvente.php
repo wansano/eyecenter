@@ -534,7 +534,7 @@ include('../PUBLIC/header.php');
                             // noop
                         }
 
-                        var url = '../impression/_mesure.php?affectation=' + encodeURIComponent(affectation);
+                        var url = '../optometrie/imprimer_mesure.php?affectation=' + encodeURIComponent(affectation) + '&autoprint=0';
                         openPrintModal(url, 'Ordonnance des lunettes');
                     });
                 }
@@ -549,6 +549,7 @@ include('../PUBLIC/header.php');
                                 return;
                             }
                             if (win && typeof win.print === 'function') {
+                                if (typeof win.focus === 'function') win.focus();
                                 win.print();
                             }
                         } catch (err) {

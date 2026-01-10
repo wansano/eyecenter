@@ -89,7 +89,7 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label class="col-form-label">Departement concerné</label>
-                                <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs()">
+                                <select name="service" class="form-control populate" id="tcServiceSelect" onchange="tcUpdateMotifs(this)">
                                     <option value=""> ------ Choisir ----- </option>
                                     <?php
                                     $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?, ?)');
@@ -104,13 +104,12 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                         <div class="col-md-3">
                             <div class="form-group">
                                 <label class="col-form-label">Motif de présence</label>
-                                <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice()" required>
+                                <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" required>
                                     <option value=""> ------ Choisir un service ----- </option>
                                 </select>
-                                <input type="hidden" id="hiddenMotifId" name="motif_id" value="">
+                                <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="">
                             </div>
                         </div>
-                        <div class="col-md-2" id="productPrice"></div>
                     </div>
                 </form>
             </div>
@@ -533,39 +532,6 @@ include('../PUBLIC/header.php');
 											</div>
 										</div>
 									</div>
-                                    <form class="form-horizontal" novalidate="novalidate" method="POST" action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?id_patient='.$_GET['id_patient'].'" enctype="multipart/form-data" onsubmit="return confirmSubmit(event)">
-                                    <input type="hidden" value="'.$_GET['id_patient'].'"> 
-                                        <div class="row form-group pb-3">
-                                            <div class="col-md-2">
-                                                <div class="form-group">
-                                                    <label class="col-form-label" for="formGroupExampleInput">Departement concerné</label>
-                                                    <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs()">
-                                                        <option value=""> ------ Choisir ----- </option>';
-                                                            $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?, ?)');
-                                                            $coll -> execute([1, 2, 3, 4, 14]);
-                                                            while ($services = $coll->fetch(PDO::FETCH_ASSOC))
-                                                            {
-                                                                echo '<option value="'.$services['id_organigramme'].'">'.$services['celulle'].'</option>';
-                                                            } echo '
-                                                        </option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="form-group">
-                                                    <label class="col-form-label" for="formGroupExampleInput">Motif de présence</label>
-                                                    <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice()" data-plugin-selectTwo data-plugin-options="{ "minimumInputLength": O }" required>
-                                                    <option value=""> ------ Choisir un service ----- </option>
-                                                    </select>
-                                                    <input type="hidden" id="hiddenMotifId" name="motif_id" value="">
-                                                </div>
-                                            </div>
-                                            <div class="col-md-2" id="productPrice"></div>
-                                        </div>
-                                    <footer class="card-footer text-end">
-                                        <button class="btn btn-primary" type="submit" name="transmettre">Transmettre à la caisse</button>
-                                    </footer>
-                                </form>
 							</section>
 						</div>
 					</div>';}
@@ -702,7 +668,7 @@ document.addEventListener('DOMContentLoaded', function () {
         e.preventDefault();
         hideModalAlert();
 
-        const motifSelect = affForm.querySelector('#motifSelect');
+        const motifSelect = affForm.querySelector('select[name="type"]');
         const motifValue = motifSelect ? motifSelect.value : '';
         if (!motifValue) {
             showModalAlert('Veuillez sélectionner un motif de présence avant de continuer.', 'warning');
@@ -740,5 +706,80 @@ document.addEventListener('DOMContentLoaded', function () {
             if (modalSubmitBtn) modalSubmitBtn.disabled = true;
         });
     }
+
+    // Si la page est ouverte avec un id_patient dans l'URL (ex: depuis ajout patient),
+    // on affiche directement le modal d'affectation.
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pid = (urlParams.get('id_patient') || '').trim();
+        if (pid) {
+            if (input) input.value = pid;
+            loadModal(pid).catch(function () {
+                showModalAlert('Erreur lors du chargement.', 'danger');
+            });
+        }
+    } catch (e) {
+        // noop
+    }
 });
+</script>
+
+<script>
+// Fonctions dédiées au contenu injecté dans le modal (évite les conflits d'IDs avec la page principale)
+function tcUpdateMotifs(serviceSelectEl) {
+    try {
+        const form = serviceSelectEl && serviceSelectEl.closest ? serviceSelectEl.closest('form') : null;
+        const motifSelect = form ? form.querySelector('select[name="type"]') : null;
+        if (!motifSelect) return;
+
+        const serviceId = (serviceSelectEl && serviceSelectEl.value) ? String(serviceSelectEl.value) : '';
+        if (!serviceId) {
+            motifSelect.innerHTML = '<option value=""> ------ Choisir le motif ----- </option>';
+            const hidden = form ? form.querySelector('input[name="motif_id"]') : null;
+            if (hidden) hidden.value = '';
+            return;
+        }
+
+        motifSelect.innerHTML = '<option value="">Chargement...</option>';
+        fetch(`../PUBLIC/getMotifs.php?service=${encodeURIComponent(serviceId)}`)
+            .then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(data => {
+                motifSelect.innerHTML = '<option value=""> ------ Choisir le motif ----- </option>';
+                if (data && data.success && Array.isArray(data.motifs)) {
+                    data.motifs.forEach(motif => {
+                        const opt = document.createElement('option');
+                        opt.value = motif.id;
+                        opt.textContent = motif.nom;
+                        motifSelect.appendChild(opt);
+                    });
+                }
+            })
+            .catch(() => {
+                motifSelect.innerHTML = '<option value="">Erreur lors du chargement</option>';
+            });
+    } catch (e) {
+        // noop
+    }
+}
+
+// Au changement de motif, on conserve juste l'ID (pas d'affichage du prix)
+function tcOnMotifChange(motifSelectEl) {
+    try {
+        const form = motifSelectEl && motifSelectEl.closest ? motifSelectEl.closest('form') : null;
+        const motifId = (motifSelectEl && motifSelectEl.value) ? String(motifSelectEl.value) : '';
+        const hidden = form ? form.querySelector('input[name="motif_id"]') : null;
+
+        if (!motifId) {
+            if (hidden) hidden.value = '';
+            return;
+        }
+
+        if (hidden) hidden.value = motifId;
+    } catch (e) {
+        // noop
+    }
+}
 </script>
