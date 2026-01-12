@@ -8,7 +8,7 @@ $existe = 0;
 
 if (isset($_POST['recherche'])) {
     $productCode = htmlspecialchars($_POST['productcode'] ?? '');
-    $req1 = $bdd->prepare('SELECT * FROM produits WHERE code_produit=? AND vendu=0');
+    $req1 = $bdd->prepare('SELECT * FROM montures WHERE code_monture=? AND vendu=0');
     $req1->execute([$productCode]);
     if ($req1->fetch()) {
         echo '<script>document.location.href="ventelunette.php?client=' . $_GET['client'] . '&affectation=' . $_GET['affectation'] . '&codeproduit=' . $productCode . '"</script>';
@@ -20,7 +20,7 @@ if (isset($_POST['recherche'])) {
 if (isset($_POST['vendre'])) {
     $affectation = $_GET['affectation'] ?? null;
     $patient = $_GET['client'] ?? null;
-    $codeproduit = $_GET['codeproduit'] ?? null;
+    $codeMonture = $_GET['codeproduit'] ?? null;
     $modePaiement = $_POST['estAssure'] ?? 0;
     $categorie = $_POST['categorie'] ?? null;
     $compte = $_POST['compte'] ?? null;
@@ -28,23 +28,23 @@ if (isset($_POST['vendre'])) {
     $taux = $_POST['taux'] ?? 0;
     $acompte = 0;
     
-    if (!$affectation || !$patient || !$codeproduit || !$categorie || !$compte || !$collaborateur) {
+    if (!$affectation || !$patient || !$codeMonture || !$categorie || !$compte || !$collaborateur) {
         $errors = 1;
     } elseif (paiementDejaEffectue($bdd, $affectation)) {
         $existe = 3;
     } else {
         // Récupération des infos produit
-        $reponse1 = $bdd->prepare('SELECT * FROM produits WHERE code_produit=?');
-        $reponse1->execute([$codeproduit]);
+        $reponse1 = $bdd->prepare('SELECT * FROM montures WHERE code_monture=?');
+        $reponse1->execute([$codeMonture]);
         $donnees1 = $reponse1->fetch();
         if (!$donnees1) {
             $errors = 2;
         } else {
-            $produit = $donnees1['id_produit'];
+            $produit = $donnees1['id_monture'];
             $prixmonture = $donnees1['prix'];
-            $model = $donnees1['id_model'];
+            $model = $donnees1['id_marque'];
             // Récupération des infos catégorie
-            $reponse2 = $bdd->prepare('SELECT * FROM categorie_produits WHERE id_categorie=?');
+            $reponse2 = $bdd->prepare('SELECT * FROM lentilles WHERE id_lentille=?');
             $reponse2->execute([$categorie]);
             $donnees2 = $reponse2->fetch();
             if (!$donnees2) {
@@ -62,12 +62,12 @@ if (isset($_POST['vendre'])) {
                     $acompte = floatval($acompteN);
                 }
                 // Enregistrement vente
-                $req = $bdd->prepare('INSERT INTO ventes_produits (id_affectation, id_produit, id_categorie, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?,?)');
+                $req = $bdd->prepare('INSERT INTO ventes_produits (id_affectation, id_produit, id_lentille, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?,?)');
                 $req->execute([$affectation, $produit, $categorie, $patient, $_SESSION['auth'], $prixmonture, $prixverre, $compte, $collaborateur]);
                 // Mise à jour des stocks et débits
                 updateQuantiteModel($bdd, $model);
                 updateQuantiteCategorie($bdd, $categorie);
-                updateProduitVendu($bdd, $categorie, $codeproduit);
+                updateProduitVendu($bdd, $categorie, $codeMonture);
                 updateCollaborateurDebit($bdd, $collaborateur, $prixmontage);
                 // Paiement
                 $code = genererNumeroPaiement();
@@ -127,7 +127,7 @@ include('../PUBLIC/header.php');
                                             <div class="row form-group pb-3">
                                                 <div class="col-md-4">
                                                     <div class="form-group">
-                                                        <label class="col-form-label" for="formGroupExampleInput">Saisir le code reference du produit à vendre</label>
+                                                        <label class="col-form-label" for="formGroupExampleInput">Saisir le code de la monture à vendre</label>
                                                         <input type="text" class="form-control" name="productcode" id="formGroupExampleInput" placeholder="" require>
                                                     </div>
                                                 </div>
@@ -142,14 +142,14 @@ include('../PUBLIC/header.php');
                 }
 
                 if (isset($_GET['codeproduit'])) {
-                    $reponse1 = $bdd->prepare('SELECT * FROM produits WHERE code_produit=?');
+                    $reponse1 = $bdd->prepare('SELECT * FROM montures WHERE code_monture=?');
                     $reponse1->execute(array($_GET['codeproduit']));
                     while ($donnees1 = $reponse1->fetch()) {
-                        $codeproduit = $donnees1['code_produit'];
-                        $categories = $donnees1['id_categorie'];
-                        $models = $donnees1['id_model'];
+                        $codeMonture = $donnees1['code_monture'];
+                        $lentilles = $donnees1['id_lentille'];
+                        $marques = $donnees1['id_marque'];
                         $couleurs = $donnees1['couleur'];
-                        $descriptions = $donnees1['description'];
+                        $monturePour = $donnees1['monture_pour'];
                         $prixvente = $donnees1['prix'];
                         $status = $donnees1['vendu'];
                     }
@@ -178,14 +178,14 @@ include('../PUBLIC/header.php');
                                     <div class="row form-group pb-3">
                                         <div class="col-md-3">
                                             <div class="form-group">
-                                                <label class="col-form-label" for="formGroupExampleInput">Code Produit</label>
-                                                <input type="text" class="form-control" value="' . $codeproduit . '" disabled>
+                                                <label class="col-form-label" for="formGroupExampleInput">Code Monture</label>
+                                                <input type="text" class="form-control" value="' . $codeMonture . '" disabled>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="form-group">
-                                                <label class="col-form-label" for="formGroupExampleInput">Model du produit</label>
-                                                <input type="text" class="form-control" value="' . model_produits($models) . '" disabled>
+                                                <label class="col-form-label" for="formGroupExampleInput">Modèle</label>
+                                                <input type="text" class="form-control" value="' . model_produits($marques) . '" disabled>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
@@ -203,7 +203,7 @@ include('../PUBLIC/header.php');
                                         <div class="col-md-12">
                                             <div class="form-group">
                                                 <label class="col-form-label" for="formGroupExampleInput">Autre description du produit</label>
-                                                <textarea class="form-control" rows="3" id="formGroupExampleInput" disabled>' . $descriptions . '</textarea>
+                                                <textarea class="form-control" rows="3" id="formGroupExampleInput" disabled>' . $monturePour . '</textarea>
                                             </div>
                                         </div>
                                         <div class="col-md-2">
@@ -243,10 +243,10 @@ include('../PUBLIC/header.php');
                                                     <label class="col-form-label" for="productSelect">Type de verres</label>
                                                     <select class="form-control populate" id="productSelect" name="categorie" onchange="fetchPrice()" required>
                                                         <option value=""> --- Choisir les verres --- </option>';
-                                                        $type = $bdd->prepare('SELECT * FROM categorie_produits WHERE quantite>0 AND status = ?');
+                                                        $type = $bdd->prepare('SELECT * FROM lentilles WHERE quantite > 0 AND status = ?');
                                                         $type->execute(array(1));
                                                         while ($categorie = $type->fetch(PDO::FETCH_ASSOC)) {
-                                                            echo '<option value="'.$categorie['id_categorie'].'">'. htmlspecialchars($categorie['categorie']) . '</option>';
+                                                            echo '<option value="'.$categorie['id_lentille'].'">'. htmlspecialchars($categorie['lentille']) . '</option>';
                                                         }
                                                         echo '
                                                     </select>

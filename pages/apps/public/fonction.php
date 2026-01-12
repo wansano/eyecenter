@@ -725,7 +725,7 @@ function model_produits($id_model) {
     }
     
     try {
-        $stmt = $bdd->prepare('SELECT model FROM model_produits WHERE id_model = ?');
+        $stmt = $bdd->prepare('SELECT marque FROM marques WHERE id_marque = ?');
         $stmt->execute([$id_model]);
         $result = $stmt->fetchColumn();
         

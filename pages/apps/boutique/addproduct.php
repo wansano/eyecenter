@@ -6,23 +6,24 @@ $errors = 0;
 $existe = 0;
 
 if (isset($_POST['ajouter'])) {
-	$codeProduit = isset($_POST['codeproduit']) ? trim((string)$_POST['codeproduit']) : '';
+	$codeMonture = isset($_POST['codeMonture']) ? trim((string)$_POST['codeMonture']) : '';
 	$noLivraison = isset($_POST['nolivraison']) ? trim((string)$_POST['nolivraison']) : '';
-	$idModel     = isset($_POST['model']) ? (int)$_POST['model'] : 0;
+	$idMarque     = isset($_POST['marque']) ? (int)$_POST['marque'] : 0;
+	$prixMonture = isset($_POST['prixmonture']) ? (float)$_POST['prixmonture'] : 0;
 	$couleur     = isset($_POST['couleur']) ? trim((string)$_POST['couleur']) : '';
-	$description = isset($_POST['description']) ? trim((string)$_POST['description']) : '';
+	$typeMonture = isset($_POST['typeMonture']) ? trim((string)$_POST['typeMonture']) : '';
 
-	if ($codeProduit === '' || $noLivraison === '' || $idModel <= 0 || $couleur === '') {
+	if ($codeMonture === '' || $noLivraison === '' || $idMarque <= 0 || $couleur === '') {
 		// Champs incomplets / invalides
 		$errors = 8;
 	} else {
 		try {
 			$req1 = $bdd->prepare('SELECT 1 FROM montures WHERE code_monture = ? LIMIT 1');
-			$req1->execute([$codeProduit]);
+			$req1->execute([$codeMonture]);
 			$existe = $req1->fetchColumn() ? 1 : 0;
 
 			if ($existe == 0) {
-				$reponse2 = $bdd->prepare('SELECT quantite, prix_unitaire FROM approvisionnements WHERE no_livraison = ? LIMIT 1');
+				$reponse2 = $bdd->prepare('SELECT quantite FROM approvisionnements WHERE no_livraison = ? LIMIT 1');
 				$reponse2->execute([$noLivraison]);
 				$donnees2 = $reponse2->fetch(PDO::FETCH_ASSOC);
 
@@ -31,14 +32,13 @@ if (isset($_POST['ajouter'])) {
 					$errors = 6;
 				} else {
 					$qteAppro = (int)$donnees2['quantite'];
-					$prixUnitaire = (float)$donnees2['prix_unitaire'];
 
 					if ($qteAppro < 1) {
 						// Quantité insuffisante
 						$errors = 5;
 					} else {
 						$reponse1 = $bdd->prepare('SELECT quantite FROM marques WHERE id_marque = ? LIMIT 1');
-						$reponse1->execute([$idModel]);
+						$reponse1->execute([$idMarque]);
 						$quantiteModeleRaw = $reponse1->fetchColumn();
 						if ($quantiteModeleRaw === false) {
 							// Modèle introuvable
@@ -47,11 +47,11 @@ if (isset($_POST['ajouter'])) {
 							$quantiteModele = (int)$quantiteModeleRaw;
 
 							$bdd->beginTransaction();
-							$req = $bdd->prepare('INSERT INTO montures (code_monture, no_livraison, id_marque, couleur, prix, description) VALUES(?,?,?,?,?,?)');
-							$req->execute([$codeProduit, $noLivraison, $idModel, $couleur, $prixUnitaire, $description]);
+							$req = $bdd->prepare('INSERT INTO montures (code_monture, no_livraison, id_marque, couleur, prix, monture_pour) VALUES(?,?,?,?,?,?)');
+							$req->execute([$codeMonture, $noLivraison, $idMarque, $couleur, $prixMonture, $typeMonture]);
 
 							$reqQ = $bdd->prepare('UPDATE marques SET quantite = ? WHERE id_marque = ?');
-							$reqQ->execute([$quantiteModele + 1, $idModel]);
+							$reqQ->execute([$quantiteModele + 1, $idMarque]);
 
 							// Sécuriser la décrémentation (évite quantite négative en cas de concurrence)
 							$reqA = $bdd->prepare('UPDATE approvisionnements SET quantite = quantite - 1 WHERE no_livraison = ? AND quantite > 0');
@@ -153,7 +153,7 @@ if (isset($_POST['ajouter'])) {
 									<div class="col-md-3">
 										<div class="form-group">
 											<label class="col-form-label" for="formGroupExampleInput">N° de la monture</label>
-											<input type="text" pattern="^\S*$" oninput="this.value = this.value.replace(/\s/g, '')" name="codeproduit" class="form-control" required="">
+											<input type="text" pattern="^\S*$" oninput="this.value = this.value.replace(/\s/g, '')" name="codeMonture" class="form-control" required="">
 										</div>
 									</div>
 									<div class="col-md-3">
@@ -174,7 +174,7 @@ if (isset($_POST['ajouter'])) {
 									<div class="col-md-3">
 										<div class="form-group">
 											<label class="col-form-label" for="formGroupExampleInput">De la marque</label>
-											<select class="form-control populate" name="model" required="">
+											<select class="form-control populate" name="marque" required="">
 												<option value="">---- choisir ----</option>
 												<?php
 												$type = $bdd->prepare('SELECT id_marque, marque FROM marques WHERE status = 1');
@@ -197,12 +197,18 @@ if (isset($_POST['ajouter'])) {
 									<div class="col-md-2">
 										<div class="form-group">
 											<label class="col-form-label" for="formGroupExampleInput">Type de la monture</label>
-											<select class="form-control populate" name="description">
+											<select class="form-control populate" name="typeMonture">
 												<option value="">---- choisir ----</option>
 												<option value="Adulte Homme">Adulte Homme</option>
 												<option value="Adulte Femme">Adulte Femme</option>
 												<option value="Enfant">Enfant</option>
 											</select>
+										</div>
+									</div>
+									<div class="col-md-2">
+										<div class="form-group">
+											<label class="col-form-label" for="formGroupExampleInput">Prix de la monture</label>
+											<input type="number" step="50000" name="prixmonture" class="form-control" required="">
 										</div>
 									</div>
 								</div>

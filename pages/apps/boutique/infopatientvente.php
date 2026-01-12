@@ -427,7 +427,11 @@ include('../PUBLIC/header.php');
                         <?php endif; ?>
 
                         <?php
-                            $affectationForSale = isset($_GET['affectation']) ? (int)$_GET['affectation'] : 0;
+                            // Vente autorisée uniquement si une ordonnance existe.
+                            // On utilise l'affectation de la dernière ordonnance (confirmée) comme base de la vente.
+                            $affectationForSale = $lastOrdonnanceAffectation > 0
+                                ? (int)$lastOrdonnanceAffectation
+                                : (isset($_GET['affectation']) ? (int)$_GET['affectation'] : 0);
                             $canSale = ($patientIdFound > 0 && $affectationForSale > 0);
                         ?>
                         <?php if ($canSale): ?>

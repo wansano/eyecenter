@@ -277,8 +277,10 @@ try {
     if ($hasDepartement) {
         $where = [];
         $params = [];
-        $where[] = 'LOWER(TRIM(departement)) = ?';
-        $params[] = 'clinique';
+        // Valeurs DB parfois: "Clinique", "CLINIQUE OPHTA", etc.
+        // On filtre large, et on fallback vers toutes les cellules si vide.
+        $where[] = 'LOWER(TRIM(departement)) LIKE ?';
+        $params[] = '%clinique%';
         if ($statusCol !== null) {
             $where[] = $statusCol . ' != 3';
         }
@@ -294,6 +296,11 @@ try {
             if ($idOrg <= 0 || $celulle === '') { continue; }
             $label = ($departement !== '') ? ($departement . ' - ' . $celulle) : $celulle;
             $serviceOptionsHtmlClinique .= '<option value="' . h((string)$idOrg) . '">' . h($label) . '</option>';
+        }
+
+        // Si aucune cellule "Clinique" trouvée, on retombe sur toutes les cellules
+        if ($serviceOptionsHtmlClinique === '') {
+            $serviceOptionsHtmlClinique = $serviceOptionsHtmlAll;
         }
     } else {
         // Pas de colonne departement => on retombe sur toutes les cellules

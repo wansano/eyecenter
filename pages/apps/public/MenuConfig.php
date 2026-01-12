@@ -43,7 +43,7 @@ class MenuConfig {
     private static function getTechnologieMenu($user_data) {
         return '
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Administration</a>
+            <a class="nav-link dropdown-toggle">Administration</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="listeutilisateurs.php">Liste des utilisateurs</a></li>
                 <li><a class="nav-link" href="listedesservices.php">Liste des services</a></li>
@@ -52,24 +52,15 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Gestion HR</a>
+            <a class="nav-link dropdown-toggle">Gestion HR</a>
             <ul class="dropdown-menu">
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Employés</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="listeemployes.php">Liste des employés</a></li>
-                    </ul>
-                </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Congés</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="#">Liste des congés</a></li>
-                    </ul>
-                </li>
+                <li><a class="nav-link" href="listeemployes.php">Liste des employés</a></li>
+                <li><a class="nav-link" href="#">Liste des congés</a></li>
+                <li><a class="nav-link" href="realisationindividuelle.php">Réalisation individuelle</a></li>
             </ul>
         </li>
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Gestion Trésorerie</a>
+            <a class="nav-link dropdown-toggle">Gestion Trésorerie</a>
             <ul class="dropdown-menu">
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Paiements</a>
@@ -170,8 +161,9 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Gestion monture</a>
             <ul class="dropdown-menu">
+                <li><a class="nav-link" href="listedesmonturesdisponibles.php">Liste des montures</a></li>
                 <li><a class="nav-link" href="addproduct.php">Ajouter une monture</a></li>
-                <li><a class="nav-link" href="#.php">Modifier une monture</a></li>
+                <li><a class="nav-link" href="editproduct.php">Modifier une monture</a></li>
             </ul>
         </li>
         <li class="dropdown">

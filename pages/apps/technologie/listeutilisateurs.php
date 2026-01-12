@@ -99,6 +99,47 @@ try {
         header('Location: ' . $_SERVER['PHP_SELF'] . '?ok=5');
         exit;
     }
+
+    // Ajouter un utilisateur (modal)
+    if (isset($_POST['add_user_save'])) {
+        $pseudo = isset($_POST['pseudo']) ? trim((string) $_POST['pseudo']) : '';
+        $email = isset($_POST['email']) ? trim((string) $_POST['email']) : '';
+        $type = isset($_POST['type']) ? trim((string) $_POST['type']) : '';
+        $idService = isset($_POST['id_service']) ? (int) $_POST['id_service'] : 0;
+        $dateEngagement = isset($_POST['date_engagement']) ? trim((string) $_POST['date_engagement']) : '';
+        $responsable = isset($_POST['responsable']) ? (int) $_POST['responsable'] : 0;
+        $plageConnexion = isset($_POST['plage_connexion']) ? trim((string) $_POST['plage_connexion']) : '';
+        $password = isset($_POST['mdp']) ? (string) $_POST['mdp'] : '';
+
+        if ($pseudo === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $idService <= 0 || $dateEngagement === '' || trim($password) === '') {
+            header('Location: ' . $_SERVER['PHP_SELF'] . '?ok=10');
+            exit;
+        }
+
+        // Email unique
+        $stmt = $bdd->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+        $stmt->execute([$email]);
+        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+            header('Location: ' . $_SERVER['PHP_SELF'] . '?ok=9');
+            exit;
+        }
+
+        // Insertion (status par défaut = 0 => à activer)
+        $stmt = $bdd->prepare('INSERT INTO users (pseudo, email, type, id_service, date_engagement, responsable, plage_connexion, mdp) VALUES (?,?,?,?,?,?,?,?)');
+        $stmt->execute([
+            $pseudo,
+            $email,
+            ($type === '' ? null : $type),
+            $idService,
+            $dateEngagement,
+            $responsable,
+            ($plageConnexion === '' ? null : $plageConnexion),
+            password_hash($password, PASSWORD_DEFAULT),
+        ]);
+
+        header('Location: ' . $_SERVER['PHP_SELF'] . '?ok=1');
+        exit;
+    }
 } catch (PDOException $e) {
     if (isset($bdd) && $bdd->inTransaction()) {
         $bdd->rollBack();
@@ -196,27 +237,7 @@ try {
 			<div class="inner-wrapper">
 				<section role="main" class="content-body">
 					<header class="page-header">
-						<h2>
-						<?php 
-							if ($types=="comptabilité") { echo 'Liste des caissiers.';} 
-							else { echo 'Liste des utilisateurs du systeme.'; }
-						?>
-						</h2>
-
-						<div class="right-wrapper text-end">
-							<ol class="breadcrumbs">
-								<li>
-									<a href="welcome.php?profil=ecv2">
-										<i class="bx bx-home-alt"></i>
-									</a>
-								</li>
-
-								<li><span>Acceuil</span></li>
-
-							</ol>
-
-							<a class="sidebar-right-toggle" data-open="sidebar-right"></a>
-						</div>
+						<h2>Liste des utilisateurs du systeme</h2>
 					</header>
 
 					<!-- start: page -->
@@ -225,14 +246,8 @@ try {
 							<div class="col">
 								<section class="card">
 									<div class="card-body">
-                                    <?php 
-											if ($types=="comptabilité") { echo 'Liste des caissiers.';} 
-											else { echo 'Liste des utilisateurs du systeme.
-                                                <br>
-                                                    <a href="addcustumuser.php" type="button" class="btn btn-sm btn-success"><i class="fa fa-plus"></i> ajouter un utilisateur</a><br/> 
-                                                <br>'; }
-
-                                            if ($errors==2) {
+                                        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal"><i class="fa fa-plus"></i> ajouter un utilisateur</button> <br><br>
+                                        <?php    if ($errors==2) {
                                             echo '
                                                 <div class="alert alert-success">
                                                 <li><strong>Succès !</strong>
@@ -259,6 +274,27 @@ try {
                                                 <div class="alert alert-success">
                                                 <li><strong>Succès !</strong>
                                                 <br>Utilisateur modifié avec succès.</li>
+                                                </div>
+                                                '; }
+
+                                            if ($errors==1) {
+                                                echo '
+                                                <div class="alert alert-danger">
+                                                <li>Une erreur est survenue. Réessayez.</li>
+                                                </div>
+                                                '; }
+
+                                            if ($errors==9) {
+                                                echo '
+                                                <div class="alert alert-danger">
+                                                <li>Enregistrement non effectué : cet email est déjà utilisé.</li>
+                                                </div>
+                                                '; }
+
+                                            if ($errors==10) {
+                                                echo '
+                                                <div class="alert alert-danger">
+                                                <li>Enregistrement non effectué : champs invalides.</li>
                                                 </div>
                                                 '; }
                                             if ($errors==6) {
@@ -352,6 +388,98 @@ try {
 										</table>
 
 
+                                        <!-- Modal ajout utilisateur -->
+                                        <div class="modal fade" id="addUserModal" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-lg">
+                                                <div class="modal-content">
+                                                    <form method="POST" action="<?php echo h($_SERVER['PHP_SELF']); ?>">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">Ajouter un utilisateur</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <input type="hidden" name="add_user_save" value="1">
+
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_pseudo">Prénoms et Nom</label>
+                                                                        <input type="text" class="form-control" name="pseudo" id="add_pseudo" required>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_email">Courriel</label>
+                                                                        <input type="email" class="form-control" name="email" id="add_email" required>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_date_engagement">Date engagement</label>
+                                                                        <input type="date" class="form-control" name="date_engagement" id="add_date_engagement" required>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_id_service">Affecté au service</label>
+                                                                        <select class="form-control populate" name="id_service" id="add_id_service" required>
+                                                                            <?php echo $serviceOptionsHtml; ?>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_responsable">Responsable</label>
+                                                                        <select class="form-control populate" name="responsable" id="add_responsable" required>
+                                                                            <?php echo $responsableOptionsHtml; ?>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_type">Type d'utilisateur (optionnel)</label>
+                                                                        <select class="form-control populate" name="type" id="add_type">
+                                                                            <option value="">------ Choisir ------</option>
+                                                                            <option value="administrateur">Administrateur</option>
+                                                                            <option value="caisse">Caisse</option>
+                                                                            <option value="caisseoptic">Caisse Optique</option>
+                                                                            <option value="modeservices">Medecin traitant</option>
+                                                                            <option value="acceuil">Acceuil</option>
+                                                                            <option value="comptabilité">Comptable</option>
+                                                                            <option value="superviseur">Superviseur</option>
+                                                                            <option value="secretariat">Secrétariat</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_mdp">Mot de passe</label>
+                                                                        <input type="password" class="form-control" name="mdp" id="add_mdp" required>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="add_plage_connexion">Plage de connexion</label>
+                                                                        <input type="text" class="form-control" name="plage_connexion" id="add_plage_connexion" placeholder="ex: lundi:caisse;mardi:secretariat">
+                                                                        <small class="text-muted">Format: jour:type séparés par ';' (ex: lundi:caisse;mardi:acceuil)</small>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Annuler</button>
+                                                            <button type="submit" class="btn btn-primary">Ajouter</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
                                         <!-- Modal édition utilisateur -->
                                         <div class="modal fade" id="editUserModal" tabindex="-1" aria-hidden="true">
                                             <div class="modal-dialog modal-lg">
@@ -440,6 +568,17 @@ try {
                             el.value = (value === undefined || value === null) ? '' : value;
                         }
 
+                        function clearAddModal() {
+                            setValue('add_pseudo', '');
+                            setValue('add_email', '');
+                            setValue('add_date_engagement', '');
+                            setValue('add_id_service', '');
+                            setValue('add_responsable', '0');
+                            setValue('add_type', '');
+                            setValue('add_mdp', '');
+                            setValue('add_plage_connexion', '');
+                        }
+
                         document.addEventListener('click', function (e) {
                             var btn = e.target.closest('.js-edit-user');
                             if (!btn) return;
@@ -452,6 +591,11 @@ try {
                             setValue('edit_plage_connexion', btn.getAttribute('data-plage_connexion'));
                             setValue('edit_mdp', '');
                         });
+
+                        var addModal = document.getElementById('addUserModal');
+                        if (addModal) {
+                            addModal.addEventListener('show.bs.modal', clearAddModal);
+                        }
                     })();
                     </script>
             <?php include('../PUBLIC/footer.php');?>
