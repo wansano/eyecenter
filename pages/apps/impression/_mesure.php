@@ -84,7 +84,9 @@ $pdf->WriteHTML(pdf_text_compat($html));
     }
     $pdf->Ln(16);
    
-    $pdf->Cell(0, 5, pdf_text_compat('Dr ' . traitant($data['traitant'])), 0, 1, 'C');
+    $pdf->Cell(0, 5, pdf_text_compat('L\'opticien optometriste '), 0, 1, 'C');
+    $pdf->Ln(30);
+     $pdf->Cell(0, 5, pdf_text_compat('Dr ' . traitant($data['traitant'])), 0, 1, 'C');
 
     $filename = 'ORDONNANCE LUNETTES PAT-' . $data['id_patient'] . '.pdf';
     $pdf->Output($filename, 'I');
