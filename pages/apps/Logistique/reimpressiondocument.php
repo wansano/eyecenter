@@ -513,7 +513,7 @@ include('../PUBLIC/header.php');
         function openPrintModal(url, titleText) {
             if (!url) return;
             if (!window.bootstrap || !printModalEl || !printFrameEl) {
-                window.open(url, '_blank');
+                alert('Impossible d\'ouvrir le document: Bootstrap indisponible.');
                 return;
             }
             if (printTitleEl) printTitleEl.textContent = titleText || 'Impression';

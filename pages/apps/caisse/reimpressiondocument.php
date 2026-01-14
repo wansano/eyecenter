@@ -185,8 +185,7 @@ include('../PUBLIC/header.php');
         function openReceiptModal(url) {
             if (!url) return;
             if (!window.bootstrap || !recuModalEl || !recuFrameEl) {
-                // fallback si bootstrap indisponible
-                window.open(url, '_blank');
+                alert('Impossible d\'ouvrir le reçu: Bootstrap indisponible.');
                 return;
             }
             recuFrameEl.src = withAutoPrintDisabled(url);

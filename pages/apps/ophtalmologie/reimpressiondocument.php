@@ -102,13 +102,13 @@ include('../public/header.php');
                                     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                                         $found = true;
                                         $motif = model($row['id_type']);
-                                        $url = $meta['file'] . '?affectation=' . $row['id_affectation'];
+                                        $url = $meta['file'] . '?affectation=' . (int)$row['id_affectation'];
                                         echo '<tr>';
                                         echo '<td>' . htmlspecialchars($row['date_doc']) . '</td>';
                                         echo '<td>EC_AFF' . htmlspecialchars($row['id_affectation']) . '</td>';
                                         echo '<td>' . htmlspecialchars($motif) . '</td>';
                                         echo '<td>' . htmlspecialchars(traitant($row['traitant'])) . '</td>';
-                                        echo '<td><a href="' . htmlspecialchars($url) . '" target="_blank" class="btn btn-sm btn-info">Document ' . htmlspecialchars($motif) . '</a></td>';
+                                        echo '<td><a href="' . htmlspecialchars($url) . '" class="btn btn-sm btn-info js-open-document" data-title="Document ' . htmlspecialchars($motif) . '">Document ' . htmlspecialchars($motif) . '</a></td>';
                                         echo '</tr>';
                                     }
                                 }
@@ -126,4 +126,82 @@ include('../public/header.php');
         </div>
 
     </section>
+
+    <!-- Modal Document (aperçu + impression) -->
+    <div class="modal fade" id="documentModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="documentModalTitle">Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0" style="height:80vh;">
+                    <iframe id="documentFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="documentPrintBtn" class="btn btn-primary">Imprimer</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalEl = document.getElementById('documentModal');
+        const frameEl = document.getElementById('documentFrame');
+        const titleEl = document.getElementById('documentModalTitle');
+        const printBtnEl = document.getElementById('documentPrintBtn');
+
+        function openDocumentModal(url, title) {
+            if (!url) return;
+            if (!window.bootstrap || !modalEl || !frameEl) {
+                alert('Impossible d\'ouvrir le document: Bootstrap indisponible.');
+                return;
+            }
+
+            if (titleEl) titleEl.textContent = title || 'Document';
+            frameEl.src = url;
+
+            const instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+            instance.show();
+        }
+
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.js-open-document');
+            if (!btn) return;
+
+            const href = btn.getAttribute('href');
+            if (!href || href === '#') return;
+
+            e.preventDefault();
+            const title = btn.getAttribute('data-title') || btn.textContent || 'Document';
+            openDocumentModal(href, title.trim());
+        });
+
+        if (printBtnEl) {
+            printBtnEl.addEventListener('click', function () {
+                try {
+                    const win = frameEl && frameEl.contentWindow ? frameEl.contentWindow : null;
+                    if (win && typeof win.printPdf === 'function') {
+                        win.printPdf();
+                        return;
+                    }
+                    if (win && typeof win.print === 'function') {
+                        win.print();
+                    }
+                } catch (err) {
+                    // noop
+                }
+            });
+        }
+
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                if (frameEl) frameEl.src = 'about:blank';
+            });
+        }
+    });
+    </script>
+
     <?php include('../public/footer.php');?>

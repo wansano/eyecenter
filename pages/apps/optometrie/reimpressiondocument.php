@@ -156,8 +156,7 @@ include('../public/header.php');
         function openDocumentModal(url, title) {
             if (!url) return;
             if (!window.bootstrap || !modalEl || !frameEl) {
-                // fallback (ne devrait pas arriver si bootstrap est chargé)
-                window.open(url, '_blank');
+                alert('Impossible d\'ouvrir le document: Bootstrap indisponible.');
                 return;
             }
 
