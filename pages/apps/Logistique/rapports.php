@@ -24,7 +24,7 @@ $alertes = articlesSousSeuil($bdd);
 <p><strong><?php echo number_format($valeur,2,',',' '); ?> <?php echo htmlspecialchars($devise ?? '', ENT_QUOTES, 'UTF-8'); ?></strong></p>
 <h6>Articles sous seuil: <?php echo count($alertes); ?></h6>
 </div>
-<a class="btn btn-sm btn-secondary" href="_rapport_logistique.php?jours=30" target="_blank">Imprimer PDF</a>
+<a class="btn btn-sm btn-secondary js-open-print" data-title="Rapport logistique" href="_rapport_logistique.php?jours=30">Imprimer PDF</a>
 </div>
 <div class="col-lg-8">
 <h5>Rotation (en 30 jours)</h5>

@@ -112,7 +112,7 @@ while ($donnees1 = $reponse1->fetch())
 													<td>'.number_format($donnees1['montant_paye']).' '.$devise.'</td>
                                                     <td>'.compte($donnees1['compte']).'</td>
 													<td>
-                                                    <a href="bondepaiementcollaborateur.php?paiement='.$donnees1['id_paie'].'" target="_blank" class="btn btn-sm btn-info"> voir le bon</a>
+													<a href="bondepaiementcollaborateur.php?paiement='.$donnees1['id_paie'].'" class="btn btn-sm btn-info js-open-print" data-title="Bon de paiement"> voir le bon</a>
                                                     </td>';
                                                     }
 												?>

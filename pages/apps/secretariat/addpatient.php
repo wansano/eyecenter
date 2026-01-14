@@ -520,13 +520,13 @@ require('../PUBLIC/header.php');
 
                 if (!modalEl || !frameEl) {
                     // Fallback sans modal
-                    if (url) window.open(url, '_blank');
+                    if (url && typeof window.openPrintModal === 'function') window.openPrintModal(url, 'Impression');
                     return;
                 }
 
                 frameEl.src = withAutoPrintDisabled(url);
                 if (!showModal()) {
-                    window.open(url, '_blank');
+                    if (typeof window.openPrintModal === 'function') window.openPrintModal(url, 'Impression');
                 }
             }
 

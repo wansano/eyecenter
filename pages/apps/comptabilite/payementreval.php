@@ -173,7 +173,7 @@ include('../public/header.php');
                                             <div class="alert alert-success">
                                                 <strong>Succès</strong><br/>  
                                                 <li>Le remboursement de '.$montantAffiche.' '.$devise.' à été éffectuer avec succès !</li>
-                                                <li>Vous pouvez imprimer le reçu de remboursement en cliquant sur <a href="bonderemboursement.php?affectation='.$affectation.'" target="_blank"><i class="fa fa-file-pdf-o"></i> Reçu de remboursement</a>.</li>
+                                                <li>Vous pouvez imprimer le reçu de remboursement en cliquant sur <a href="bonderemboursement.php?affectation='.$affectation.'" class="js-open-print" data-title="Reçu de remboursement"><i class="fa fa-file-pdf-o"></i> Reçu de remboursement</a>.</li>
                                             </div>
                                             ';
                                                 }
@@ -293,7 +293,9 @@ include('../public/header.php');
             <?php if (isset($_GET['success']) && $affectation): ?>
                 <script>
                     window.onload = function() {
-                        window.open('imprimer_remboursement.php?affectation=<?= (int)$affectation ?>', '_blank');
+                        if (typeof window.openPrintModal === 'function') {
+                            window.openPrintModal('imprimer_remboursement.php?affectation=<?= (int)$affectation ?>', 'Impression remboursement');
+                        }
                     };
                 </script>
             <?php endif; ?>

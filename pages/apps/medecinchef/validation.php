@@ -39,7 +39,7 @@ if (isset($_POST['traiter'])) {
 
 		// Si le traitement nécessite un consentement, ouvrir l'impression dans un nouvel onglet
 		if (function_exists('consentement') && consentement((int) $traitement) == 1) {
-			echo '<script>window.onload=function(){ window.open("imprimer_consentement.php?affectation=' . $affectation . '", "_blank"); window.location.href="' . $actionLink . '?affectation=' . $affectation . '"; };</script>';
+			header('Location: ' . $actionLink . '?affectation=' . $affectation . '&print_consentement=1');
 			exit();
 		}
 

@@ -153,7 +153,9 @@ include('../PUBLIC/header.php');
        <!-- <?php if ($errors == 4 && $affectation): ?>
             <script>
                 window.onload = function() {
-                    window.open('imprimer_chirurgie.php?affectation=<?= $affectation ?>', '_blank');
+                    if (typeof window.openPrintModal === 'function') {
+                        window.openPrintModal('imprimer_chirurgie.php?affectation=<?= (int)$affectation ?>', 'Impression');
+                    }
                 };
             </script>
         <?php endif; ?> -->

@@ -171,7 +171,7 @@ include('../PUBLIC/header.php');
                                         <div class="alert alert-success alert-dismissible fade show" role="alert">
                                             <strong>succès</strong> <br/>
                                             Les informations relatives à la chirurgie de '.htmlspecialchars(nom_patient($id_patient)).' ont été enregistrées. 
-                                            <a href="imprimer_chirurgie.php?affectation='.$affectation.'" target="_blank" class="alert-link">imprimer les données</a>
+                                                        <a href="imprimer_chirurgie.php?affectation='.$affectation.'" class="alert-link js-open-print" data-title="Impression chirurgie">imprimer les données</a>
                                         </div>
                                     ';
                                 }
@@ -179,7 +179,7 @@ include('../PUBLIC/header.php');
                                     echo '
                                         <div class="alert alert-warning alert-dismissible fade show" role="alert">
                                             <strong>Attention</strong> <br/>
-                                            Cette chirurgie a déjà été approuvée ou traitée. Il est également possible <a href="imprimer_chirurgie.php?affectation='.$affectation.'" target="_blank" class="alert-link">d\'imprimer les données</a>
+                                                        Cette chirurgie a déjà été approuvée ou traitée. Il est également possible <a href="imprimer_chirurgie.php?affectation='.$affectation.'" class="alert-link js-open-print" data-title="Impression chirurgie">d\'imprimer les données</a>
                                         </div>
                                     ';
                                 }
@@ -279,9 +279,11 @@ include('../PUBLIC/header.php');
     </div>
         <?php if ($errors == 4 && $affectation): ?>
             <script>
-                window.onload = function() {
-                    window.open('imprimer_chirurgie.php?affectation=<?= $affectation ?>', '_blank');
-                };
+                window.addEventListener('load', function() {
+                    if (typeof window.openPrintModal === 'function') {
+                        window.openPrintModal('imprimer_chirurgie.php?affectation=<?= (int)$affectation ?>', 'Impression chirurgie');
+                    }
+                });
             </script>
         <?php endif; ?>
         

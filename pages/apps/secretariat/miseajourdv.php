@@ -20,7 +20,7 @@ if (isset($_POST['impression']) && $rendezvous > 0) {
     if ($rdv_print === $rendezvous) {
         $id_patient_print = getPatientIdByRdv($bdd, $rdv_print);
         if ($id_patient_print) {
-            echo "<script>window.onload=function(){window.open('imprimer_dossier.php?id_patient=" . (int)$id_patient_print . "','_blank');};</script>";
+            echo "<script>window.onload=function(){ if (typeof window.openPrintModal === 'function') { window.openPrintModal('imprimer_dossier.php?id_patient=" . (int)$id_patient_print . "', 'Impression dossier'); } };</script>";
         }
     }
 }

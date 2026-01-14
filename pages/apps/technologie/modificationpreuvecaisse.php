@@ -24,6 +24,19 @@ function mp_expected_total(array $p): int {
     return ($b0 * 500) + ($b1 * 1000) + ($b2 * 2000) + ($b5 * 5000) + ($b10 * 10000) + ($b20 * 20000);
 }
 
+function mp_entree_paiements(PDO $bdd, int $compteId, string $dateRapportement): int {
+    // Total réel encaissé le jour J sur ce compte (prend en compte les paiements partiels)
+    $st = $bdd->prepare(
+        'SELECT COALESCE(SUM(COALESCE(montant_paye, montant)), 0) AS entree '
+        . 'FROM paiements '
+        . 'WHERE (remboursement = 0 OR remboursement IS NULL) '
+        . 'AND compte = ? '
+        . 'AND DATE(datepaiement) = DATE(?)'
+    );
+    $st->execute([$compteId, $dateRapportement]);
+    return mp_int($st->fetchColumn());
+}
+
 function mp_fetch_preuve(PDO $bdd, int $id_preuve): ?array {
     $st = $bdd->prepare('
         SELECT p.id_preuve, p.date_rapportement, p.compte, p.montant, p.b0, p.b1, p.b2, p.b5, p.b10, p.b20, p.montant_lettre, p.id_user,
@@ -59,7 +72,10 @@ if (isset($_GET['ajax_preuve'])) {
 
         $montant = mp_int($p['montant'] ?? 0);
         $expected = mp_expected_total($p);
-        $conforme = ($montant === $expected);
+        $entreeJour = mp_entree_paiements($bdd, (int)($p['compte'] ?? 0), (string)($p['date_rapportement'] ?? ''));
+        $conformeBillets = ($montant === $expected);
+        $conformeEntree = ($montant === $entreeJour);
+        $conforme = ($conformeBillets && $conformeEntree);
 
         echo json_encode([
             'success' => true,
@@ -79,6 +95,9 @@ if (isset($_GET['ajax_preuve'])) {
                 'b20' => mp_int($p['b20'] ?? 0),
                 'montant_lettre' => (string)($p['montant_lettre'] ?? ''),
                 'expected_total' => $expected,
+                'entree_total' => $entreeJour,
+                'conforme_billets' => $conformeBillets,
+                'conforme_entree' => $conformeEntree,
                 'conforme' => $conforme,
             ],
         ]);
@@ -118,7 +137,8 @@ if (isset($_POST['ajax_update'])) {
 
         $existingMontant = mp_int($existing['montant'] ?? 0);
         $existingExpected = mp_expected_total($existing);
-        $existingConforme = ($existingMontant === $existingExpected);
+        $existingEntree = mp_entree_paiements($bdd, (int)($existing['compte'] ?? 0), (string)($existing['date_rapportement'] ?? ''));
+        $existingConforme = ($existingMontant === $existingExpected) && ($existingMontant === $existingEntree);
 
         if ($existingConforme) {
             echo json_encode(['success' => false, 'message' => "Preuve conforme : aucune modification n'est proposée."]); 
@@ -139,7 +159,10 @@ if (isset($_POST['ajax_update'])) {
         $p = mp_fetch_preuve($bdd, $id);
         $montant2 = mp_int($p['montant'] ?? 0);
         $expected2 = mp_expected_total($p);
-        $conforme2 = ($montant2 === $expected2);
+        $entreeJour2 = mp_entree_paiements($bdd, (int)($p['compte'] ?? 0), (string)($p['date_rapportement'] ?? ''));
+        $conformeBillets2 = ($montant2 === $expected2);
+        $conformeEntree2 = ($montant2 === $entreeJour2);
+        $conforme2 = ($conformeBillets2 && $conformeEntree2);
 
         echo json_encode([
             'success' => true,
@@ -160,6 +183,9 @@ if (isset($_POST['ajax_update'])) {
                 'b20' => mp_int($p['b20'] ?? 0),
                 'montant_lettre' => (string)($p['montant_lettre'] ?? ''),
                 'expected_total' => $expected2,
+                'entree_total' => $entreeJour2,
+                'conforme_billets' => $conformeBillets2,
+                'conforme_entree' => $conformeEntree2,
                 'conforme' => $conforme2,
             ],
         ]);
@@ -228,6 +254,7 @@ include('../PUBLIC/header.php');
                             <tr><th>Caissier (ID)</th><td id="mp_user">—</td></tr>
                             <tr><th>Montant déclaré</th><td id="mp_montant">—</td></tr>
                             <tr><th>Total billets calculé</th><td id="mp_expected">—</td></tr>
+                            <tr><th>Total entrées du jour</th><td id="mp_entree">—</td></tr>
                             <tr><th>Statut</th><td id="mp_status">—</td></tr>
                         </tbody>
                     </table>
@@ -313,6 +340,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setText('mp_user', '—');
         setText('mp_montant', '—');
         setText('mp_expected', '—');
+        setText('mp_entree', '—');
         setText('mp_status', '—');
     }
 
@@ -386,6 +414,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setText('mp_user', cashierLabel);
         setText('mp_montant', fmt(p.montant));
         setText('mp_expected', fmt(p.expected_total));
+        setText('mp_entree', fmt(p.entree_total));
 
         if (p.conforme) {
             setText('mp_status', 'Conforme');
@@ -393,7 +422,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (editSection) editSection.classList.add('d-none');
         } else {
             setText('mp_status', 'Non conforme');
-            setAlert('warning', 'Preuve non conforme : vous pouvez corriger les informations.');
+            var reasons = [];
+            if (p.conforme_billets === false) reasons.push('montant ≠ total billets');
+            if (p.conforme_entree === false) reasons.push('montant ≠ entrées du jour');
+            setAlert('warning', 'Preuve non conforme : ' + (reasons.length ? reasons.join(' ; ') : 'écart détecté') + '.');
             if (editSection) editSection.classList.remove('d-none');
             fillEditForm(p);
             if (saveBtn) saveBtn.disabled = false;
@@ -464,6 +496,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     setText('mp_user', cashierLabel2);
                     setText('mp_montant', fmt(p.montant));
                     setText('mp_expected', fmt(p.expected_total));
+                    setText('mp_entree', fmt(p.entree_total));
                     setText('mp_status', p.conforme ? 'Conforme' : 'Non conforme');
 
                     if (p.conforme) {

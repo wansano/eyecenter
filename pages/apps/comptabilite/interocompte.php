@@ -270,7 +270,9 @@ include('../PUBLIC/header.php');
 		function openRapportModal(url) {
 			if (!url) return;
 			if (!window.bootstrap || !rapportModalEl || !rapportFrameEl) {
-				window.open(url, '_blank');
+				if (typeof window.openPrintModal === 'function') {
+					window.openPrintModal(url, 'Impression');
+				}
 				return;
 			}
 			rapportFrameEl.src = withAutoPrintDisabled(url);

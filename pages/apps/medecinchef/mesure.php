@@ -86,7 +86,7 @@ include('../PUBLIC/header.php');
                                             echo '
                                                 <div class="alert alert-success">
                                                 <strong>'.model($type).' de '.nom_patient($id_patient).' validé avec succès </strong> <br/> 
-                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="imprimer_mesure.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
+                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="imprimer_mesure.php?affectation='.$affectation.'" class="js-open-print" data-title="Impression mesure">imprimer les données</a></li>
                                                 </div>
                                                 ';
                                                     }
@@ -94,7 +94,7 @@ include('../PUBLIC/header.php');
                                             echo '
                                                 <div class="alert alert-danger">
                                                     <strong>Erreur de validation de '.model($type).'  de '.nom_patient($id_patient).'</strong> <br/>  
-                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="imprimer_mesure.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
+                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="imprimer_mesure.php?affectation='.$affectation.'" class="js-open-print" data-title="Impression mesure">imprimer les données</a></li>
                                                 </div>
                                                 ';}
                                     ?>
@@ -165,9 +165,11 @@ include('../PUBLIC/header.php');
     </div>
         <?php if ($errors == 4 && $affectation): ?>
             <script>
-                window.onload = function() {
-                    window.open('imprimer_mesure.php?affectation=<?= $affectation ?>', '_blank');
-                };
+                window.addEventListener('load', function() {
+                    if (typeof window.openPrintModal === 'function') {
+                        window.openPrintModal('imprimer_mesure.php?affectation=<?= (int)$affectation ?>', 'Impression mesure');
+                    }
+                });
             </script>
         <?php endif; ?>
     <?php include('../PUBLIC/footer.php');?>

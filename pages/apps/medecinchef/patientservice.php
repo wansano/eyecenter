@@ -68,8 +68,8 @@ try {
 
             try {
                 if (consentement($traitement) == 1) {
-                    // Ouvrir le consentement dans un nouvel onglet puis rediriger
-                    echo '<script>window.onload = function(){ window.open("imprimer_consentement.php?affectation=' . $affectationId . '", "_blank"); window.location.href = "' . $actionLink . '?affectation=' . $affectationId . '"; };</script>';
+                    // Ouvrir le consentement en modal sur la page cible
+                    header('Location: ' . $actionLink . '?affectation=' . $affectationId . '&print_consentement=1');
                     exit;
                 }
                 

@@ -132,7 +132,9 @@ include('../public/header.php');
                         + '?medecin=' + encodeURIComponent(<?= json_encode($userId) ?>)
                         + '&debut=' + encodeURIComponent(<?= json_encode($date_debut) ?>)
                         + '&fin=' + encodeURIComponent(<?= json_encode($date_fin) ?>);
-                    window.open(url, '_blank');
+                    if (typeof window.openPrintModal === 'function') {
+                        window.openPrintModal(url, 'Impression');
+                    }
                 });
             </script>
         <?php endif; ?>

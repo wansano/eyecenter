@@ -98,7 +98,9 @@ if (isset($_POST['impression'])) {
     if ($id_patient_post) {
         echo "<script>
         window.onload = function() {
-            window.open('imprimer_dossier.php?id_patient=".$id_patient_post."', '_blank');
+            if (typeof window.openPrintModal === 'function') {
+                window.openPrintModal('imprimer_dossier.php?id_patient=".$id_patient_post."', 'Impression dossier');
+            }
         };
         </script>";
     }
@@ -325,8 +327,8 @@ if (isset($_POST['impression'])) {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                            <a href="#" class="btn btn-primary" id="btnImprimerDossier" target="_blank" rel="noopener"> <i class="fa fa-print"></i> dossier</a>
-                            <a href="#" class="btn btn-info" id="btnImprimerCarte" target="_blank" rel="noopener"> <i class="fa fa-print"></i> carte d'adhésion</a>
+                                <a href="#" class="btn btn-primary" id="btnImprimerDossier"> <i class="fa fa-print"></i> dossier</a>
+                                <a href="#" class="btn btn-info" id="btnImprimerCarte"> <i class="fa fa-print"></i> carte d'adhésion</a>
                         </div>
                     </div>
                 </div>

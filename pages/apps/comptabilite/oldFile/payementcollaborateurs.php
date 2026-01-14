@@ -146,7 +146,7 @@ while ($donnees1 = $reponse1->fetch())
                                             <div class="alert alert-success">
                                                 <strong>Succès</strong><br/>  
                                                 <li>Le paiement de '.number_format($_POST['montant']).' '.$devise.' à été éffectuer avec succès !</li>
-                                                <li>Vous pouvez imprimer le reçu de paiement en cliquant sur <a href="bondepaiementcollaborateur.php?paiement='.$idpaie.'" target="_blank"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
+                                                <li>Vous pouvez imprimer le reçu de paiement en cliquant sur <a href="bondepaiementcollaborateur.php?paiement='.$idpaie.'" class="js-open-print" data-title="Reçu de paiement"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
                                             </div>
                                             ';
                                                 }
@@ -169,7 +169,7 @@ while ($donnees1 = $reponse1->fetch())
                                                 <div class="alert alert-danger">
                                                     <li>Erreur</li>
                                                     <li>Ce paiement à été déjà effectuée</li>
-                                                     <li>Vous pouvez réimprimer le reçu de paiement en cliquant sur <a href="bondepaiementcollaborateur.php?paiement='.$idpaie.'" target="_blank"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
+                                                     <li>Vous pouvez réimprimer le reçu de paiement en cliquant sur <a href="bondepaiementcollaborateur.php?paiement='.$idpaie.'" class="js-open-print" data-title="Reçu de paiement"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
                                                 </div>
                                                 ';}
                                     echo '

@@ -93,7 +93,7 @@ include('../PUBLIC/header.php');
                                     echo '
                                         <div class="alert alert-success">
                                         <strong>Succès paiement éffectué !</strong> <br/>  
-                                        <li>Vous pouvez ré-imprimer le reçu de paiement en cliquant sur <a href="../clinique/recudepaiement.php?affectation='.$_GET['affectation'].'" target="_blank"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
+                                            <li>Vous pouvez ré-imprimer le reçu de paiement en cliquant sur <a href="../clinique/recudepaiement.php?affectation='.$_GET['affectation'].'" class="js-open-print" data-title="Reçu de paiement"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
                                         </div>
                                         ';
                                             }
@@ -102,7 +102,7 @@ include('../PUBLIC/header.php');
                                         <div class="alert alert-danger">
                                             <strong>Erreur de Paiement !</strong> <br/>  
                                             <li>Paiement déjà éffectué par le client.</li>
-                                            <li>Vous pouvez ré-imprimer le reçu de paiement en cliquant sur <a href="recudepaiement.php?affectation='.$_GET['affectation'].'" target="_blank"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
+                                            <li>Vous pouvez ré-imprimer le reçu de paiement en cliquant sur <a href="recudepaiement.php?affectation='.$_GET['affectation'].'" class="js-open-print" data-title="Reçu de paiement"><i class="fa fa-file-pdf-o"></i> Reçu de paiement</a>.</li>
                                         </div>
                                         ';}
                                     ?>

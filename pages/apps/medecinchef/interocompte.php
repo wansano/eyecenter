@@ -154,7 +154,7 @@ include('../PUBLIC/header.php');
 							<section class="panel panel-transparent">
 								<div class="row">
 									<header class="panel panel-transparent">
-										<h4 class="panel-title">Prestations <a href="../impression/_rapportinterrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" target="_blank">imprimer le rapport <i class="fa fa-file-pdf"></i> </a> </h4>
+											<h4 class="panel-title">Prestations <a href="../impression/_rapportinterrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" class="js-open-print" data-title="Rapport interrogation">imprimer le rapport <i class="fa fa-file-pdf"></i> </a> </h4>
 									</header>';
 										$total = $bdd->prepare('SELECT * FROM traitements ORDER BY id_type');
 										$total -> execute();
@@ -244,7 +244,7 @@ include('../PUBLIC/header.php');
 							<section class="panel panel-transparent">
 								<div class="row">
 									<header class="panel panel-transparent">
-										<h4 class="panel-title">Prestations <a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$montanttotal.'&rapportcaisse='.$entreePreuveTotal.'&solde='.$soldetotal.'" target="_blank">imprimer le rapport <i class="fa fa-file-pdf"></i> </a> </h4>
+											<h4 class="panel-title">Prestations <a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$montanttotal.'&rapportcaisse='.$entreePreuveTotal.'&solde='.$soldetotal.'" class="js-open-print" data-title="Rapport interrogation">imprimer le rapport <i class="fa fa-file-pdf"></i> </a> </h4>
 									</header>';
 										$total = $bdd->prepare('SELECT * FROM traitements ORDER BY id_type');
 										$total -> execute();

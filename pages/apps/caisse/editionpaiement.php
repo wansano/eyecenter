@@ -274,7 +274,7 @@ include('../PUBLIC/header.php');
                     <div class="modal-body">
                         <div id="modalAlert" class="alert d-none" role="alert"></div>
 
-                        <a id="btnImprimerNouveauRecu" href="#" target="_blank" class="btn btn-info btn-sm d-none mb-3">
+                        <a id="btnImprimerNouveauRecu" href="#" class="btn btn-info btn-sm d-none mb-3">
                             <i class="fa fa-file-pdf-o"></i> Imprimer le nouveau reçu
                         </a>
 

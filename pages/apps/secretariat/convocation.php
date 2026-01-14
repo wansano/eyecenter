@@ -81,7 +81,7 @@ $errors=0;
 					</div>
 				</div>
 				<div class="modal-footer">
-					<a id="rapportRdvPrint" class="btn btn-primary" target="_blank" rel="noopener">Imprimer le PDF pour +détails</a>
+					<a id="rapportRdvPrint" class="btn btn-primary">Imprimer le PDF pour +détails</a>
 					<button type="button" class="btn btn-default" data-dismiss="modal" data-bs-dismiss="modal">Fermer</button>
 				</div>
 			</div>
@@ -184,7 +184,9 @@ $errors=0;
 					if (!url) return;
 					if (printTitleEl) printTitleEl.textContent = titleText || 'Impression';
 					if (!printModalEl || !printFrameEl) {
-						window.open(url, '_blank');
+						if (typeof window.openPrintModal === 'function') {
+							window.openPrintModal(url, 'Impression');
+						}
 						return;
 					}
 					printFrameEl.src = withAutoPrintDisabled(url);
@@ -197,7 +199,9 @@ $errors=0;
 						jQuery(printModalEl).modal('show');
 						return;
 					}
-					window.open(url, '_blank');
+					if (typeof window.openPrintModal === 'function') {
+						window.openPrintModal(url, 'Impression');
+					}
 				}
 
 				if (printBtnEl) {

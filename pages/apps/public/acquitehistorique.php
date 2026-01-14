@@ -111,7 +111,7 @@ function getValue($array, $key, $default = '') {
     <div class="col-md-2">
         <div class="form-group">
             <label class="col-form-label" for="formGroupExampleInput"><?= nom_patient($id_patient);?> </label>
-            <a class="btn btn-info" target="_blank" href="../impression/_historique_traitements.php?id_patient=<?php echo (int)$id_patient; ?>">voir historique dossier</a>
+            <a class="btn btn-info js-open-print" data-title="Historique dossier" href="../impression/_historique_traitements.php?id_patient=<?php echo (int)$id_patient; ?>">voir historique dossier</a>
         </div>
     </div>
 </div>

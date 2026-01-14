@@ -70,7 +70,7 @@ $errors=0;
 													<td>'.number_format($donnees1['montant_paye']).' '.$devise.'</td>
                                                     <td>'.compte($donnees1['compte']).'</td>
 													<td>
-                                                    <a href="bonderemboursement.php?affectation='.$donnees1['id_affectation'].'" target="_blank" class="btn btn-sm btn-info"> voir le bon</a>
+													<a href="bonderemboursement.php?affectation='.$donnees1['id_affectation'].'" class="btn btn-sm btn-info js-open-print" data-title="Bon de remboursement"> voir le bon</a>
                                                     </td>';
                                                     }
 												?>
