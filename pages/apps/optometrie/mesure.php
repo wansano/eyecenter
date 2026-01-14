@@ -86,7 +86,7 @@ include('../PUBLIC/header.php');
                                             echo '
                                                 <div class="alert alert-success">
                                                 <strong>'.model($type).' de '.nom_patient($id_patient).' validé avec succès </strong> <br/> 
-                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="imprimer_mesure.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
+                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <button type="button" class="btn btn-success btn-sm" id="btnImprimerOrdonnance"><i class="fa fa-file-pdf-o"></i> Imprimer l\'ordonnance</button></li>
                                                 </div>
                                                 ';
                                                     }
@@ -94,7 +94,7 @@ include('../PUBLIC/header.php');
                                             echo '
                                                 <div class="alert alert-danger">
                                                     <strong>Erreur de validation de '.model($type).'  de '.nom_patient($id_patient).'</strong> <br/>  
-                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="imprimer_mesure.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
+                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <button type="button" class="btn btn-default btn-sm" id="btnImprimerOrdonnanceAlt"><i class="fa fa-file-pdf-o"></i> Imprimer l\'ordonnance</button></li>
                                                 </div>
                                                 ';}
                                     ?>
@@ -145,15 +145,21 @@ include('../PUBLIC/header.php');
                                     </div>
                                 </div>
                                 <div class="row form-group pb-3">
-                                    <div class="col-md-12">
+                                    <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="col-form-label" for="formGroupExampleInput">Details concernant les verres</label>
-                                            <textarea name="details" class="form-control" rows="5" placeholder="Obligatoire" required><?php echo getFormValue('details'); ?></textarea>
+                                            <select name="details" data-plugin-selectTwo class="form-control populate" data-plugin-options="{ "minimumInputLength": 2 }" value="<?php echo getFormValue('refraction'); ?>" required>
+                                                <optgroup label="Choisir les details concernant les verres">
+                                                    <option value="Antireflet">Antireflet</option>
+                                                    <option value="Antireflet Photochromique" selected>Antireflet Photochromique</option>
+                                                    <option value="Antireflet Photochromique Progressif">Antireflet Photochromique Progressif</option>
+                                                </optgroup>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
                                 <footer class="card-footer text-end">
-                                    <button class="btn btn-primary" type="submit" name="ajouter">Valider les mesures</button>
+                                    <button class="btn btn-primary" type="submit" name="ajouter">valider l'ordonnance</button>
                                 </footer>
                             </form>
                         <!-- Fin du formulaire de consultation -->
@@ -163,11 +169,48 @@ include('../PUBLIC/header.php');
         <!-- end: page -->
     </section>
     </div>
-        <?php if ($errors == 4 && $affectation): ?>
-            <script>
-                window.onload = function() {
-                    window.open('imprimer_mesure.php?affectation=<?= $affectation ?>', '_blank');
-                };
-            </script>
+
+        <!-- Modal impression ordonnance -->
+        <?php if (!empty($affectation)): ?>
+        <div class="modal fade" id="ordonnanceModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Impression ordonnance</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="height:75vh;">
+                        <iframe id="ordonnanceIframe" src="imprimer_mesure.php?affectation=<?php echo (int)$affectation; ?>" style="width:100%;height:100%;border:0;"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
         <?php endif; ?>
+
+        <script>
+            function openOrdonnanceModal() {
+                try {
+                    if (!window.bootstrap) return;
+                    var el = document.getElementById('ordonnanceModal');
+                    if (!el) return;
+                    var modal = window.bootstrap.Modal.getInstance(el) || new window.bootstrap.Modal(el);
+                    modal.show();
+                } catch (e) {
+                    // noop
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                var btn = document.getElementById('btnImprimerOrdonnance');
+                if (btn) btn.addEventListener('click', openOrdonnanceModal);
+                var btnAlt = document.getElementById('btnImprimerOrdonnanceAlt');
+                if (btnAlt) btnAlt.addEventListener('click', openOrdonnanceModal);
+
+                var autoOpen = <?php echo (!empty($affectation) && (int)$errors === 4) ? 'true' : 'false'; ?>;
+                if (autoOpen) {
+                    openOrdonnanceModal();
+                }
+            });
+        </script>
+
     <?php include('../PUBLIC/footer.php');?>

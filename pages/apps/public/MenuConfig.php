@@ -171,7 +171,7 @@ class MenuConfig {
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="rapportjournalier.php?rdp=' . $user_data['type'] . '">Proof de caisse</a></li>
                 <li><a class="nav-link" href="mesrapportdecaisse.php?rdp=' . $user_data['type'] . '">Mes proofs du mois</a></li>
-                <li><a class="nav-link" href="listetotaldesventes.php">Liste des ventes</a></li>
+                <li><a class="nav-link" href="venteslunettes_incompletes.php">Liste des créances</a></li>
             </ul>
         </li>';
     }

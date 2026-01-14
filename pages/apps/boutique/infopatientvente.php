@@ -428,14 +428,11 @@ include('../PUBLIC/header.php');
 
                         <?php
                             // Vente autorisée uniquement si une ordonnance existe.
-                            // On utilise l'affectation de la dernière ordonnance (confirmée) comme base de la vente.
-                            $affectationForSale = $lastOrdonnanceAffectation > 0
-                                ? (int)$lastOrdonnanceAffectation
-                                : (isset($_GET['affectation']) ? (int)$_GET['affectation'] : 0);
-                            $canSale = ($patientIdFound > 0 && $affectationForSale > 0);
+                            // La vente crée désormais sa propre affectation automatiquement (dans ventelunette.php).
+                            $canSale = ($patientIdFound > 0 && $lastOrdonnanceAffectation > 0);
                         ?>
                         <?php if ($canSale): ?>
-                            <a class="btn btn-primary" href="ventelunette.php?client=<?php echo (int)$patientIdFound; ?>&affectation=<?php echo (int)$affectationForSale; ?>">Effectuer une vente</a>
+                            <a class="btn btn-primary" href="ventelunette.php?client=<?php echo (int)$patientIdFound; ?>">Effectuer une vente</a>
                         <?php else: ?>
                             <button type="button" class="btn btn-primary" disabled>Effectuer une vente</button>
                         <?php endif; ?>
