@@ -10,6 +10,9 @@ $errors = 0;
 $existe = 0;
 $showReprintModalOnLoad = false;
 $bypassCaisseAfterTransmit = false;
+$showPrintModalOnLoad = false;
+$printUrlOnLoad = '';
+$printTitleOnLoad = '';
 
 // RDV courant (utilisé pour action du formulaire et sécurisation)
 $rendezvous = (int)($_GET['rdv'] ?? 0);
@@ -257,13 +260,10 @@ if (isset($_POST['impression'])) {
     $id_patient_post = getPatientIdByRdv($bdd, $rdv_post);
 
     if ($id_patient_post) {
-        echo "<script>
-        window.onload = function() {
-            if (typeof window.openPrintModal === 'function') {
-                window.openPrintModal('imprimer_dossier.php?id_patient=".$id_patient_post."', 'Impression dossier');
-            }
-        };
-        </script>";
+        // Toujours en modal (pas de window.open)
+        $showPrintModalOnLoad = true;
+        $printUrlOnLoad = 'imprimer_dossier.php?id_patient=' . (int)$id_patient_post;
+        $printTitleOnLoad = 'Impression dossier';
     }
 }
 
@@ -631,6 +631,25 @@ if (isset($_POST['impression'])) {
                     </div>
                 </div>
 
+                <!-- Modal Impression (aperçu + impression) -->
+                <div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="printModalTitle">Impression</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body p-0" style="height:80vh;">
+                                <iframe id="printFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" id="printBtn" class="btn btn-primary">Imprimer</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <script>
                 document.addEventListener('DOMContentLoaded', function () {
                     const modalEl = document.getElementById('patientInfoModal');
@@ -647,6 +666,78 @@ if (isset($_POST['impression'])) {
                         if (btnDossier) btnDossier.href = 'imprimer_dossier.php?id_patient=' + encodeURIComponent(pid);
                         if (btnCarte) btnCarte.href = 'imprimer_carte.php?id_patient=' + encodeURIComponent(pid);
                     });
+                });
+                </script>
+
+                <script>
+                // Impression dossier/carte : toujours en modal (iframe)
+                document.addEventListener('DOMContentLoaded', function () {
+                    const printModalEl = document.getElementById('printModal');
+                    const printFrameEl = document.getElementById('printFrame');
+                    const printTitleEl = document.getElementById('printModalTitle');
+                    const printBtnEl = document.getElementById('printBtn');
+
+                    function withAutoPrintDisabled(url) {
+                        if (!url) return url;
+                        return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+                    }
+
+                    window.openPrintModal = function (url, titleText) {
+                        if (!url) return;
+                        if (!window.bootstrap || !printModalEl || !printFrameEl) {
+                            alert('Impossible d\'ouvrir l\'impression: Bootstrap indisponible.');
+                            return;
+                        }
+                        if (printTitleEl) printTitleEl.textContent = titleText || 'Impression';
+                        printFrameEl.src = withAutoPrintDisabled(url);
+                        const instance = window.bootstrap.Modal.getInstance(printModalEl) || new window.bootstrap.Modal(printModalEl);
+                        instance.show();
+                    };
+
+                    function bind(btn, titleText) {
+                        if (!btn) return;
+                        btn.addEventListener('click', function (e) {
+                            const href = btn.getAttribute('href');
+                            if (!href || href === '#') return;
+                            e.preventDefault();
+                            window.openPrintModal(href, titleText);
+                        });
+                    }
+
+                    bind(document.getElementById('btnImprimerDossier'), 'Impression dossier');
+                    bind(document.getElementById('btnImprimerCarte'), "Impression carte d'adhésion");
+
+                    if (printBtnEl) {
+                        printBtnEl.addEventListener('click', function () {
+                            try {
+                                const win = printFrameEl && printFrameEl.contentWindow ? printFrameEl.contentWindow : null;
+                                if (win && typeof win.printPdf === 'function') {
+                                    win.printPdf();
+                                    return;
+                                }
+                                if (win && typeof win.print === 'function') {
+                                    win.print();
+                                }
+                            } catch (err) {
+                                // noop
+                            }
+                        });
+                    }
+
+                    if (printModalEl) {
+                        printModalEl.addEventListener('hidden.bs.modal', function () {
+                            if (printFrameEl) printFrameEl.src = 'about:blank';
+                        });
+                    }
+
+                    // Ouverture automatique si impression déclenchée côté serveur
+                    var autoOpen = <?php echo !empty($showPrintModalOnLoad) ? 'true' : 'false'; ?>;
+                    if (autoOpen) {
+                        window.openPrintModal(
+                            <?php echo json_encode((string)$printUrlOnLoad); ?>,
+                            <?php echo json_encode((string)$printTitleOnLoad); ?>
+                        );
+                    }
                 });
                 </script>
 
