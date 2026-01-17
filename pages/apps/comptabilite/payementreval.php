@@ -173,7 +173,7 @@ include('../public/header.php');
                                             <div class="alert alert-success">
                                                 <strong>Succès</strong><br/>  
                                                 <li>Le remboursement de '.$montantAffiche.' '.$devise.' à été éffectuer avec succès !</li>
-                                                <li>Vous pouvez imprimer le reçu de remboursement en cliquant sur <a href="bonderemboursement.php?affectation='.$affectation.'" class="js-open-print" data-title="Reçu de remboursement"><i class="fa fa-file-pdf-o"></i> Reçu de remboursement</a>.</li>
+                                                <li>Vous pouvez imprimer le reçu de remboursement en cliquant sur <a href="imprimer_remboursement.php?affectation='.$affectation.'" class="js-open-print" data-title="Reçu de remboursement"><i class="fa fa-file-pdf-o"></i> Reçu de remboursement</a>.</li>
                                             </div>
                                             ';
                                                 }
@@ -290,6 +290,95 @@ include('../public/header.php');
 					<!-- end: page -->
 				</section>
             </div>
+
+            <!-- Modal impression (reçu remboursement) -->
+            <div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="printModalTitle">Impression</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" style="height:75vh;">
+                            <iframe id="printModalFrame" src="about:blank" style="width:100%;height:100%;border:0;"></iframe>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                            <button type="button" class="btn btn-primary" id="btnPrintModal">
+                                <i class="fa fa-print"></i> Imprimer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    if (typeof window.openPrintModal !== 'function') {
+                        window.openPrintModal = function (url, title) {
+                            try {
+                                if (!window.bootstrap) {
+                                    window.open(url, '_blank');
+                                    return;
+                                }
+
+                                var modalEl = document.getElementById('printModal');
+                                var frame = document.getElementById('printModalFrame');
+                                if (!modalEl || !frame) {
+                                    window.open(url, '_blank');
+                                    return;
+                                }
+
+                                var titleEl = document.getElementById('printModalTitle');
+                                if (titleEl && title) titleEl.textContent = title;
+                                frame.setAttribute('src', url);
+
+                                var modal = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                                modal.show();
+                            } catch (e) {
+                                try { window.open(url, '_blank'); } catch (_) {}
+                            }
+                        };
+                    }
+
+                    function printCurrentModalFrame() {
+                        try {
+                            var frame = document.getElementById('printModalFrame');
+                            if (!frame || !frame.contentWindow) return;
+                            if (typeof frame.contentWindow.printPdf === 'function') {
+                                frame.contentWindow.printPdf();
+                            } else {
+                                frame.contentWindow.print();
+                            }
+                        } catch (e) {
+                            // noop
+                        }
+                    }
+
+                    document.addEventListener('DOMContentLoaded', function () {
+                        document.addEventListener('click', function (e) {
+                            var a = e.target && e.target.closest ? e.target.closest('a.js-open-print') : null;
+                            if (!a) return;
+                            e.preventDefault();
+                            var url = a.getAttribute('href');
+                            var title = a.getAttribute('data-title') || 'Impression';
+                            window.openPrintModal(url, title);
+                        });
+
+                        var btnPrint = document.getElementById('btnPrintModal');
+                        if (btnPrint) btnPrint.addEventListener('click', printCurrentModalFrame);
+
+                        var modalEl = document.getElementById('printModal');
+                        if (modalEl) {
+                            modalEl.addEventListener('hidden.bs.modal', function () {
+                                var frame = document.getElementById('printModalFrame');
+                                if (frame) frame.setAttribute('src', 'about:blank');
+                            });
+                        }
+                    });
+                })();
+            </script>
+
             <?php if (isset($_GET['success']) && $affectation): ?>
                 <script>
                     window.onload = function() {
