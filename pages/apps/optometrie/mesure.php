@@ -176,11 +176,17 @@ include('../PUBLIC/header.php');
             <div class="modal-dialog modal-xl modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Impression ordonnance</h5>
+                        <h5 class="modal-title" id="ordonnanceModalTitle">Impression ordonnance</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body" style="height:75vh;">
-                        <iframe id="ordonnanceIframe" src="imprimer_mesure.php?affectation=<?php echo (int)$affectation; ?>" style="width:100%;height:100%;border:0;"></iframe>
+                        <iframe id="ordonnanceIframe" src="about:blank" style="width:100%;height:100%;border:0;"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                        <button type="button" class="btn btn-primary" id="btnPrintOrdonnance">
+                            <i class="fa fa-print"></i> Imprimer
+                        </button>
                     </div>
                 </div>
             </div>
@@ -188,11 +194,42 @@ include('../PUBLIC/header.php');
         <?php endif; ?>
 
         <script>
+            function printOrdonnanceModal() {
+                try {
+                    var frame = document.getElementById('ordonnanceIframe');
+                    if (!frame || !frame.contentWindow) return;
+
+                    // Si la page imprimée expose printPdf(), on l'utilise; sinon print() standard
+                    if (typeof frame.contentWindow.printPdf === 'function') {
+                        frame.contentWindow.printPdf();
+                    } else {
+                        frame.contentWindow.print();
+                    }
+                } catch (e) {
+                    try {
+                        var frame2 = document.getElementById('ordonnanceIframe');
+                        if (frame2 && frame2.contentWindow) frame2.contentWindow.print();
+                    } catch (_) {
+                        // noop
+                    }
+                }
+            }
+
             function openOrdonnanceModal() {
                 try {
                     if (!window.bootstrap) return;
                     var el = document.getElementById('ordonnanceModal');
                     if (!el) return;
+
+                    // Charger le document au moment d'ouvrir le modal (évite l'auto-print au chargement de la page)
+                    var frame = document.getElementById('ordonnanceIframe');
+                    if (frame) {
+                        var desiredUrl = 'imprimer_mesure.php?affectation=<?php echo (int)$affectation; ?>&autoprint=0';
+                        if (!frame.getAttribute('src') || frame.getAttribute('src') === 'about:blank') {
+                            frame.setAttribute('src', desiredUrl);
+                        }
+                    }
+
                     var modal = window.bootstrap.Modal.getInstance(el) || new window.bootstrap.Modal(el);
                     modal.show();
                 } catch (e) {
@@ -206,9 +243,20 @@ include('../PUBLIC/header.php');
                 var btnAlt = document.getElementById('btnImprimerOrdonnanceAlt');
                 if (btnAlt) btnAlt.addEventListener('click', openOrdonnanceModal);
 
+                var btnPrint = document.getElementById('btnPrintOrdonnance');
+                if (btnPrint) btnPrint.addEventListener('click', printOrdonnanceModal);
+
                 var autoOpen = <?php echo (!empty($affectation) && (int)$errors === 4) ? 'true' : 'false'; ?>;
                 if (autoOpen) {
                     openOrdonnanceModal();
+                }
+
+                var modalEl = document.getElementById('ordonnanceModal');
+                if (modalEl) {
+                    modalEl.addEventListener('hidden.bs.modal', function () {
+                        var frame = document.getElementById('ordonnanceIframe');
+                        if (frame) frame.setAttribute('src', 'about:blank');
+                    });
                 }
             });
         </script>
