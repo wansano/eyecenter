@@ -271,12 +271,12 @@ require('../PUBLIC/header.php');
                                             <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssurance">
                                                 <option value="">-------- Choisir l'assurance --------</option>
                                                 <?php 
-                                                    $client = $bdd->prepare('SELECT * FROM clients WHERE status=?');
+                                                    $client = $bdd->prepare('SELECT * FROM assurances WHERE status= ?');
                                                     $client -> execute([1]);
                                                     while ($clients = $client->fetch(PDO::FETCH_ASSOC))
                                                     {
-                                                        $selected = (isset($_POST['entrepriseAssurance']) && $_POST['entrepriseAssurance'] == $clients['id_client']) ? 'selected' : '';
-                                                        echo '<option value="'.$clients['id_client'].'" '.$selected.'>'.$clients['nom_client'].'</option>';
+                                                        $selected = (isset($_POST['entrepriseAssurance']) && $_POST['entrepriseAssurance'] == $clients['id_assurance']) ? 'selected' : '';
+                                                        echo '<option value="'.$clients['id_assurance'].'" '.$selected.'>'.$clients['assurance'].'</option>';
                                                     } 
                                                 ?>
                                             </select>

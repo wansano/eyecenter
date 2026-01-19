@@ -38,9 +38,10 @@ include('../PUBLIC/header.php');
 											}
 									?>
 											<div class="mb-3 text-end">
-												<button type="button" class="btn btn-primary" id="openAddCompteBtn">
-													Ajouter un compte
-												</button>
+												<div class="btn-group" role="group" aria-label="Comptes">
+													<button type="button" class="btn btn-primary" id="openAddCompteBtn">Ajouter un compte</button>
+													<button type="button" class="btn btn-default" id="openEditCompteByCodeBtn">Modifier un compte</button>
+												</div>
 											</div>
 										<table class="table table-bordered table-striped mb-0" id="datatable-default">
 
@@ -49,8 +50,8 @@ include('../PUBLIC/header.php');
                                                     <th>CODE</th>
                                                     <th>COMPTE</th>
                                                     <th>MODE PAIEMENT</th>
-                                                    <th>MONTANT DEBIT</th>
-													<th>MONTANT CREDIT</th>
+                                                    <th>DEBIT</th>
+													<th>CREDIT</th>
 													<th>SOLDE</th>
                                                     <th>CONFIDENTIALITE</th>
                                                     <th>TAUX</th>
@@ -101,8 +102,10 @@ include('../PUBLIC/header.php');
 				<script>
 					(function () {
 						const openBtn = document.getElementById('openAddCompteBtn');
+								const openEditByCodeBtn = document.getElementById('openEditCompteByCodeBtn');
 						const modalEl = document.getElementById('addCompteModal');
 						const modalBody = document.getElementById('addCompteModalBody');
+						const modalTitle = modalEl ? modalEl.querySelector('.modal-title') : null;
 						let pendingReload = false;
 
 						function getModalInstance() {
@@ -110,10 +113,11 @@ include('../PUBLIC/header.php');
 							return window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
 						}
 
-						async function loadAddCompteForm() {
+						async function loadCompteForm(url, title) {
+							if (modalTitle) modalTitle.textContent = title || 'Compte';
 							modalBody.innerHTML = '<div class="text-muted">Chargement...</div>';
 							try {
-								const res = await fetch('addacount.php', { credentials: 'same-origin' });
+								const res = await fetch(url, { credentials: 'same-origin' });
 								const html = await res.text();
 								modalBody.innerHTML = html;
 							} catch (e) {
@@ -121,21 +125,65 @@ include('../PUBLIC/header.php');
 							}
 						}
 
+								function renderLookupByCode() {
+									if (modalTitle) modalTitle.textContent = 'Modifier un compte';
+									modalBody.innerHTML = '' +
+										'<div class="alert alert-info">Saisissez le <strong>code</strong> du compte à éditer.</div>' +
+										'<div id="editCompteLookupAlert" class="alert alert-danger" style="display:none;"></div>' +
+										'<form id="editCompteLookupForm" novalidate>' +
+											'<div class="row g-3 align-items-end">' +
+												'<div class="col-md-6">' +
+													'<label class="col-form-label" for="editCompteCodeInput">Code du compte</label>' +
+													'<input type="text" class="form-control" id="editCompteCodeInput" required>' +
+												'</div>' +
+												'<div class="col-md-6">' +
+													'<button type="submit" class="btn btn-primary" id="editCompteLookupBtn">Rechercher</button>' +
+												'</div>' +
+											'</div>' +
+										'</form>';
+								}
+
 						function showErrors(errors) {
-							const el = modalBody.querySelector('#addCompteErrors');
-							if (!el) return;
+								const el = ensureAlertContainer('addCompteErrors', 'alert alert-danger');
+								const okEl = modalBody.querySelector('#addCompteSuccess');
+								if (okEl) { okEl.style.display = 'none'; okEl.textContent = ''; }
 							const items = (errors || []).map(msg => '<li>' + String(msg) + '</li>').join('');
 							el.innerHTML = '<strong>Erreur(s)</strong><br><ul class="mb-0">' + items + '</ul>';
 							el.style.display = '';
 						}
 
-						async function submitAddCompte(form) {
-							const submitBtn = modalBody.querySelector('#addCompteSubmitBtn');
+							function showSuccess(message) {
+								const el = ensureAlertContainer('addCompteSuccess', 'alert alert-success');
+								const errEl = modalBody.querySelector('#addCompteErrors');
+								if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+								el.innerHTML = '<strong>Succès</strong><br>' + String(message || 'Opération réussie.');
+								el.style.display = '';
+							}
+
+							function ensureAlertContainer(id, className) {
+								let el = modalBody.querySelector('#' + id);
+								if (el) return el;
+								el = document.createElement('div');
+								el.id = id;
+								el.className = className;
+								el.style.display = 'none';
+								modalBody.insertBefore(el, modalBody.firstChild);
+								return el;
+							}
+
+						async function submitCompte(form) {
+							const submitBtn = modalBody.querySelector('#addCompteSubmitBtn') || form.querySelector('button[type="submit"]');
 							if (submitBtn) submitBtn.disabled = true;
+								// reset alerts
+								const errEl = modalBody.querySelector('#addCompteErrors');
+								if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+								const okEl = modalBody.querySelector('#addCompteSuccess');
+								if (okEl) { okEl.style.display = 'none'; okEl.textContent = ''; }
 							const fd = new FormData(form);
 
 							try {
-								const res = await fetch('addacount.php', {
+								const actionUrl = form.getAttribute('action') || 'addacount.php';
+								const res = await fetch(actionUrl, {
 									method: 'POST',
 									body: fd,
 									credentials: 'same-origin'
@@ -148,12 +196,16 @@ include('../PUBLIC/header.php');
 									payload = null;
 								}
 
-								if (res.ok && payload && payload.success) {
-									pendingReload = true;
-									const instance = getModalInstance();
-									if (instance) instance.hide();
-									return;
-								}
+									if (res.ok && payload && payload.success) {
+										pendingReload = true;
+										showSuccess(payload.message || 'Compte enregistré avec succès.');
+										// laisse le temps de lire le message
+										const instance = getModalInstance();
+										setTimeout(function () {
+											if (instance) instance.hide();
+										}, 900);
+										return;
+									}
 
 								showErrors((payload && payload.errors) ? payload.errors : ['Une erreur est survenue.']);
 							} catch (e) {
@@ -165,17 +217,65 @@ include('../PUBLIC/header.php');
 
 						if (openBtn && modalEl) {
 							openBtn.addEventListener('click', async function () {
-								await loadAddCompteForm();
+								await loadCompteForm('addacount.php', 'Ajouter un compte');
 								const instance = getModalInstance();
 								if (instance) instance.show();
 							});
 						}
 
+								if (openEditByCodeBtn && modalEl) {
+									openEditByCodeBtn.addEventListener('click', function () {
+										renderLookupByCode();
+										const instance = getModalInstance();
+										if (instance) instance.show();
+										try {
+											const inp = modalBody.querySelector('#editCompteCodeInput');
+											if (inp) inp.focus();
+										} catch (e) {}
+									});
+								}
+
+						// Édition depuis la liste
+						document.addEventListener('click', async function (e) {
+							const btn = e.target && e.target.closest ? e.target.closest('.js-edit-compte') : null;
+							if (!btn) return;
+							const idCompte = btn.getAttribute('data-id-compte');
+							if (!idCompte) return;
+							await loadCompteForm('editacount.php?id_compte=' + encodeURIComponent(idCompte), 'Éditer le compte');
+							const instance = getModalInstance();
+							if (instance) instance.show();
+						});
+
+							// Recherche par code puis chargement du formulaire d'édition
+							modalEl.addEventListener('submit', async function (e) {
+								const form = e.target;
+								if (!form || form.id !== 'editCompteLookupForm') return;
+								e.preventDefault();
+								const alertEl = modalBody.querySelector('#editCompteLookupAlert');
+								const btn = modalBody.querySelector('#editCompteLookupBtn');
+								const inp = modalBody.querySelector('#editCompteCodeInput');
+								const code = inp ? String(inp.value || '').trim() : '';
+								if (!code) {
+									if (alertEl) {
+										alertEl.textContent = 'Veuillez saisir le code du compte.';
+										alertEl.style.display = '';
+									}
+									return;
+								}
+								if (alertEl) { alertEl.style.display = 'none'; alertEl.textContent = ''; }
+								if (btn) btn.disabled = true;
+								try {
+									await loadCompteForm('editacount.php?code=' + encodeURIComponent(code), 'Éditer le compte');
+								} finally {
+									if (btn) btn.disabled = false;
+								}
+							});
+
 						modalEl.addEventListener('submit', function (e) {
 							const form = e.target;
-							if (form && form.id === 'addCompteForm') {
+							if (form && (form.id === 'addCompteForm' || form.id === 'editCompteForm')) {
 								e.preventDefault();
-								submitAddCompte(form);
+								submitCompte(form);
 							}
 						});
 

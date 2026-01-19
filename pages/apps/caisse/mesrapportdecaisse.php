@@ -31,7 +31,7 @@ include('../PUBLIC/header.php');
                                                     <th>DATE</th>
                                                     <th>COMPTE</th>
 													<th>MONTANT</th>
-														<th>B500</th>
+													<th>B500</th>
                                                     <th>B1000</th>
 													<th>B2000</th>
 													<th>B5000</th>
@@ -73,7 +73,7 @@ include('../PUBLIC/header.php');
 															echo '<button class="btn btn-sm btn-danger">non conforme</button>';
 														}
 														echo'</td>';
-														echo '<td><a href="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '" target="_blank" class="btn btn-sm btn-primary">imprimer</a></td>';
+														echo '<td><button type="button" class="btn btn-sm btn-primary btn-print-rapport" data-print-url="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '"><i class="fa fa-print"></i> imprimer</button></td>';
 														echo '</tr>';
 													}
 															if (!$hasRows) {
@@ -87,4 +87,65 @@ include('../PUBLIC/header.php');
 							</div>
 						</div>
 			    </div>
+
+								<!-- Modal impression rapport -->
+								<div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+									<div class="modal-dialog modal-xl modal-dialog-scrollable">
+										<div class="modal-content">
+											<div class="modal-header">
+												<h5 class="modal-title" id="printModalTitle">Impression</h5>
+												<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+											</div>
+											<div class="modal-body p-0">
+												<iframe id="printModalFrame" title="Aperçu impression" style="width:100%; height:80vh; border:0;"></iframe>
+											</div>
+											<div class="modal-footer">
+												<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+												<button type="button" class="btn btn-primary" id="btnPrintModal"><i class="fa fa-print"></i> Imprimer</button>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<script>
+									(function(){
+										var modalEl = document.getElementById('printModal');
+										var frameEl = document.getElementById('printModalFrame');
+										var btnPrint = document.getElementById('btnPrintModal');
+
+										function openPrintModal(url, title){
+											if (!modalEl || !frameEl || !window.bootstrap) return;
+											if (title) {
+												var titleEl = document.getElementById('printModalTitle');
+												if (titleEl) titleEl.textContent = title;
+											}
+											frameEl.src = url;
+											var instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+											instance.show();
+										}
+
+										function printCurrentModalFrame(){
+											if (!frameEl || !frameEl.contentWindow) return;
+											frameEl.contentWindow.focus();
+											frameEl.contentWindow.print();
+										}
+
+										document.addEventListener('DOMContentLoaded', function(){
+											document.querySelectorAll('.btn-print-rapport').forEach(function(btn){
+												btn.addEventListener('click', function(){
+													var url = btn.getAttribute('data-print-url');
+													if (url) openPrintModal(url, 'Impression rapport de caisse');
+												});
+											});
+
+											if (btnPrint) btnPrint.addEventListener('click', printCurrentModalFrame);
+
+											if (modalEl) {
+												modalEl.addEventListener('hidden.bs.modal', function(){
+													if (frameEl) frameEl.src = '';
+												});
+											}
+										});
+									})();
+								</script>
             <?php include('../PUBLIC/footer.php');?>

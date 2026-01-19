@@ -8,7 +8,7 @@ require_once('../PUBLIC/fonction.php');
 
 $pdf = new PDF();
 $pdf->AliasNbPages();
-$pdf->AddPage();
+$pdf->AddPage('P');
 $pdf->AddFont('CenturyGothic','','CenturyGothic.php');
 $pdf->AddFont('CenturyGothic','B','CenturyGothic_bold.php');
 $pdf->SetAutoPageBreak(false,0);
@@ -18,13 +18,28 @@ $profil = $bdd->prepare('SELECT * FROM profil_entreprise');
 $profil->execute();
 $data = $profil->fetch();
 
-$affStmt = $bdd->prepare('SELECT * FROM affectations WHERE id_affectation = ?');
-$affStmt->execute([$_GET['affectation']]);
-$aff = $affStmt->fetch();
+$affectationId = isset($_GET['affectation']) ? (int)$_GET['affectation'] : 0;
+$remboursementId = isset($_GET['remboursement']) ? (int)$_GET['remboursement'] : 0;
 
-$rembStmt = $bdd->prepare('SELECT * FROM remboursements WHERE id_affectation = ? ORDER BY id_remboursement DESC LIMIT 1');
-$rembStmt->execute([$_GET['affectation']]);
-$remb = $rembStmt->fetch();
+$remb = null;
+$aff = null;
+
+if ($remboursementId > 0) {
+    $rembStmt = $bdd->prepare('SELECT * FROM remboursements WHERE id_remboursement = ? LIMIT 1');
+    $rembStmt->execute([$remboursementId]);
+    $remb = $rembStmt->fetch();
+    $affectationId = $remb ? (int)($remb['id_affectation'] ?? 0) : 0;
+} elseif ($affectationId > 0) {
+    $rembStmt = $bdd->prepare('SELECT * FROM remboursements WHERE id_affectation = ? ORDER BY id_remboursement DESC LIMIT 1');
+    $rembStmt->execute([$affectationId]);
+    $remb = $rembStmt->fetch();
+}
+
+if ($affectationId > 0) {
+    $affStmt = $bdd->prepare('SELECT * FROM affectations WHERE id_affectation = ?');
+    $affStmt->execute([$affectationId]);
+    $aff = $affStmt->fetch();
+}
 
 if (!$aff || !$remb) {
     die('Données remboursement introuvables');

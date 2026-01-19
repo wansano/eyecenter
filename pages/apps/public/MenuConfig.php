@@ -291,7 +291,8 @@ class MenuConfig {
             self::getComptabiliteStructureMenu(),
             self::getComptabiliteConfigurationMenu(),
             self::getComptabiliteStocksMenu(),
-            self::getComptabiliteReportingMenu()
+            self::getComptabiliteReportingMenu(),
+            self::getComptabiliteEditionMenu()
         ];
         
         return implode("\n", $submenus);
@@ -352,13 +353,19 @@ class MenuConfig {
     private static function getComptabiliteStructureMenu() {
         return '
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Structure fonction</a>
+            <a href="#" class="nav-link dropdown-toggle">Structure</a>
             <ul class="dropdown-menu">
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Comptabilité</a>
                     <ul class="dropdown-menu">
                         <li><a class="nav-link" href="#">Etats financiers</a></li>
                         <li><a class="nav-link" href="#">Grand livre</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Assurances</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listedesassurances.php">Liste des assurances</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">
@@ -395,21 +402,35 @@ class MenuConfig {
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Comptes</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addaccount.php?new">Ajouter un compte</a></li>
                         <li><a class="nav-link" href="listecomptes.php?accountlist">Liste des comptes</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Budgets</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addbudget.php?addbudgets">Ajouter un budget</a></li>
+                        <li><a class="nav-link" href="listedesbudgets.php?addbudgets">Liste des budgets</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">TAUX</a>
+                    <a class="nav-link" href="#">Taux de remise</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addtaux.php">Ajouter un Taux</a></li>
                         <li><a class="nav-link" href="listetaux.php?taxlist">Liste des Taux</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </li>';
+    }
+
+
+    private static function getComptabiliteEditionMenu() {
+        return '
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Edition</a>
+            <ul class="dropdown-menu">
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Reimpression document</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="imprimer_bonremboursement.php">Bon de remboursement</a></li>
                     </ul>
                 </li>
             </ul>

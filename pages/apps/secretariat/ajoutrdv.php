@@ -612,7 +612,7 @@ require('../PUBLIC/header.php');
                                                 <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssurance">
                                                     <option value="">-------- Choisir l'assurance --------</option>
                                                     <?php 
-                                                        $client = $bdd->prepare('SELECT * FROM clients WHERE status=?');
+                                                        $client = $bdd->prepare('SELECT * FROM assurances WHERE status=?');
                                                         $client -> execute([1]);
                                                         while ($clients = $client->fetch(PDO::FETCH_ASSOC))
                                                         {
