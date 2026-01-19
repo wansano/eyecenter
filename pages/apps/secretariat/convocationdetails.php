@@ -220,13 +220,29 @@ if (isset($_POST['transmettre'])) {
             // Avis médical (operation=8) : ne pas passer par la caisse
             $bypassCaisseAfterTransmit = ((int)operation((int)$motifrdv_post) === 8);
 
+            $affecterPar = (int)($_SESSION['auth'] ?? 0);
+            $hasAffecterPar = false;
+            if (function_exists('dbTableHasColumn')) {
+                $hasAffecterPar = dbTableHasColumn($bdd, 'affectations', 'affecter_par');
+            }
+
             // insertion dans affectations
             if ($bypassCaisseAfterTransmit) {
-                $stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, id_rdv, status, montant, taux, type_paiement) VALUES (?, ?, ?, ?, 1, 0, 0, 0)');
-                $stmt->execute([(int)$id_patient_post, (int)$id_service_post, (int)$motifrdv_post, $rdv_post]);
+                if ($hasAffecterPar && $affecterPar > 0) {
+                    $stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, id_rdv, affecter_par, status, montant, taux, type_paiement) VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0)');
+                    $stmt->execute([(int)$id_patient_post, (int)$id_service_post, (int)$motifrdv_post, $rdv_post, $affecterPar]);
+                } else {
+                    $stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, id_rdv, status, montant, taux, type_paiement) VALUES (?, ?, ?, ?, 1, 0, 0, 0)');
+                    $stmt->execute([(int)$id_patient_post, (int)$id_service_post, (int)$motifrdv_post, $rdv_post]);
+                }
             } else {
-                $stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, id_rdv) VALUES (?, ?, ?, ?)');
-                $stmt->execute([(int)$id_patient_post, (int)$id_service_post, (int)$motifrdv_post, $rdv_post]);
+                if ($hasAffecterPar && $affecterPar > 0) {
+                    $stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, id_rdv, affecter_par) VALUES (?, ?, ?, ?, ?)');
+                    $stmt->execute([(int)$id_patient_post, (int)$id_service_post, (int)$motifrdv_post, $rdv_post, $affecterPar]);
+                } else {
+                    $stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, id_rdv) VALUES (?, ?, ?, ?)');
+                    $stmt->execute([(int)$id_patient_post, (int)$id_service_post, (int)$motifrdv_post, $rdv_post]);
+                }
             }
 
             // mise à jour du rdv

@@ -27,6 +27,17 @@ try {
         exit;
     }
 
+    // Dimanche : pas de prise de RDV
+    $jourSemaine = (int)date('N', strtotime($date)); // 1=lundi..7=dimanche
+    if ($jourSemaine === 7) {
+        if ($format === 'simple') {
+            echo json_encode([]);
+        } else {
+            echo json_encode(['success'=>false,'message'=>'Pas de rendez-vous le dimanche','creneaux'=>[]]);
+        }
+        exit;
+    }
+
     // Créneaux déjà occupés pour ce médecin ce jour-là
     $query = "SELECT TIME(prochain_rdv) AS h FROM dmd_rendez_vous WHERE traitant = ? AND DATE(prochain_rdv) = ?";
     $params = [$medecinId, $date];
@@ -42,20 +53,26 @@ try {
     $pris = $stmt->fetchAll(PDO::FETCH_COLUMN);
     $occ = array_flip($pris ?: []);
 
-    // Génération d'une grille de créneaux (modifiable selon vos besoins)
-    $plages = [
-        ['08:30:00','08:45:00'], ['08:45:00','09:00:00'], ['09:00:00','09:15:00'],
-        ['09:15:00','09:30:00'], ['09:30:00','09:45:00'], ['09:45:00','10:00:00'], 
-        ['10:00:00','10:15:00'], ['10:15:00','10:30:00'], ['10:30:00','10:45:00'], 
-        ['10:45:00','11:00:00'], ['11:00:00','11:15:00'], ['11:15:00','11:30:00'], 
-        ['11:30:00','11:45:00'], ['11:45:00','12:00:00'], ['12:00:00','12:15:00'], 
-        ['12:15:00','12:30:00'], ['12:30:00','12:45:00'], ['12:45:00','13:00:00'], 
-                                 ['14:00:00','14:15:00'], ['14:15:00','14:30:00'], 
-        ['14:30:00','14:45:00'], ['14:45:00','15:00:00'], ['15:00:00','15:15:00'], 
-        ['15:15:00','15:30:00'], ['15:30:00','15:45:00'], ['15:45:00','16:00:00'], 
-        ['16:00:00','16:15:00'], ['16:15:00','16:30:00'], ['16:30:00','16:45:00']
-    ];
-
+    // Créneaux disponibles configurés par le médecin (hebdomadaire)
+    // Table: creneaux_medecins (jour_semaine: 1=lundi..6=samedi)
+    $plages = [];
+    try {
+        $stmtCfg = $bdd->prepare('SELECT heure FROM creneaux_medecins WHERE id_medecin = ? AND jour_semaine = ? AND actif = 1 ORDER BY heure');
+        $stmtCfg->execute([$medecinId, $jourSemaine]);
+        $heures = $stmtCfg->fetchAll(PDO::FETCH_COLUMN);
+        if (!empty($heures)) {
+            foreach ($heures as $h) {
+                // On garde la structure [debut, fin] pour compat (fin non utilisée ici)
+                $hh = (string)$h;
+                if (strlen($hh) === 5) $hh .= ':00';
+                $plages[] = [$hh, $hh];
+            }
+        }
+    } catch (Throwable $e) {
+        // Si la table n'existe pas encore ou autre erreur SQL, on revient à la grille par défaut
+        $plages = [];
+    }
+    
     $libres = [];
     foreach ($plages as $p) {
         $start = $p[0];

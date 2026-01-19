@@ -43,11 +43,10 @@ include('../public/header.php');
                                         </tr>
                                     </thead>
                                     <tbody>
-                                    <?php                                    
-                                    if ($types == 7) {
+                                    <?php 
                                         try {
-                                            $stmt = $bdd->prepare('SELECT * FROM affectations WHERE status IN (1, 2, 6, 99, 7, 8, 9) ORDER BY id_affectation');
-                                            $stmt->execute();
+                                            $stmt = $bdd->prepare('SELECT * FROM affectations WHERE status IN (1, 2, 6, 99, 7, 8, 9) AND affecter_par = ? ORDER BY id_affectation');
+                                            $stmt->execute([$id_user]);
                                             while ($donnees1 = $stmt->fetch(PDO::FETCH_ASSOC)) {                                                
                                                 $status = $donnees1['status'];
                                                 $patientInfo = getPatientInfo($donnees1['id_patient']);
@@ -70,16 +69,16 @@ include('../public/header.php');
                                                     <td>';
                                                 
                                                 if ($status == 6 ) {
-                                                    echo '<button class="btn btn-sm btn-danger">paiement en attente</button>';
+                                                    echo '<button class="btn btn-sm btn-danger">à la caisse</button>';
                                                 }
                                                  elseif ($status == 2) {
-                                                    echo '<button class="btn btn-sm btn-info">accepté en attente</button>';
+                                                    echo '<button class="btn btn-sm btn-info">en traitement</button>';
                                                 } elseif ($status == 1) {
-                                                    echo '<button class="btn btn-sm btn-warning">payé en attente</button>';
+                                                    echo '<button class="btn btn-sm btn-warning">à payer</button>';
                                                 } elseif ($status == 99) {
-                                                    echo '<button class="btn btn-sm btn-dark">est à rembourser</button>';
+                                                    echo '<button class="btn btn-sm btn-dark">en remboursement</button>';
                                                 } elseif ($status == 7 || $status == 8 || $status == 9) {
-                                                    echo '<button class="btn btn-sm btn-dark">en chirurgie</button>';
+                                                    echo '<button class="btn btn-sm btn-dark">au bloc</button>';
                                                 }                                                
                                                 echo '</td></tr>';
                                             }
@@ -92,7 +91,6 @@ include('../public/header.php');
                                                 Veuillez contacter l\'administrateur système si le problème persiste.
                                             </div>';
                                         }
-                                    }
                                     ?>
                                     </tbody>
                                 </table>

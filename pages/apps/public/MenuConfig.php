@@ -191,6 +191,12 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Gestion Créneaux</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="creneaux.php?rdp=' . $user_data['type'] . '">Mes créneaux</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Realisations</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="mesrealisations.php?rdp=' . $user_data['type'] . '">Mes réalisations</a></li>
@@ -211,6 +217,12 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle" href="#">Documentation</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Gestion Créneaux</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="creneaux.php?rdp=' . $user_data['type'] . '">Mes créneaux</a></li>
             </ul>
         </li>
         <li class="dropdown">
@@ -257,6 +269,12 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle" href="#">Documentation</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle" href="#">Gestion Créneaux</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="creneaux.php?rdp=' . $user_data['type'] . '">Mes créneaux</a></li>
             </ul>
         </li>
         <li class="dropdown">

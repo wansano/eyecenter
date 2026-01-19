@@ -449,7 +449,7 @@ require('../PUBLIC/header.php');
                 <div class="col-md-12">
                     <section class="card">
                         <div class="card-body">
-                            <div class="d-flex justify-content-end mb-3">
+                            <div class="d-flex justify-content-start mb-3">
                                 <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#verificationRdvModal">
                                     <i class="fa fa-search"></i> Vérifier un RDV
                                 </button>

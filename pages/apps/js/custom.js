@@ -316,8 +316,37 @@ function updateQTE() {
 }
 
 // Génère les créneaux de 30min entre 08:00 et 18:00
+    function isSundayDate(dateStr) {
+        if (!dateStr) return false;
+        // dateStr attendu: YYYY-MM-DD
+        var d = new Date(dateStr + 'T00:00:00');
+        if (isNaN(d.getTime())) return false;
+        return d.getDay() === 0; // 0 = dimanche
+    }
+
     function genererCreneaux(date, medecinId, rdvExclu) {
         if (!date || !medecinId) return;
+
+        // Exclure le dimanche côté UI (le backend renvoie aussi vide en sécurité)
+        if (isSundayDate(date)) {
+            var selectSunday = document.getElementById('creneauSelect');
+            if (selectSunday) {
+                selectSunday.innerHTML = '<option value="">Pas de rendez-vous le dimanche</option>';
+                selectSunday.disabled = true;
+            }
+
+            var dateInputSunday = document.getElementById('dateRdvInput');
+            if (dateInputSunday && typeof dateInputSunday.setCustomValidity === 'function') {
+                dateInputSunday.setCustomValidity("Le dimanche n'est pas disponible. Choisissez une autre date.");
+                try { dateInputSunday.reportValidity(); } catch (e) { /* noop */ }
+            }
+            return;
+        } else {
+            var dateInputOk = document.getElementById('dateRdvInput');
+            if (dateInputOk && typeof dateInputOk.setCustomValidity === 'function') {
+                dateInputOk.setCustomValidity('');
+            }
+        }
         
         // Construire l'URL avec les paramètres
         var url = '../public/getCreneaux.php?date=' + encodeURIComponent(date) + '&medecin=' + encodeURIComponent(medecinId) + '&format=simple';
@@ -420,6 +449,20 @@ function updateQTE() {
         var medecin = medecinSelect.value;
         var date = dateInput.value;
 
+        if (date && isSundayDate(date)) {
+            if (typeof dateInput.setCustomValidity === 'function') {
+                dateInput.setCustomValidity("Le dimanche n'est pas disponible. Choisissez une autre date.");
+                try { dateInput.reportValidity(); } catch (e) { /* noop */ }
+            }
+            creneauSelect.innerHTML = '<option value="">Pas de rendez-vous le dimanche</option>';
+            creneauSelect.disabled = true;
+            return;
+        } else {
+            if (typeof dateInput.setCustomValidity === 'function') {
+                dateInput.setCustomValidity('');
+            }
+        }
+
         if (date && medecin) {
             genererCreneaux(date, medecin, rdvExclu);
         } else {
@@ -445,6 +488,7 @@ function updateQTE() {
         }
 
         dateInput.addEventListener('change', updateCreneaux);
+        dateInput.addEventListener('input', updateCreneaux);
         medecinSelect.addEventListener('change', updateCreneaux);
         
         // Initialiser si médecin et date déjà sélectionnés
@@ -466,6 +510,24 @@ function updateQTE() {
             let d = new Date();
             d.setDate(d.getDate() + 1); // Demain
             input.min = d.toISOString().split("T")[0];
+
+            // Validation immédiate: interdit dimanche même en saisie manuelle
+            function validateNoSunday() {
+                if (isSundayDate(input.value)) {
+                    if (typeof input.setCustomValidity === 'function') {
+                        input.setCustomValidity("Le dimanche n'est pas disponible. Choisissez une autre date.");
+                        try { input.reportValidity(); } catch (e) { /* noop */ }
+                    }
+                } else {
+                    if (typeof input.setCustomValidity === 'function') {
+                        input.setCustomValidity('');
+                    }
+                }
+            }
+
+            input.addEventListener('change', validateNoSunday);
+            input.addEventListener('input', validateNoSunday);
+            validateNoSunday();
         }
     });
 

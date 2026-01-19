@@ -132,6 +132,12 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
 
     $id_patient = (string)$id_patient;
 
+    $affecterPar = (int)($_SESSION['auth'] ?? 0);
+    $hasAffecterPar = false;
+    if (function_exists('dbTableHasColumn')) {
+        $hasAffecterPar = dbTableHasColumn($bdd, 'affectations', 'affecter_par');
+    }
+
     // Le traitement réellement affecté est celui stocké dans affectations.type (souvent motif_id)
     $traitementId = (int)($post['motif_id'] ?? 0);
     if ($traitementId <= 0) {
@@ -206,12 +212,22 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
 
         // Réforme: avis médical (operation=8) => pas de caisse, visible médecin directement
         if ($op === 8) {
-            $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES(?, ?, ?, 1, 0, 0, 0)');
-            $req->execute([$id_patient, $model, $traitementId]);
+            if ($hasAffecterPar && $affecterPar > 0) {
+                $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, affecter_par, status, montant, taux, type_paiement) VALUES(?, ?, ?, ?, 1, 0, 0, 0)');
+                $req->execute([$id_patient, $model, $traitementId, $affecterPar]);
+            } else {
+                $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES(?, ?, ?, 1, 0, 0, 0)');
+                $req->execute([$id_patient, $model, $traitementId]);
+            }
             $state['bypassCaisse'] = 1;
         } else {
-            $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
-            $req->execute([$id_patient, $model, $traitementId]);
+            if ($hasAffecterPar && $affecterPar > 0) {
+                $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, affecter_par) VALUES(?,?,?,?)');
+                $req->execute([$id_patient, $model, $traitementId, $affecterPar]);
+            } else {
+                $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
+                $req->execute([$id_patient, $model, $traitementId]);
+            }
         }
 
         $state['errors'] = 2;
@@ -418,13 +434,29 @@ include('../PUBLIC/header.php');
                                 $model = isset($tRow['id_organigramme']) ? (int)$tRow['id_organigramme'] : 0;
                                 $op = isset($tRow['operation']) ? (int)$tRow['operation'] : 0;
 
+                                $affecterParLegacy = (int)($_SESSION['auth'] ?? 0);
+                                $hasAffecterParLegacy = false;
+                                if (function_exists('dbTableHasColumn')) {
+                                    $hasAffecterParLegacy = dbTableHasColumn($bdd, 'affectations', 'affecter_par');
+                                }
+
                                 if ($op === 8) {
-                                    $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES(?, ?, ?, 1, 0, 0, 0)');
-                                    $req->execute([$id_patient, $model, $traitementIdLegacy]);
+                                    if ($hasAffecterParLegacy && $affecterParLegacy > 0) {
+                                        $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, affecter_par, status, montant, taux, type_paiement) VALUES(?, ?, ?, ?, 1, 0, 0, 0)');
+                                        $req->execute([$id_patient, $model, $traitementIdLegacy, $affecterParLegacy]);
+                                    } else {
+                                        $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES(?, ?, ?, 1, 0, 0, 0)');
+                                        $req->execute([$id_patient, $model, $traitementIdLegacy]);
+                                    }
                                     $bypassCaisseLegacy = 1;
                                 } else {
-                                    $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
-                                    $req->execute([$id_patient, $model, $traitementIdLegacy]);
+                                    if ($hasAffecterParLegacy && $affecterParLegacy > 0) {
+                                        $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, affecter_par) VALUES(?,?,?,?)');
+                                        $req->execute([$id_patient, $model, $traitementIdLegacy, $affecterParLegacy]);
+                                    } else {
+                                        $req = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type) VALUES(?,?,?)');
+                                        $req->execute([$id_patient, $model, $traitementIdLegacy]);
+                                    }
                                     $bypassCaisseLegacy = 0;
                                 }
 

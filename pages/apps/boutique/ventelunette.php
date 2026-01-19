@@ -73,8 +73,17 @@ function createAffectationForVente(PDO $bdd, int $patientId, int $userId): int {
 	if ($idService <= 0 || $idType <= 0) return 0;
 
 	try {
-		$stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES (?, ?, ?, 1, 0, 0, 0)');
-		$stmt->execute([$patientId, $idService, $idType]);
+		$hasAffecterPar = true;
+		if (function_exists('dbTableHasColumn')) {
+			$hasAffecterPar = dbTableHasColumn($bdd, 'affectations', 'affecter_par');
+		}
+		if ($hasAffecterPar) {
+			$stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, affecter_par, status, montant, taux, type_paiement) VALUES (?, ?, ?, ?, 1, 0, 0, 0)');
+			$stmt->execute([$patientId, $idService, $idType, $userId]);
+		} else {
+			$stmt = $bdd->prepare('INSERT INTO affectations (id_patient, id_service, type, status, montant, taux, type_paiement) VALUES (?, ?, ?, 1, 0, 0, 0)');
+			$stmt->execute([$patientId, $idService, $idType]);
+		}
 		return (int)$bdd->lastInsertId();
 	} catch (Throwable $e) {
 		error_log('[ventelunette] createAffectationForVente: ' . $e->getMessage());
