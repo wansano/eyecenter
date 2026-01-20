@@ -89,11 +89,11 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label class="col-form-label">Departement concerné</label>
-                                <select name="service" class="form-control populate" id="tcServiceSelect" onchange="tcUpdateMotifs(this)">
+                                <select name="service" class="form-control populate" id="tcServiceSelect" onchange="tcUpdateMotifs(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' >
                                     <option value=""> ------ Choisir ----- </option>
                                     <?php
-                                    $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?, ?)');
-                                    $coll->execute([1, 2, 3, 4, 14]);
+                                    $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?)');
+                                    $coll->execute([1, 2, 3, 4]);
                                     while ($services = $coll->fetch(PDO::FETCH_ASSOC)) {
                                         echo '<option value="' . htmlspecialchars($services['id_organigramme'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($services['celulle'], ENT_QUOTES, 'UTF-8') . '</option>';
                                     }
@@ -104,7 +104,7 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                         <div class="col-md-3">
                             <div class="form-group">
                                 <label class="col-form-label">Motif de présence</label>
-                                <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" required>
+                                <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
                                     <option value=""> ------ Choisir un service ----- </option>
                                 </select>
                                 <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="">

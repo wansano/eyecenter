@@ -96,12 +96,12 @@ if (isset($_POST['ajouter'])) {
             $bdd->beginTransaction();
 
             // Vérification de l'existence du patient
-            $req1 = $bdd->prepare('SELECT id_patient FROM patients WHERE phone = ? AND profession = ? AND sexe = ? AND adresse = ?');
+            $req1 = $bdd->prepare('SELECT id_patient FROM patients WHERE profession = ? AND sexe = ? AND adresse = ?, carteAdhesion = ?');
             $req1->execute([
-                $_POST['phone'], 
                 $_POST['profession'], 
                 $_POST['sexe'], 
-                $_POST['adresse']
+                $_POST['adresse'],
+                $_POST['carteAdhesion']
             ]);
 
             if ($data = $req1->fetch()) {
@@ -113,7 +113,7 @@ if (isset($_POST['ajouter'])) {
                 $responsable = !empty($_POST['responsable']) ? $_POST['responsable'] : null;
                 $entrepriseAssurance = $assure ? $_POST['entrepriseAssurance'] : 0;
 
-                $req = $bdd->prepare('INSERT INTO patients (nom_patient, sexe, profession, age, adresse, phone, responsable, assure, assurance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $req = $bdd->prepare('INSERT INTO patients (nom_patient, sexe, profession, age, adresse, phone, responsable, assure, assurance, carteAdhesion, tauxPrisecharge, dateExpiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $req->execute([
                     $_POST['nom_patient'], 
                     $_POST['sexe'], 
@@ -123,7 +123,10 @@ if (isset($_POST['ajouter'])) {
                     $_POST['phone'], 
                     $responsable,
                     $assure, 
-                    $entrepriseAssurance
+                    $entrepriseAssurance,
+                    $_POST['carteAdhesion'],
+                    $_POST['tauxPrisecharge'],
+                    $_POST['dateExpiration']
                 ]);
 
                 $errors = 2;
@@ -264,12 +267,13 @@ require('../PUBLIC/header.php');
                                         </div>
                                     </div>
                                 </div>
-                                <div class="row form-group pb-3" id="assuranceField" style="display:none;">
-                                    <div class="col-md-4">
+                                <div id="assuranceField" style="display:none;">
+                                    <div class="row form-group pb-3">
+                                        <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="col-form-label" for="formGroupExampleInput">Assureur</label>
-                                            <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssurance">
-                                                <option value="">-------- Choisir l'assurance --------</option>
+                                            <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssurance" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' >
+                                                <option value="">-------- Choisir l'assureur --------</option>
                                                 <?php 
                                                     $client = $bdd->prepare('SELECT * FROM assurances WHERE status= ?');
                                                     $client -> execute([1]);
@@ -282,9 +286,27 @@ require('../PUBLIC/header.php');
                                             </select>
                                         </div>
                                     </div>
+                                    <div class="col-md-2">
+                                        <div class="form-group">
+                                            <label class="col-form-label" for="formGroupExampleInput">N° Carte d'adhesion</label>
+                                            <input type="text" class="form-control" name="carteAdhesion" id="formGroupExampleInput" value="<?php echo isset($_POST['carteAdhesion']) ? htmlspecialchars($_POST['carteAdhesion']) : ''; ?>" placeholder="">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="form-group">
+                                            <label class="col-form-label" for="formGroupExampleInput">Taux de prise en charge %</label>
+                                            <input type="number" class="form-control" name="tauxPrisecharge" step="10" min="0" max="100" id="formGroupExampleInput" value="<?php echo isset($_POST['tauxPrisecharge']) ? htmlspecialchars($_POST['tauxPrisecharge']) : ''; ?>" placeholder="">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="form-group">
+                                            <label class="col-form-label" for="formGroupExampleInput">Date expiration carte</label>
+                                            <input type="date" class="form-control" name="dateExpiration" id="formGroupExampleInput" value="<?php echo isset($_POST['dateExpiration']) ? htmlspecialchars($_POST['dateExpiration']) : ''; ?>" placeholder="">
+                                        </div>
+                                    </div>
                                 </div>
                                 <footer class="card-footer text-end">
-                                    <button class="btn btn-primary" type="submit" name="ajouter">Ajouter le patient</button>
+                                    <button class="btn btn-primary" type="submit" name="ajouter">Ajouter</button>
                                 </footer>
                             </form>
                         </div>

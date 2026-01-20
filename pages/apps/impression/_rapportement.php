@@ -54,7 +54,7 @@ $pdf->Ln(2);
 $pdf->SetFont('CenturyGothic','B',10);
 $pdf->Cell(0,8,pdf_text_compat('Dr '.traitant($donnees3['traitant'])),0,0,'C');
 if ($donnees3['pathologie'] != NULL) {
-   $pdf->Image(realpath('../documents/photo/'.$donnees3['pathologie']),175,52,27,32);
+   $pdf->Image(realpath('../documents/photo/'.$donnees3['pathologie']),165,52,35,32);
 }
 // Positionnement du code-barres en bas de page
 $pageHeight = $pdf->GetPageHeight();

@@ -176,9 +176,10 @@ include('../PUBLIC/header.php');
                               <tbody> 
                       <?php
                           try {
-                              $stmt = $bdd->prepare('SELECT a.*, p.age as patient_age, t.operation as traitement_operation
+                            $stmt = $bdd->prepare('SELECT a.*, p.age as patient_age, t.operation as traitement_operation
                                 FROM affectations a JOIN patients p ON a.id_patient = p.id_patient
-                                JOIN traitements t ON a.type = t.id_type WHERE t.id_organigramme IN (1,2,3,4) AND a.status IN (1,2)
+                                JOIN traitements t ON a.type = t.id_type
+                                WHERE (t.id_organigramme IN (1,2,3,4) OR t.operation = 7) AND a.status IN (1,2)
                                 ORDER BY a.id_affectation');
                               $stmt->execute();
                               
