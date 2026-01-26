@@ -4,6 +4,70 @@ require('../PUBLIC/fonction.php');
 session_start();
 $existe = 0;
 
+function tc_findConsultationTraitement(PDO $bdd): array {
+    try {
+        $st = $bdd->prepare("SELECT id_type, id_organigramme FROM traitements WHERE LOWER(nom_type) LIKE '%consult%' ORDER BY id_type ASC LIMIT 1");
+        $st->execute();
+        $row = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+        return [
+            'id_type' => (int)($row['id_type'] ?? 0),
+            'id_organigramme' => (int)($row['id_organigramme'] ?? 0),
+        ];
+    } catch (Throwable $e) {
+        return ['id_type' => 0, 'id_organigramme' => 0];
+    }
+}
+
+function tc_findOphtalmologieServiceId(PDO $bdd): int {
+    try {
+        $st = $bdd->prepare("SELECT id_organigramme FROM organigramme WHERE LOWER(celulle) LIKE '%opht%' ORDER BY id_organigramme ASC LIMIT 1");
+        $st->execute();
+        return (int)($st->fetchColumn() ?: 0);
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+function tc_patientHasConsultationPayment(PDO $bdd, string $idPatient, int $consultTypeId): bool {
+    if ($consultTypeId <= 0) return false;
+    try {
+        $st = $bdd->prepare(
+            'SELECT 1
+             FROM paiements p
+             INNER JOIN affectations a ON a.id_affectation = p.id_affectation
+             WHERE a.id_patient = ? AND a.type = ? AND COALESCE(p.montant_paye, 0) > 0
+             LIMIT 1'
+        );
+        $st->execute([$idPatient, $consultTypeId]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function tc_patientLastAffectationDate(PDO $bdd, string $idPatient): ?DateTime {
+    try {
+        $st = $bdd->prepare('SELECT date FROM affectations WHERE id_patient = ? ORDER BY date DESC LIMIT 1');
+        $st->execute([$idPatient]);
+        $d = $st->fetchColumn();
+        if (!$d) return null;
+        return new DateTime((string)$d);
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function tc_patientHasFutureRdvForTraitement(PDO $bdd, string $idPatient, int $traitementId): bool {
+    if ($traitementId <= 0) return false;
+    try {
+        $st = $bdd->prepare('SELECT 1 FROM dmd_rendez_vous WHERE id_patient = ? AND motif = ? AND DATE(prochain_rdv) >= CURDATE() AND status IN (0,1,2) LIMIT 1');
+        $st->execute([$idPatient, $traitementId]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
     $id_patient = (string)$id_patient;
 
@@ -15,6 +79,11 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
     $minutesRestantes = (int)($state['minutesRestantes'] ?? 0);
     $selectedType = $state['selectedType'] ?? null;
     $bypassCaisse = (int)($state['bypassCaisse'] ?? 0);
+    $needsConsultation = (int)($state['needsConsultation'] ?? 0);
+    $proposeConsultation = (int)($state['proposeConsultation'] ?? 0);
+    $consultationTypeId = (int)($state['consultationTypeId'] ?? 0);
+    $consultationServiceId = (int)($state['consultationServiceId'] ?? 0);
+    $lockConsultation = ($needsConsultation === 1 && $consultationTypeId > 0);
 
     $patient = nom_patient($id_patient);
     $telephone = return_phone($id_patient);
@@ -66,6 +135,24 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                     </div>
                 <?php endif; ?>
 
+                <?php if ($needsConsultation === 1): ?>
+                    <div class="alert alert-info">
+                        <strong>Consultation obligatoire</strong><br>
+                        <li>Ce patient n'a encore jamais effectué une consultation.</li>
+                        <li>Vous devez d'abord l'affecter en <strong>consultation</strong> avant tout autre traitement.</li>
+                    </div>
+                <?php elseif ($proposeConsultation === 1): ?>
+                    <div class="alert alert-info">
+                        <strong>Suggestion</strong><br>
+                        <li>Ce patient n'a pas été vu depuis plus de <strong>3 mois</strong> et n'a pas de rendez-vous pour ce traitement.</li>
+                        <li>Il est recommandé de l'affecter d'abord en <strong>consultation</strong>.</li>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="tcSetConsultationAndSubmit(<?php echo (int)$consultationServiceId; ?>, <?php echo (int)$consultationTypeId; ?>)">Affecter en consultation</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="tcContinueDespiteSuggestion()">Continuer quand même</button>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <div class="table-responsive mb-3">
                     <table class="table table-bordered mb-0">
                         <tbody>
@@ -85,29 +172,43 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                 <form id="tcAffectationForm" class="form-horizontal" novalidate="novalidate" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>?id_patient=<?php echo urlencode($id_patient); ?>" enctype="multipart/form-data">
                     <input type="hidden" name="ajax_transmettre" value="1">
                     <input type="hidden" name="id_patient" value="<?php echo htmlspecialchars($id_patient, ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="tc_force_continue" id="tcForceContinue" value="0">
+                    <?php if ($lockConsultation): ?>
+                        <input type="hidden" name="service" value="<?php echo (int)$consultationServiceId; ?>">
+                        <input type="hidden" name="type" value="<?php echo (int)$consultationTypeId; ?>">
+                        <input type="hidden" name="motif_id" value="<?php echo (int)$consultationTypeId; ?>">
+                    <?php endif; ?>
                     <div class="row form-group pb-3">
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label class="col-form-label">Departement concerné</label>
-                                <select name="service" class="form-control populate" id="tcServiceSelect" onchange="tcUpdateMotifs(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' >
-                                    <option value=""> ------ Choisir ----- </option>
-                                    <?php
-                                    $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?)');
-                                    $coll->execute([1, 2, 3, 4]);
-                                    while ($services = $coll->fetch(PDO::FETCH_ASSOC)) {
-                                        echo '<option value="' . htmlspecialchars($services['id_organigramme'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($services['celulle'], ENT_QUOTES, 'UTF-8') . '</option>';
-                                    }
-                                    ?>
-                                </select>
+                                <?php if ($lockConsultation): ?>
+                                    <input type="text" class="form-control" value="Ophtalmologie" disabled>
+                                <?php else: ?>
+                                    <select name="service" class="form-control populate" id="tcServiceSelect" onchange="tcUpdateMotifs(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' >
+                                        <option value=""> ------ Choisir ----- </option>
+                                        <?php
+                                        $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?)');
+                                        $coll->execute([1, 2, 3, 4]);
+                                        while ($services = $coll->fetch(PDO::FETCH_ASSOC)) {
+                                            echo '<option value="' . htmlspecialchars($services['id_organigramme'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($services['celulle'], ENT_QUOTES, 'UTF-8') . '</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
                                 <label class="col-form-label">Motif de présence</label>
-                                <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
-                                    <option value=""> ------ Choisir un service ----- </option>
-                                </select>
-                                <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="">
+                                <?php if ($lockConsultation): ?>
+                                    <input type="text" class="form-control" value="Consultation" disabled>
+                                <?php else: ?>
+                                    <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                        <option value=""> ------ Choisir un service ----- </option>
+                                    </select>
+                                    <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="">
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -132,6 +233,18 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
 
     $id_patient = (string)$id_patient;
 
+    $forceContinue = (int)($post['tc_force_continue'] ?? 0);
+
+    // Consultation (pour règles métier)
+    $consult = tc_findConsultationTraitement($bdd);
+    $consultTypeId = (int)($consult['id_type'] ?? 0);
+    $consultServiceId = (int)($consult['id_organigramme'] ?? 0);
+    if ($consultServiceId <= 0) {
+        $consultServiceId = tc_findOphtalmologieServiceId($bdd);
+    }
+    $state['consultationTypeId'] = $consultTypeId;
+    $state['consultationServiceId'] = $consultServiceId;
+
     $affecterPar = (int)($_SESSION['auth'] ?? 0);
     $hasAffecterPar = false;
     if (function_exists('dbTableHasColumn')) {
@@ -142,6 +255,32 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
     $traitementId = (int)($post['motif_id'] ?? 0);
     if ($traitementId <= 0) {
         $traitementId = (int)($post['type'] ?? 0);
+    }
+
+    // Règle 1: nouveau patient (pas de paiement consultation) => consultation obligatoire
+    if ($consultTypeId > 0 && $traitementId > 0 && $traitementId !== $consultTypeId) {
+        $hasConsultPay = tc_patientHasConsultationPayment($bdd, $id_patient, $consultTypeId);
+        if (!$hasConsultPay) {
+            // Forcer consultation (pas de choix possible)
+            $state['needsConsultation'] = 1;
+            $traitementId = $consultTypeId;
+        }
+    }
+
+    // Règle 2: >3 mois sans affectation + pas de RDV pour ce traitement => proposer consultation
+    if ($consultTypeId > 0 && $traitementId > 0 && $traitementId !== $consultTypeId) {
+        $lastAff = tc_patientLastAffectationDate($bdd, $id_patient);
+        if ($lastAff instanceof DateTime) {
+            $now = new DateTime();
+            $days = (int)$now->diff($lastAff)->days;
+            if ($days >= 90) {
+                $hasRdv = tc_patientHasFutureRdvForTraitement($bdd, $id_patient, $traitementId);
+                if (!$hasRdv && $forceContinue !== 1) {
+                    $state['proposeConsultation'] = 1;
+                    return $state;
+                }
+            }
+        }
     }
 
     try {
@@ -205,6 +344,11 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
         $model = isset($tRow['id_organigramme']) ? (int)$tRow['id_organigramme'] : 0;
         $op = isset($tRow['operation']) ? (int)$tRow['operation'] : 0;
 
+        // Si on a forcé une consultation, forcer aussi le service ophtalmologie si connu
+        if (!empty($state['needsConsultation']) && $consultServiceId > 0) {
+            $model = $consultServiceId;
+        }
+
         if ($model <= 0) {
             $state['errors'] = 4;
             return $state;
@@ -255,7 +399,24 @@ if (isset($_GET['ajax_modal'])) {
             echo json_encode(['success' => false, 'message' => 'Les numéro dossier saisie n\'existe pas dans le système.']);
             exit;
         }
-        $html = tc_buildAffectationHtml($bdd, $id_patient_ajax, ['errors' => 0, 'existe' => 0]);
+        // Pré-charger la consultation si c'est la première fois (pas de paiement consultation)
+        $consult = tc_findConsultationTraitement($bdd);
+        $consultTypeId = (int)($consult['id_type'] ?? 0);
+        $consultServiceId = (int)($consult['id_organigramme'] ?? 0);
+        if ($consultServiceId <= 0) {
+            $consultServiceId = tc_findOphtalmologieServiceId($bdd);
+        }
+        $needsConsultation = 0;
+        if ($consultTypeId > 0) {
+            $needsConsultation = tc_patientHasConsultationPayment($bdd, (string)$id_patient_ajax, $consultTypeId) ? 0 : 1;
+        }
+        $html = tc_buildAffectationHtml($bdd, $id_patient_ajax, [
+            'errors' => 0,
+            'existe' => 0,
+            'needsConsultation' => $needsConsultation,
+            'consultationTypeId' => $consultTypeId,
+            'consultationServiceId' => $consultServiceId,
+        ]);
         echo json_encode(['success' => true, 'html' => $html]);
         exit;
     } catch (Throwable $e) {
@@ -701,7 +862,8 @@ document.addEventListener('DOMContentLoaded', function () {
         hideModalAlert();
 
         const motifSelect = affForm.querySelector('select[name="type"]');
-        const motifValue = motifSelect ? motifSelect.value : '';
+        const motifHidden = affForm.querySelector('input[name="type"]');
+        const motifValue = motifSelect ? motifSelect.value : (motifHidden ? motifHidden.value : '');
         if (!motifValue) {
             showModalAlert('Veuillez sélectionner un motif de présence avant de continuer.', 'warning');
             return;
@@ -810,6 +972,65 @@ function tcOnMotifChange(motifSelectEl) {
         }
 
         if (hidden) hidden.value = motifId;
+    } catch (e) {
+        // noop
+    }
+}
+
+// Proposer/forcer consultation depuis les alertes du modal
+function tcContinueDespiteSuggestion() {
+    try {
+        var modalBody = document.getElementById('tcModalBody');
+        var form = modalBody ? modalBody.querySelector('#tcAffectationForm') : null;
+        if (!form) return;
+        var force = form.querySelector('#tcForceContinue');
+        if (force) force.value = '1';
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    } catch (e) {
+        // noop
+    }
+}
+
+function tcSetConsultationAndSubmit(serviceId, motifId) {
+    try {
+        var modalBody = document.getElementById('tcModalBody');
+        var form = modalBody ? modalBody.querySelector('#tcAffectationForm') : null;
+        if (!form) return;
+
+        var serviceSelect = form.querySelector('#tcServiceSelect');
+        var motifSelect = form.querySelector('#tcMotifSelect');
+        var hiddenMotif = form.querySelector('#tcHiddenMotifId');
+        if (!serviceSelect || !motifSelect || !hiddenMotif) return;
+
+        if (serviceId) {
+            serviceSelect.value = String(serviceId);
+            tcUpdateMotifs(serviceSelect);
+        }
+
+        // Attendre que les motifs soient chargés puis sélectionner
+        var tries = 0;
+        var maxTries = 30;
+        var timer = setInterval(function () {
+            tries++;
+            var opt = motifSelect.querySelector('option[value="' + String(motifId) + '"]');
+            if (opt) {
+                motifSelect.value = String(motifId);
+                hiddenMotif.value = String(motifId);
+                clearInterval(timer);
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
+            }
+            if (tries >= maxTries) {
+                clearInterval(timer);
+            }
+        }, 150);
     } catch (e) {
         // noop
     }

@@ -3,6 +3,55 @@ session_start();
 require_once('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 
+if (!function_exists('appec_isCardValid')) {
+    function appec_isCardValid($dateStr): bool
+    {
+        $s = trim((string)$dateStr);
+        if ($s === '') return false;
+
+        $tryFormats = ['Y-m-d', 'd/m/Y', 'm/d/Y', 'Y/m/d', 'd-m-Y', 'm-d-Y'];
+        $dt = null;
+        foreach ($tryFormats as $fmt) {
+            $tmp = DateTimeImmutable::createFromFormat($fmt, $s);
+            if ($tmp instanceof DateTimeImmutable) {
+                $errors = DateTimeImmutable::getLastErrors();
+                if (empty($errors['warning_count']) && empty($errors['error_count'])) {
+                    $dt = $tmp;
+                    break;
+                }
+            }
+        }
+
+        if (!$dt) {
+            $ts = strtotime($s);
+            if ($ts === false) return false;
+            $dt = (new DateTimeImmutable())->setTimestamp($ts);
+        }
+
+        $expiryEnd = $dt->setTime(23, 59, 59);
+        return $expiryEnd >= new DateTimeImmutable();
+    }
+}
+
+if (!function_exists('appec_pickRowKey')) {
+    function appec_pickRowKey(array $row, array $candidates): ?string
+    {
+        if (empty($row)) return null;
+
+        $map = [];
+        foreach (array_keys($row) as $k) {
+            $map[strtolower((string)$k)] = (string)$k;
+        }
+        foreach ($candidates as $candidate) {
+            $needle = strtolower((string)$candidate);
+            if (isset($map[$needle])) {
+                return $map[$needle];
+            }
+        }
+        return null;
+    }
+}
+
 class PatientManager {
     private $bdd;
     private $errors = [];
@@ -51,28 +100,84 @@ class PatientManager {
                 return false;
             }
 
-            $stmt = $this->bdd->prepare('
-                UPDATE patients 
-                SET nom_patient = :nom,
-                    adresse = :id_quartier,
-                    phone = :phone,
-                    responsable = :responsable,
-                    profession = :profession,
-                    age = :age,
-                    sexe = :sexe 
-                WHERE id_patient = :id
-            ');
+            $assurePost = isset($data['estAssure']) && (string)$data['estAssure'] === '1';
+            $entrepriseAssurance = (int)($data['entrepriseAssurance'] ?? 0);
+            $carteAdhesion = trim((string)($data['carteAdhesion'] ?? ''));
+            $dateExpiration = (string)($data['dateExpiration'] ?? '');
+            $tauxPrisecharge = trim((string)($data['tauxPrisecharge'] ?? ''));
+            // Tolérer la virgule décimale (ex: 10,50) mais stocker en format compatible input type=number / MySQL
+            $tauxPrisecharge = str_replace(',', '.', $tauxPrisecharge);
+            if ($tauxPrisecharge !== '') {
+                $tauxPrisecharge = rtrim($tauxPrisecharge, "% \t\n\r\0\x0B");
+            }
 
-            $success = $stmt->execute([
-                ':nom' => trim(strip_tags($data['nom_patient'])),
-                ':id_quartier' => trim(strip_tags($data['adresse'])),
-                ':phone' => trim(strip_tags($data['phone'])),
-                ':responsable' => trim(strip_tags($data['responsable'])),
-                ':profession' => trim(strip_tags($data['profession'])),
-                ':age' => $data['age'],
-                ':sexe' => $data['sexe'],
-                ':id' => $data['modif_in']
-            ]);
+            if ($assurePost && function_exists('dbTableHasColumn') && dbTableHasColumn($this->bdd, 'patients', 'assurance')) {
+                if ($entrepriseAssurance <= 0) {
+                    $this->errors[] = "Veuillez choisir l'assureur.";
+                    return false;
+                }
+            }
+
+            // Valider le taux uniquement si une colonne taux existe
+            $tauxCol = null;
+            if (function_exists('dbTableHasColumn')) {
+                foreach (['TauxPrisecharge', 'tauxPrisecharge', 'tauxPriseCharge', 'taux_prisecharge', 'taux_priseCharge', 'taux_prise_en_charge', 'tauxPriseEnCharge'] as $col) {
+                    if (dbTableHasColumn($this->bdd, 'patients', $col)) {
+                        $tauxCol = $col;
+                        break;
+                    }
+                }
+            }
+            if ($assurePost && $tauxCol && $tauxPrisecharge !== '' && (!is_numeric($tauxPrisecharge) || (float)$tauxPrisecharge < 0 || (float)$tauxPrisecharge > 100)) {
+                $this->errors[] = "Le taux de prise en charge doit être compris entre 0 et 100.";
+                return false;
+            }
+
+            $setParts = [
+                'nom_patient = :nom',
+                'adresse = :id_quartier',
+                'phone = :phone',
+                'responsable = :responsable',
+                'profession = :profession',
+                'age = :age',
+                'sexe = :sexe',
+            ];
+            $params = [
+                ':nom' => trim(strip_tags((string)$data['nom_patient'])),
+                ':id_quartier' => trim(strip_tags((string)$data['adresse'])),
+                ':phone' => trim(strip_tags((string)$data['phone'])),
+                ':responsable' => trim(strip_tags((string)($data['responsable'] ?? ''))),
+                ':profession' => trim(strip_tags((string)($data['profession'] ?? ''))),
+                ':age' => (string)($data['age'] ?? ''),
+                ':sexe' => (string)($data['sexe'] ?? ''),
+                ':id' => (int)($data['modif_in'] ?? 0),
+            ];
+
+            // Champs assurance (si présents en base)
+            if (function_exists('dbTableHasColumn') && dbTableHasColumn($this->bdd, 'patients', 'assure')) {
+                $setParts[] = 'assure = :assure';
+                $params[':assure'] = $assurePost ? 1 : 0;
+            }
+            if (function_exists('dbTableHasColumn') && dbTableHasColumn($this->bdd, 'patients', 'assurance')) {
+                $setParts[] = 'assurance = :assurance';
+                $params[':assurance'] = $assurePost ? $entrepriseAssurance : 0;
+            }
+            if (function_exists('dbTableHasColumn') && dbTableHasColumn($this->bdd, 'patients', 'carteAdhesion')) {
+                $setParts[] = 'carteAdhesion = :carteAdhesion';
+                $params[':carteAdhesion'] = $assurePost ? $carteAdhesion : null;
+            }
+            if (function_exists('dbTableHasColumn') && dbTableHasColumn($this->bdd, 'patients', 'dateExpiration')) {
+                $setParts[] = 'dateExpiration = :dateExpiration';
+                $params[':dateExpiration'] = ($assurePost && $dateExpiration !== '') ? $dateExpiration : null;
+            }
+            if ($tauxCol) {
+                $setParts[] = $tauxCol . ' = :tauxPrisecharge';
+                $params[':tauxPrisecharge'] = ($assurePost && $tauxPrisecharge !== '') ? $tauxPrisecharge : null;
+            }
+
+            $sql = 'UPDATE patients SET ' . implode(",\n\t\t\t\t", $setParts) . ' WHERE id_patient = :id';
+            $stmt = $this->bdd->prepare($sql);
+            $success = $stmt->execute($params);
 
             if ($success) {
                 $this->success = true;
@@ -124,6 +229,56 @@ if (isset($_GET['ajax_patient'])) {
             $adresseLabel = (string)$adresseRaw;
         }
 
+        // Infos assurance (si colonnes présentes)
+        $assureFlag = null;
+        $assuranceId = null;
+        $assuranceNom = '';
+        $carteAdhesion = null;
+        $tauxPrise = null;
+        $dateExpiration = null;
+        $carteValide = null;
+
+        if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assure')) {
+            $assureFlag = (int)($p['assure'] ?? 0);
+
+            if (dbTableHasColumn($bdd, 'patients', 'assurance')) {
+                $assuranceId = (int)($p['assurance'] ?? 0);
+            }
+            if (dbTableHasColumn($bdd, 'patients', 'carteAdhesion')) {
+                $carteAdhesion = (string)($p['carteAdhesion'] ?? '');
+            }
+
+            // Taux de prise en charge: lire directement la clé présente dans la ligne (important pour la casse)
+            $tauxKey = appec_pickRowKey($p, ['TauxPrisecharge', 'tauxPrisecharge', 'tauxPriseCharge', 'taux_prisecharge', 'taux_priseCharge', 'taux_prise_en_charge', 'tauxPriseEnCharge']);
+            if ($tauxKey) {
+                $rawTaux = (string)($p[$tauxKey] ?? '');
+                $rawTaux = trim($rawTaux);
+                // Normaliser: retirer un éventuel symbole % déjà saisi
+                $rawTaux = rtrim($rawTaux, "% \t\n\r\0\x0B");
+                $tauxPrise = $rawTaux;
+            }
+            if (dbTableHasColumn($bdd, 'patients', 'dateExpiration')) {
+                $dateExpiration = (string)($p['dateExpiration'] ?? '');
+                $carteValide = ($assureFlag === 1) ? appec_isCardValid($dateExpiration) : false;
+            }
+
+            if ($assureFlag === 1 && $assuranceId && $assuranceId > 0 && function_exists('dbTableHasColumn')) {
+                $assuranceIdCol = null;
+                if (dbTableHasColumn($bdd, 'assurances', 'id_assurance')) {
+                    $assuranceIdCol = 'id_assurance';
+                } elseif (dbTableHasColumn($bdd, 'assurances', 'd_assurance')) {
+                    $assuranceIdCol = 'd_assurance';
+                } elseif (dbTableHasColumn($bdd, 'assurances', 'id')) {
+                    $assuranceIdCol = 'id';
+                }
+                if ($assuranceIdCol) {
+                    $stAss = $bdd->prepare('SELECT assurance FROM assurances WHERE ' . $assuranceIdCol . ' = ? LIMIT 1');
+                    $stAss->execute([$assuranceId]);
+                    $assuranceNom = (string)($stAss->fetchColumn() ?: '');
+                }
+            }
+        }
+
         echo json_encode([
             'success' => true,
             'patient' => [
@@ -135,6 +290,13 @@ if (isset($_GET['ajax_patient'])) {
                 'phone' => (string)($p['phone'] ?? ''),
                 'responsable' => (string)($p['responsable'] ?? ''),
                 'adresse' => $adresseLabel,
+                'assure' => $assureFlag,
+                'assurance_id' => $assuranceId,
+                'assurance_nom' => $assuranceNom,
+                'carteAdhesion' => $carteAdhesion,
+                'tauxPrisecharge' => $tauxPrise,
+                'dateExpiration' => $dateExpiration,
+                'carte_valide' => $carteValide,
             ],
         ]);
         exit;
@@ -224,6 +386,31 @@ include('../PUBLIC/header.php');
                             // Formulaire d'édition si patient trouvé
                             if ($patientData) {
 
+                                $assureCurrent = 0;
+                                $assuranceCurrent = 0;
+                                $carteCurrent = '';
+                                $dateExpCurrent = '';
+                                $tauxCurrent = '';
+                                $tauxColCurrent = null;
+                                if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assure')) {
+                                    $assureCurrent = (int)($patientData['assure'] ?? 0);
+                                }
+                                if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assurance')) {
+                                    $assuranceCurrent = (int)($patientData['assurance'] ?? 0);
+                                }
+                                if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'carteAdhesion')) {
+                                    $carteCurrent = (string)($patientData['carteAdhesion'] ?? '');
+                                }
+                                if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'dateExpiration')) {
+                                    $dateExpCurrent = (string)($patientData['dateExpiration'] ?? '');
+                                }
+                                $tauxKeyCurrent = appec_pickRowKey($patientData, ['TauxPrisecharge', 'tauxPrisecharge', 'tauxPriseCharge', 'taux_prisecharge', 'taux_priseCharge', 'taux_prise_en_charge', 'tauxPriseEnCharge']);
+                                if ($tauxKeyCurrent) {
+                                    $tauxCurrent = (string)($patientData[$tauxKeyCurrent] ?? '');
+                                    $tauxCurrent = trim(rtrim($tauxCurrent, "% \t\n\r\0\x0B"));
+                                    $tauxCurrent = str_replace(',', '.', $tauxCurrent);
+                                }
+
                                 // Déduire la ville à partir du quartier (adresse) actuel
                                 $quartierIdActuel = 0;
                                 $villeIdActuelle = 0;
@@ -268,6 +455,70 @@ include('../PUBLIC/header.php');
                                             </div>
                                         </div>
                                     </div>
+
+                                <div class="row form-group pb-3">
+                                    <div class="col-md-2">
+                                        <div class="form-group">
+                                            <input type="radio" name="estAssure" value="0" onclick="toggleAssuranceFieldEdit()" <?php echo ($assureCurrent === 1) ? '' : 'checked'; ?>> non assuré
+                                        </div>
+                                    </div>
+                                    <div class="col-md-10">
+                                        <div class="form-group">
+                                            <input type="radio" name="estAssure" value="1" onclick="toggleAssuranceFieldEdit()" <?php echo ($assureCurrent === 1) ? 'checked' : ''; ?>> assuré
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="assuranceFieldEdit" style="display: <?php echo ($assureCurrent === 1) ? 'block' : 'none'; ?>;">
+                                    <div class="row form-group pb-3">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Assureur</label>
+                                                <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssuranceEdit" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }'>
+                                                    <option value="">-------- Choisir l'assureur --------</option>
+                                                    <?php
+                                                    $assuranceIdCol = null;
+                                                    if (function_exists('dbTableHasColumn')) {
+                                                        if (dbTableHasColumn($bdd, 'assurances', 'id_assurance')) {
+                                                            $assuranceIdCol = 'id_assurance';
+                                                        } elseif (dbTableHasColumn($bdd, 'assurances', 'd_assurance')) {
+                                                            $assuranceIdCol = 'd_assurance';
+                                                        } elseif (dbTableHasColumn($bdd, 'assurances', 'id')) {
+                                                            $assuranceIdCol = 'id';
+                                                        }
+                                                    }
+                                                    $stAssList = $bdd->prepare('SELECT * FROM assurances WHERE status = ?');
+                                                    $stAssList->execute([1]);
+                                                    while ($assRow = $stAssList->fetch(PDO::FETCH_ASSOC)) {
+                                                        $optId = $assuranceIdCol ? (int)($assRow[$assuranceIdCol] ?? 0) : (int)($assRow['id_assurance'] ?? 0);
+                                                        $optLabel = (string)($assRow['assurance'] ?? '');
+                                                        $selected = ($optId > 0 && $optId === (int)$assuranceCurrent) ? ' selected' : '';
+                                                        echo '<option value="' . (int)$optId . '"' . $selected . '>' . htmlspecialchars($optLabel) . '</option>';
+                                                    }
+                                                    ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="col-form-label">N° Carte d'adhesion</label>
+                                                <input type="text" class="form-control" name="carteAdhesion" value="<?php echo htmlspecialchars($carteCurrent); ?>" placeholder="">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Taux de prise en charge %</label>
+                                                <input type="number" class="form-control" name="tauxPrisecharge" step="0.01" min="0" max="100" value="<?php echo htmlspecialchars($tauxCurrent); ?>" placeholder="">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="col-form-label">Date expiration carte</label>
+                                                <input type="date" class="form-control" name="dateExpiration" value="<?php echo htmlspecialchars($dateExpCurrent); ?>" placeholder="">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                     <div class="row form-group pb-3">
                                         <div class="col-md-2">
@@ -350,6 +601,18 @@ include('../PUBLIC/header.php');
         <?php include('../PUBLIC/footer.php'); ?>
     </section>
 
+    <script>
+        function toggleAssuranceFieldEdit() {
+            var wrap = document.getElementById('assuranceFieldEdit');
+            var estAssureRadio = document.querySelector('input[name="estAssure"]:checked');
+            var estAssure = estAssureRadio ? estAssureRadio.value : '0';
+            if (wrap) wrap.style.display = estAssure === '1' ? 'block' : 'none';
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            try { toggleAssuranceFieldEdit(); } catch (e) {}
+        });
+    </script>
+
     <!-- Modal: Résultat recherche patient -->
     <div class="modal fade" id="patientInfoModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -372,6 +635,9 @@ include('../PUBLIC/header.php');
                                 <tr><th>Téléphone</th><td id="pi_phone">-</td></tr>
                                 <tr><th>Adresse</th><td id="pi_adresse">-</td></tr>
                                 <tr><th>Responsable</th><td id="pi_resp">-</td></tr>
+                                <tr id="pi_row_assureur"><th>Assureur</th><td id="pi_assureur">-</td></tr>
+                                <tr id="pi_row_carte"><th>Carte d’adhésion</th><td id="pi_carte">-</td></tr>
+                                <tr id="pi_row_date_exp"><th>Date d’expiration</th><td id="pi_date_exp">-</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -411,6 +677,22 @@ include('../PUBLIC/header.php');
             if (el) el.textContent = value ? String(value) : '-';
         }
 
+        function setRowVisible(rowId, visible) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            row.style.display = visible ? '' : 'none';
+        }
+
+            function setYesNo(id, boolVal, whenNull) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (boolVal === null || boolVal === undefined) {
+                    el.textContent = whenNull || '-';
+                    return;
+                }
+                el.textContent = boolVal ? 'Oui' : 'Non';
+            }
+
         async function fetchPatient(id) {
             const url = 'editpatient.php?ajax_patient=1&id=' + encodeURIComponent(id);
             const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -437,6 +719,13 @@ include('../PUBLIC/header.php');
             setText('pi_phone', '-');
             setText('pi_adresse', '-');
             setText('pi_resp', '-');
+            setText('pi_assure', '-');
+            setText('pi_assureur', '-');
+            setText('pi_carte', '-');
+            setText('pi_date_exp', '-');
+            setRowVisible('pi_row_assureur', false);
+            setRowVisible('pi_row_carte', false);
+            setRowVisible('pi_row_date_exp', false);
 
             try {
                 const data = await fetchPatient(id);
@@ -452,6 +741,26 @@ include('../PUBLIC/header.php');
                     setText('pi_phone', p.phone);
                     setText('pi_adresse', p.adresse);
                     setText('pi_resp', p.responsable);
+
+                    // Assurance
+                    if (p.assure === null || p.assure === undefined) {
+                        setText('pi_assure', '-');
+                        setText('pi_assureur', '-');
+                        setText('pi_carte', '-');
+                        setText('pi_date_exp', '-');
+                        setRowVisible('pi_row_assureur', false);
+                        setRowVisible('pi_row_carte', false);
+                        setRowVisible('pi_row_date_exp', false);
+                    } else {
+                        const isAssure = String(p.assure) === '1';
+                        setText('pi_assure', isAssure ? 'Oui' : 'Non');
+                        setText('pi_assureur', (p.assurance_nom || (p.assurance_id ? ('#' + p.assurance_id) : '')) || '-');
+                        setText('pi_carte', p.carteAdhesion || '-');
+                        setText('pi_date_exp', p.dateExpiration || '-');
+                        setRowVisible('pi_row_assureur', isAssure);
+                        setRowVisible('pi_row_carte', isAssure);
+                        setRowVisible('pi_row_date_exp', isAssure);
+                    }
 
                     if (btnEdit) {
                         const pid = p.id_patient || id;

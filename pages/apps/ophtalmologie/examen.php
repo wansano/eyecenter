@@ -86,7 +86,7 @@ include('../public/header.php');
                                             echo '
                                                 <div class="alert alert-success">
                                                 <strong>'.model($type).' de '.nom_patient($id_patient).' validé avec succès </strong> <br/> 
-                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="traitementdata.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
+                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="#" onclick="openPrintExamenModal(); return false;">imprimer les données</a></li>
                                                 </div>
                                                 ';
                                                     }
@@ -94,7 +94,7 @@ include('../public/header.php');
                                             echo '
                                                 <div class="alert alert-danger">
                                                     <strong>Erreur de validation de '.model($type).'  de '.nom_patient($id_patient).'</strong> <br/>  
-                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="traitementdata.php?affectation='.$affectation.'" target="_blank">d\'imprimer les données</a></li>
+                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="#" onclick="openPrintExamenModal(); return false;">d\'imprimer les données</a></li>
                                                 </div>
                                                 ';}
                                     ?>
@@ -163,7 +163,7 @@ include('../public/header.php');
                                 </div>
                             
                             <footer class="card-footer text-end">
-                                <button class="btn btn-primary" type="submit" name="ajouter">Valider l'examen</button>
+                                <button class="btn btn-primary" type="submit" name="ajouter" id="btnValiderExamen" <?php echo ($errors==4 ? 'disabled' : ''); ?>>Valider l'examen</button>
                             </footer>
                         </form>
                         <!-- Fin du formulaire de consultation -->
@@ -173,11 +173,53 @@ include('../public/header.php');
         <!-- end: page -->
     </section>
     </div>
-        <?php if ($errors == 4 && $affectation): ?>
-            <script>
-                window.onload = function() {
-                    window.open('imprimer_examen.php?affectation=<?= $affectation ?>', '_blank');
-                };
-            </script>
-        <?php endif; ?>
+
+        <!-- Modal impression examen -->
+        <div class="modal fade" id="printExamenModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Impression de l'examen</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="height: 75vh;">
+                        <iframe id="printExamenIframe" src="" style="width:100%;height:100%;border:0;"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" onclick="printExamenIframeNow()">Imprimer</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function openPrintExamenModal() {
+                try {
+                    var modalEl = document.getElementById('printExamenModal');
+                    var iframe = document.getElementById('printExamenIframe');
+                    if (!modalEl || !iframe || !window.bootstrap) return;
+                    iframe.src = 'imprimer_examen.php?affectation=<?php echo (int)$affectation; ?>&autoprint=0';
+                    var instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                    instance.show();
+                } catch (e) {}
+            }
+
+            function printExamenIframeNow() {
+                try {
+                    var iframe = document.getElementById('printExamenIframe');
+                    if (!iframe || !iframe.contentWindow) return;
+                    iframe.contentWindow.print();
+                } catch (e) {}
+            }
+
+            <?php if ($errors == 4 && $affectation): ?>
+            document.addEventListener('DOMContentLoaded', function () {
+                // Ouvre l'aperçu dans un modal après succès, sans lancer l'impression
+                openPrintExamenModal();
+                var btn = document.getElementById('btnValiderExamen');
+                if (btn) btn.disabled = true;
+            });
+            <?php endif; ?>
+        </script>
     <?php include('../public/footer.php');?>

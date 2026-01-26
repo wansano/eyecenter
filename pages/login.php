@@ -111,8 +111,7 @@ if (isset($_POST['goverif'])) {
 		<!-- Mobile Metas -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-		<!-- Web Fonts  -->
-		<link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700,800%7COpen+Sans:400,700,800" rel="stylesheet" type="text/css">
+        <!-- Web Fonts (local-first: éviter les timeouts réseau sans Internet) -->
 
 		<link rel="icon" href="img/logo.jpg" type="image/jpg">
 		<!-- Vendor CSS -->
@@ -124,6 +123,7 @@ if (isset($_POST['goverif'])) {
 		<link rel="stylesheet" href="vendor/bootstrap-datepicker/css/bootstrap-datepicker3.css" />
 		<link rel="stylesheet" href="vendor/owl.carousel/assets/owl.carousel.css" />
 		<link rel="stylesheet" href="vendor/owl.carousel/assets/owl.theme.default.css" />
+        <link rel="stylesheet" href="css/fonts.css?v=<?php echo (int)@filemtime(__DIR__ . '/css/fonts.css'); ?>" />
 
 		<!-- Theme CSS -->
 		<link rel="stylesheet" href="css/theme.css" />

@@ -154,16 +154,16 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Edition</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="findingproduct.php">Verifier une monture</a></li>
+                <li><a class="nav-link" href="findingproduct.php">Délivrer une vente </a></li>
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Reimpression document</a></li>
             </ul>
         </li>
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Gestion monture</a>
+            <a class="nav-link dropdown-toggle" href="#">Gestion</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="listedesmonturesdisponibles.php">Liste des montures</a></li>
-                <li><a class="nav-link" href="addproduct.php">Ajouter une monture</a></li>
-                <li><a class="nav-link" href="editproduct.php">Modifier une monture</a></li>
+                <li><a class="nav-link" href="listedesmarques.php">Liste des marques</a></li>
+                <li><a class="nav-link" href="listedeslentilles.php">Liste des lentilles</a></li>
             </ul>
         </li>
         <li class="dropdown">
@@ -214,8 +214,9 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Documentation</a>
+            <a class="nav-link dropdown-toggle" href="#">Edition</a>
             <ul class="dropdown-menu">
+                <li><a class="nav-link" href="modificationtraitement.php">Modifier un traitement</a></li>
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression</a></li>
             </ul>
         </li>
@@ -243,8 +244,9 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Documentation</a>
+            <a class="nav-link dropdown-toggle" href="#">Edition</a>
             <ul class="dropdown-menu">
+                <li><a class="nav-link" href="modificationtraitement.php">Modifier un traitement</a></li>
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression</a></li>
             </ul>
         </li>
@@ -266,8 +268,9 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Documentation</a>
+            <a class="nav-link dropdown-toggle" href="#">Edition</a>
             <ul class="dropdown-menu">
+                <li><a class="nav-link" href="modificationtraitement.php">Modifier un traitement</a></li>
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Réimpression</a></li>
             </ul>
         </li>
@@ -308,8 +311,6 @@ class MenuConfig {
                     <ul class="dropdown-menu">
                         <li><a class="nav-link" href="demandetopay.php">Depense validé</a></li>
                         <li><a class="nav-link" href="remboursement.php">Rembourssement</a></li>
-                        <li><a class="nav-link" href="listesituationdesfournisseurs.php">Fournisseur</a></li>
-                        <li><a class="nav-link" href="listesituationdescollaborateurs.php">Collaborateur</a></li>
                         <li><a class="nav-link" href="listepaiementannuler.php">Paiements annulés</a></li>
                     </ul>
                 </li>
@@ -371,15 +372,7 @@ class MenuConfig {
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Fournisseurs</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addsupplyer.php">Ajouter fournisseur</a></li>
                         <li><a class="nav-link" href="listedesfournisseurs.php">Liste des fournisseurs</a></li>
-                    </ul>
-                </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Collaborateurs</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addcollaborator.php">Ajouter collaborateur</a></li>
-                        <li><a class="nav-link" href="listedescollaborateurs.php?commande=delivred">Liste collaborateurs</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">

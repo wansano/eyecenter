@@ -26,7 +26,7 @@ include('../PUBLIC/header.php');
                                     <form class="form-horizontal" novalidate="novalidate" method="POST" action="'.htmlspecialchars($_SERVER['PHP_SELF']).'?id_patient='.$_GET['id_patient'].'" enctype="multipart/form-data">
                                     <input type="hidden" value="'.$_GET['id_patient'].'"> 
                                         <div class="row form-group pb-3">
-                                            <div class="col-md-4">
+                                            <div class="col-md-2">
                                                 <div class="form-group">
                                                     <label class="col-form-label" for="formGroupExampleInput">Departement concerné</label>
                                                     <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs()">
@@ -44,7 +44,7 @@ include('../PUBLIC/header.php');
                                                     </select>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-2">
                                                 <div class="form-group">
                                                     <label class="col-form-label" for="formGroupExampleInput">Prestation</label>
                                                     <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice()" data-plugin-selectTwo data-plugin-options="{ "minimumInputLength": O }" required>
@@ -59,6 +59,12 @@ include('../PUBLIC/header.php');
                                                     <input type="text" class="form-control" id="productPrice" style="background-color:#64F584;" disabled>
                                                 </div>
                                             </div>
+										<div class="col-md-2">
+											<div class="form-group">
+												<label class="col-form-label" for="productPriceAssurance">Prix assurance en <?php echo $devise; ?></label>
+												<input type="text" class="form-control" id="productPriceAssurance" style="background-color:#F5E764;" disabled>
+											</div>
+										</div>
                                         </div>
                                     </form>
 							</section>

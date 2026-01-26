@@ -29,6 +29,7 @@
 		<script src="../vendor/datatables/extras/TableTools/pdfmake-0.1.32/pdfmake.min.js"></script>
 		<script src="../vendor/datatables/extras/TableTools/pdfmake-0.1.32/vfs_fonts.js"></script>
         <script src="../vendor/fullcalendar/index.global.min.js"></script>
+		<script src="../vendor/fullcalendar/locales/fr.global.js"></script>
         <script src="../vendor/isotope/isotope.js"></script>
 
 
@@ -36,8 +37,7 @@
 		<script src="../js/theme.js"></script>
 
 		<!-- Theme Custom -->
-		<script src="../js/custom.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/fr.js"></script>
+		<script src="../js/custom.js?v=<?php echo (int)@filemtime(__DIR__ . '/../js/custom.js'); ?>"></script>
 
 		<!-- Theme Initialization Files -->
 		<script src="../js/theme.init.js"></script>

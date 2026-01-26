@@ -4,17 +4,9 @@ require_once('../PUBLIC/fonction.php');
 session_start();
 
 $errors = 0;
-				$hasAffCol = true;
-				if (function_exists('dbTableHasColumn')) {
-					$hasAffCol = dbTableHasColumn($bdd, 'ventes_produits', 'id_affectation');
-				}
-				if ($hasAffCol) {
-					$req = $bdd->prepare('INSERT INTO ventes_produits (id_affectation, id_monture, id_lentille, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?,?)');
-					$req->execute([(int)$affectation, $produit, $categorie, $patient, $_SESSION['auth'], $prixmonture, $prixverre, $compte, $collaborateur]);
-				} else {
-					$req = $bdd->prepare('INSERT INTO ventes_produits (id_monture, id_lentille, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?)');
-					$req->execute([$produit, $categorie, $patient, $_SESSION['auth'], $prixmonture, $prixverre, $compte, $collaborateur]);
-				}
+
+// évite notices (utilisé plus bas)
+$existe = 0;
 // Devise (fallback)
 $devise = 'GNF';
 try {
@@ -213,8 +205,17 @@ if (isset($_POST['vendre'])) {
                     $acompte = floatval($acompteN);
                 }
                 // Enregistrement vente
-				$req = $bdd->prepare('INSERT INTO ventes_produits (id_affectation, id_monture, id_lentille, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?)');
-				$req->execute([,$produit, $categorie, $patient, $_SESSION['auth'], $prixmonture, $prixverre, $compte, $collaborateur]);
+				$hasAffCol = true;
+				if (function_exists('dbTableHasColumn')) {
+					$hasAffCol = dbTableHasColumn($bdd, 'ventes_produits', 'id_affectation');
+				}
+				if ($hasAffCol) {
+					$req = $bdd->prepare('INSERT INTO ventes_produits (id_affectation, id_monture, id_lentille, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?,?)');
+					$req->execute([(int)$affectation, $produit, $categorie, $patient, $_SESSION['auth'], $prixmonture, $prixverre, $compte, $collaborateur]);
+				} else {
+					$req = $bdd->prepare('INSERT INTO ventes_produits (id_monture, id_lentille, id_patient, id_caissier, prix_monture, prix_verre, compte, collaborateur) VALUES(?,?,?,?,?,?,?,?)');
+					$req->execute([$produit, $categorie, $patient, $_SESSION['auth'], $prixmonture, $prixverre, $compte, $collaborateur]);
+				}
 
 				// Mise à jour des stocks et débits (schéma montures/lentilles)
 				if ($idMarque > 0) {
@@ -252,9 +253,7 @@ if (isset($_POST['vendre'])) {
         }
     }
 }
-
 }
-
 include('../PUBLIC/header.php');
 ?>
 
@@ -349,11 +348,6 @@ include('../PUBLIC/header.php');
 						<?php if ($errors == 6): ?>
 							<div class="alert alert-success">
 								<strong>Succès paiement éffectué !</strong><br>
-								<li>
-									<button type="button" class="btn btn-success btn-sm" id="btnImprimerRecu" data-affectation="<?php echo (int)$affectationForReceipt; ?>">
-										<i class="fa fa-file-pdf-o"></i> Imprimer le reçu
-									</button>
-								</li>
 							</div>
 						<?php endif; ?>
 						<?php if ($existe == 3): ?>
@@ -459,6 +453,12 @@ include('../PUBLIC/header.php');
 								</div>
 							</div>
 							<footer class="card-footer text-end">
+								<button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+								<?php if ($errors == 6 && $affectationForReceipt > 0): ?>
+									<button type="button" class="btn btn-success" id="btnImprimerRecu" data-affectation="<?php echo (int)$affectationForReceipt; ?>">
+										<i class="fa fa-file-pdf-o"></i> Imprimer le reçu
+									</button>
+								<?php endif; ?>
 								<button class="btn btn-primary" type="submit" <?php echo ($errors == 6 ? 'disabled' : ''); ?>>Valider la vente</button>
 							</footer>
 						</form>
@@ -478,6 +478,10 @@ include('../PUBLIC/header.php');
 					</div>
 					<div class="modal-body" style="height:75vh;">
 						<iframe id="recuIframe" src="../caisse/imprimer_recu.php?affectation=<?php echo (int)$affectationForReceipt; ?>" style="width:100%;height:100%;border:0;"></iframe>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+						<button type="button" class="btn btn-primary" id="btnPrintRecuModal">Imprimer</button>
 					</div>
 				</div>
 			</div>
@@ -505,8 +509,8 @@ include('../PUBLIC/header.php');
 		<script>
 			document.addEventListener('DOMContentLoaded', function () {
 				var btn = document.getElementById('btnImprimerRecu');
-				if (!btn) return;
-				btn.addEventListener('click', function () {
+				if (btn) {
+					btn.addEventListener('click', function () {
 					try {
 						if (!window.bootstrap) return;
 						var el = document.getElementById('recuPaiementModal');
@@ -516,7 +520,22 @@ include('../PUBLIC/header.php');
 					} catch (e) {
 						// noop
 					}
-				});
+					});
+				}
+
+				var btnPrint = document.getElementById('btnPrintRecuModal');
+				if (btnPrint) {
+					btnPrint.addEventListener('click', function () {
+						try {
+							var iframe = document.getElementById('recuIframe');
+							if (!iframe || !iframe.contentWindow) return;
+							iframe.contentWindow.focus();
+							iframe.contentWindow.print();
+						} catch (e) {
+							// noop
+						}
+					});
+				}
 			});
 		</script>
 

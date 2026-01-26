@@ -19,8 +19,7 @@ if (!defined('APP_HEADER_INCLUDED')) {
 		<!-- Mobile Metas -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-		<!-- Web Fonts  -->
-		<link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700,800|Shadows+Into+Light" rel="stylesheet" type="text/css">
+		<!-- Web Fonts (local-first: éviter les timeouts réseau sans Internet) -->
 
 		<!-- Vendor CSS -->
 		<link rel="icon" href="../img/logo.jpg" type="image/jpg">
@@ -37,6 +36,7 @@ if (!defined('APP_HEADER_INCLUDED')) {
 		<link rel="stylesheet" href="../vendor/select2/css/select2.css" />
 		<link rel="stylesheet" href="../vendor/select2-bootstrap-theme/select2-bootstrap.min.css" />
 		<link rel="stylesheet" href="../vendor/datatables/media/css/dataTables.bootstrap5.css" />
+		<link rel="stylesheet" href="../css/fonts.css?v=<?php echo (int)@filemtime(__DIR__ . '/../css/fonts.css'); ?>" />
 		<!-- Theme CSS -->
 		<link rel="stylesheet" href="../css/theme.css" />
 

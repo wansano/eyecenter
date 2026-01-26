@@ -15,9 +15,9 @@ try {
 	if (is_string($dev) && trim($dev) !== '') {
 		$devise = trim($dev);
 	}
-} catch (Throwable $e) {
-	// noop
-}
+	} catch (Throwable $e) {
+		// noop
+	}
 
 // Déterminer le type "Vente lunettes" (même logique que ventelunette)
 $lunetteTypeId = 0;
@@ -68,32 +68,25 @@ if (!empty($_SESSION['flash_complete_vente_lunette_affectation'])) {
 	$success = 1;
 }
 
-// Compléter un paiement (en incrémentant montant_paye sur le même enregistrement)
+// Compléter un paiement (en AJOUTANT une nouvelle ligne dans paiements pour garder l'historique)
 if (isset($_POST['complete_payment'])) {
-	$idPaiement = isset($_POST['id_paiement']) ? (int)$_POST['id_paiement'] : 0;
+	$idAffectation = isset($_POST['id_affectation']) ? (int)$_POST['id_affectation'] : 0;
 	$newCompte = isset($_POST['compte']) ? (int)$_POST['compte'] : 0;
 	$montantAjoutN = str_replace([' ', ','], '', (string)($_POST['montant_ajout'] ?? '0'));
 	$montantAjout = (float)$montantAjoutN;
 
-	if ($idPaiement <= 0 || $montantAjout <= 0 || $newCompte <= 0) {
+	if ($idAffectation <= 0 || $montantAjout <= 0 || $newCompte <= 0) {
 		$errors = 1;
 	} else {
 		try {
 			$bdd->beginTransaction();
 			try {
-				$stmt = $bdd->prepare(
-					'SELECT p.id_paiement, p.code, p.id_affectation, p.montant, p.montant_paye, p.compte, p.patient,
-						a.type AS type_traitement
-					 FROM paiements p
-					 LEFT JOIN affectations a ON a.id_affectation = p.id_affectation
-					 WHERE p.id_paiement = ?
-					 LIMIT 1
-					 FOR UPDATE'
-				);
-				$stmt->execute([$idPaiement]);
-				$row = $stmt->fetch(PDO::FETCH_ASSOC);
-				if (!$row) {
-					throw new Exception('Paiement introuvable.');
+				// Verrouiller l'affectation + récupérer le montant total
+				$stAff = $bdd->prepare('SELECT id_affectation, type, montant, id_patient FROM affectations WHERE id_affectation = ? LIMIT 1 FOR UPDATE');
+				$stAff->execute([$idAffectation]);
+				$aff = $stAff->fetch(PDO::FETCH_ASSOC);
+				if (!$aff) {
+					throw new Exception('Affectation introuvable.');
 				}
 
 				// Sécurité minimale: utilisateur connecté
@@ -102,18 +95,20 @@ if (isset($_POST['complete_payment'])) {
 				}
 
 				// S'assurer que c'est bien une vente lunette
-				if ($lunetteTypeId > 0 && (int)($row['type_traitement'] ?? 0) !== $lunetteTypeId) {
+				if ($lunetteTypeId > 0 && (int)($aff['type'] ?? 0) !== $lunetteTypeId) {
 					throw new Exception('Cette affectation ne correspond pas à une vente de lunettes.');
 				}
 
-				$montantTotal = (float)($row['montant'] ?? 0);
-				$montantPaye = (float)($row['montant_paye'] ?? 0);
+				$montantTotal = (float)($aff['montant'] ?? 0);
 				if ($montantTotal <= 0) {
 					throw new Exception('Montant total invalide.');
 				}
-				if ($montantPaye < 0) {
-					$montantPaye = 0;
-				}
+
+				// Total déjà payé = somme de toutes les lignes de paiement
+				$stSum = $bdd->prepare('SELECT COALESCE(SUM(COALESCE(montant_paye,0)),0) FROM paiements WHERE id_affectation = ? FOR UPDATE');
+				$stSum->execute([$idAffectation]);
+				$montantPaye = (float)($stSum->fetchColumn() ?: 0);
+				if ($montantPaye < 0) $montantPaye = 0;
 
 				$reste = $montantTotal - $montantPaye;
 				if ($reste <= 0) {
@@ -123,46 +118,17 @@ if (isset($_POST['complete_payment'])) {
 					throw new Exception('Le montant saisi dépasse le reste à payer.');
 				}
 
-				$newPaye = $montantPaye + $montantAjout;
-				$newSolde = $montantTotal - $newPaye;
+				$newSolde = $montantTotal - ($montantPaye + $montantAjout);
 
-				$oldCompte = (int)($row['compte'] ?? 0);
-				if ($oldCompte <= 0) {
-					$oldCompte = $newCompte;
-				}
+				// Insérer une nouvelle ligne de paiement pour garder l'historique (datepaiement)
+				$code = genererNumeroPaiement();
+				$idPatient = (int)($aff['id_patient'] ?? 0);
+				$types = (int)($aff['type'] ?? 0);
+				$caissier = (int)($_SESSION['auth'] ?? 0);
 
-				// Verrouiller comptes si besoin (si le mode change, on transfère l'historique payé sur le nouveau compte)
-				if ($newCompte !== $oldCompte) {
-					$stAcc = $bdd->prepare('SELECT id_compte, debit FROM comptes WHERE id_compte IN (?, ?) FOR UPDATE');
-					$stAcc->execute([$oldCompte, $newCompte]);
-					$accRows = $stAcc->fetchAll(PDO::FETCH_ASSOC);
-					$map = [];
-					foreach ($accRows as $ar) {
-						$map[(int)$ar['id_compte']] = (float)($ar['debit'] ?? 0);
-					}
-					if (!array_key_exists($oldCompte, $map) || !array_key_exists($newCompte, $map)) {
-						throw new Exception('Compte(s) de règlement introuvable(s).');
-					}
-
-					// Transfert de l'ancien payé vers le nouveau compte
-					$oldDebit = $map[$oldCompte] - $montantPaye;
-					$newDebit = $map[$newCompte] + $montantPaye;
-					$bdd->prepare('UPDATE comptes SET debit = ? WHERE id_compte = ?')->execute([$oldDebit, $oldCompte]);
-					$bdd->prepare('UPDATE comptes SET debit = ? WHERE id_compte = ?')->execute([$newDebit, $newCompte]);
-				}
-
-				$hasSolde = false;
-				if (function_exists('dbTableHasColumn')) {
-					$hasSolde = dbTableHasColumn($bdd, 'paiements', 'solde');
-				}
-
-				if ($hasSolde) {
-					$upd = $bdd->prepare('UPDATE paiements SET montant_paye = ?, solde = ?, compte = ? WHERE id_paiement = ?');
-					$upd->execute([$newPaye, $newSolde, $newCompte, $idPaiement]);
-				} else {
-					$upd = $bdd->prepare('UPDATE paiements SET montant_paye = ?, compte = ? WHERE id_paiement = ?');
-					$upd->execute([$newPaye, $newCompte, $idPaiement]);
-				}
+				$ins = $bdd->prepare('INSERT INTO paiements (id_affectation, code, types, montant, montant_paye, compte, patient, caisse) VALUES (?,?,?,?,?,?,?,?)');
+				$ins->execute([$idAffectation, $code, $types, $montantTotal, $montantAjout, $newCompte, $idPatient, $caissier]);
+				$newPaiementId = (int)$bdd->lastInsertId();
 
 				// Créditer le compte du montant ajouté (sur le compte choisi)
 				$stOne = $bdd->prepare('SELECT debit FROM comptes WHERE id_compte = ? FOR UPDATE');
@@ -174,19 +140,16 @@ if (isset($_POST['complete_payment'])) {
 				$bdd->prepare('UPDATE comptes SET debit = ? WHERE id_compte = ?')->execute([(float)$debit + $montantAjout, $newCompte]);
 
 				// Si soldé, marquer l'affectation comme payée/traitée
-				$idAff = (int)($row['id_affectation'] ?? 0);
-				if ($idAff > 0 && $newSolde <= 0.00001) {
-					$bdd->prepare('UPDATE affectations SET status = 4 WHERE id_affectation = ?')->execute([$idAff]);
+				if ($newSolde <= 0.00001) {
+					$bdd->prepare('UPDATE affectations SET status = 4 WHERE id_affectation = ?')->execute([$idAffectation]);
 				}
-				// Garder cohérent avec l'affectation (reçu affiche type_paiement)
-				if ($idAff > 0) {
-					$bdd->prepare('UPDATE affectations SET type_paiement = ? WHERE id_affectation = ?')->execute([$newCompte, $idAff]);
-				}
+				// Garder cohérent avec l'affectation (certaines impressions utilisent encore type_paiement)
+				$bdd->prepare('UPDATE affectations SET type_paiement = ? WHERE id_affectation = ?')->execute([$newCompte, $idAffectation]);
 
 				$bdd->commit();
 
-				$_SESSION['flash_complete_vente_lunette_affectation'] = (int)($row['id_affectation'] ?? 0);
-				header('Location: venteslunettes_incompletes.php?open=1&affectation=' . (int)($row['id_affectation'] ?? 0));
+				$_SESSION['flash_complete_vente_lunette_affectation'] = (int)$idAffectation;
+				header('Location: venteslunettes_incompletes.php?open=1&affectation=' . (int)$idAffectation . '&paiement=' . (int)$newPaiementId);
 				exit;
 			} catch (Throwable $txe) {
 				$bdd->rollBack();
@@ -216,10 +179,19 @@ if ($lunetteTypeId > 0) {
 		$hasVpAff = dbTableHasColumn($bdd, 'ventes_produits', 'id_affectation');
 	}
 
+	// Agrégation des paiements par affectation: on veut SUM(montant_paye) et le dernier paiement pour l'affichage
 	$stmt = $bdd->prepare(
 		(
 			$hasVpAff
-				? 'SELECT p.id_paiement, p.code, p.id_affectation, p.montant, p.montant_paye, p.compte, p.patient, p.datepaiement,
+				? 'SELECT
+						a.id_affectation,
+						COALESCE(a.montant, 0) AS montant_total,
+						COALESCE(ps.total_paye, 0) AS total_paye,
+						pl.id_paiement,
+						pl.code,
+						pl.datepaiement,
+						pl.compte,
+						pl.patient,
 						pa.nom_patient,
 						a.date AS date_aff,
 						vp.id_vente,
@@ -229,26 +201,48 @@ if ($lunetteTypeId > 0) {
 						vp.prix_monture AS vente_prix_monture,
 						vp.prix_verre AS vente_prix_verre,
 						COALESCE(c.nom_compte, c.types) AS compte_label
-					FROM paiements p
-					INNER JOIN affectations a ON a.id_affectation = p.id_affectation
-					LEFT JOIN patients pa ON pa.id_patient = p.patient
-					LEFT JOIN ventes_produits vp ON vp.id_affectation = p.id_affectation
+					FROM affectations a
+					INNER JOIN (
+						SELECT id_affectation,
+							   SUM(COALESCE(montant_paye,0)) AS total_paye,
+							   MAX(id_paiement) AS last_paiement_id
+						FROM paiements
+						GROUP BY id_affectation
+					) ps ON ps.id_affectation = a.id_affectation
+					INNER JOIN paiements pl ON pl.id_paiement = ps.last_paiement_id
+					LEFT JOIN patients pa ON pa.id_patient = COALESCE(pl.patient, a.id_patient)
+					LEFT JOIN ventes_produits vp ON vp.id_affectation = a.id_affectation
 					LEFT JOIN montures m ON m.id_monture = vp.id_monture
 					LEFT JOIN marques ma ON ma.id_marque = m.id_marque
 					LEFT JOIN lentilles l ON l.id_lentille = vp.id_lentille
-					LEFT JOIN comptes c ON c.id_compte = p.compte
-					WHERE a.type = ? AND COALESCE(p.montant_paye, 0) < COALESCE(p.montant, 0)
-					ORDER BY p.id_paiement DESC'
-				: 'SELECT p.id_paiement, p.code, p.id_affectation, p.montant, p.montant_paye, p.compte, p.patient, p.datepaiement,
+					LEFT JOIN comptes c ON c.id_compte = pl.compte
+					WHERE a.type = ? AND COALESCE(ps.total_paye, 0) < COALESCE(a.montant, 0)
+					ORDER BY pl.id_paiement DESC'
+				: 'SELECT
+						a.id_affectation,
+						COALESCE(a.montant, 0) AS montant_total,
+						COALESCE(ps.total_paye, 0) AS total_paye,
+						pl.id_paiement,
+						pl.code,
+						pl.datepaiement,
+						pl.compte,
+						pl.patient,
 						pa.nom_patient,
 						a.date AS date_aff,
 						COALESCE(c.nom_compte, c.types) AS compte_label
-					FROM paiements p
-					INNER JOIN affectations a ON a.id_affectation = p.id_affectation
-					LEFT JOIN patients pa ON pa.id_patient = p.patient
-					LEFT JOIN comptes c ON c.id_compte = p.compte
-					WHERE a.type = ? AND COALESCE(p.montant_paye, 0) < COALESCE(p.montant, 0)
-					ORDER BY p.id_paiement DESC'
+					FROM affectations a
+					INNER JOIN (
+						SELECT id_affectation,
+							   SUM(COALESCE(montant_paye,0)) AS total_paye,
+							   MAX(id_paiement) AS last_paiement_id
+						FROM paiements
+						GROUP BY id_affectation
+					) ps ON ps.id_affectation = a.id_affectation
+					INNER JOIN paiements pl ON pl.id_paiement = ps.last_paiement_id
+					LEFT JOIN patients pa ON pa.id_patient = COALESCE(pl.patient, a.id_patient)
+					LEFT JOIN comptes c ON c.id_compte = pl.compte
+					WHERE a.type = ? AND COALESCE(ps.total_paye, 0) < COALESCE(a.montant, 0)
+					ORDER BY pl.id_paiement DESC'
 		)
 	);
 	$stmt->execute([$lunetteTypeId]);
@@ -294,18 +288,12 @@ include('../public/header.php');
 								} elseif ($successAffectation > 0) {
 									$affForReceipt = $successAffectation;
 								}
+								$paiementForReceipt = !empty($_GET['paiement']) ? (int)$_GET['paiement'] : 0;
 							?>
 
 							<?php if ($success): ?>
 								<div class="alert alert-success">
-									<strong>Paiement complété avec succès.</strong>
-									<?php if ($affForReceipt > 0): ?>
-										<div class="mt-2">
-											<button type="button" class="btn btn-success btn-sm" id="btnImprimerRecu" data-affectation="<?php echo (int)$affForReceipt; ?>">
-												<i class="fa fa-file-pdf-o"></i> Imprimer le reçu
-											</button>
-										</div>
-									<?php endif; ?>
+									<strong>Paiement effectué avec succès.</strong>
 								</div>
 							<?php endif; ?>
 
@@ -327,8 +315,8 @@ include('../public/header.php');
 									</thead>
 									<tbody>
 									<?php foreach ($rows as $r):
-										$montant = (float)($r['montant'] ?? 0);
-										$paye = (float)($r['montant_paye'] ?? 0);
+										$montant = (float)($r['montant_total'] ?? 0);
+										$paye = (float)($r['total_paye'] ?? 0);
 										$reste = max(0, $montant - $paye);
 										$codeMonture = (string)($r['code_monture'] ?? '');
 										$marqueNom = (string)($r['marque_nom'] ?? '');
@@ -354,7 +342,7 @@ include('../public/header.php');
 											<td>
 												<button
 													class="btn btn-primary btn-sm btnCompleter"
-													data-idpaiement="<?php echo (int)$r['id_paiement']; ?>"
+													data-idpaiement="<?php echo (int)($r['id_paiement'] ?? 0); ?>"
 													data-affectation="<?php echo (int)($r['id_affectation'] ?? 0); ?>"
 													data-montant="<?php echo h($montant); ?>"
 													data-paye="<?php echo h($paye); ?>"
@@ -407,6 +395,7 @@ include('../public/header.php');
 											<form method="POST" action="venteslunettes_incompletes.php" novalidate>
 												<input type="hidden" name="complete_payment" value="1">
 												<input type="hidden" name="id_paiement" id="inpIdPaiement" value="">
+												<input type="hidden" name="id_affectation" id="inpIdAffectation" value="">
 												<div class="row mb-3">
 													<div class="col-md-4 mb-3">
 														<label class="form-label">Montant à ajouter (<?php echo h($devise); ?>)</label>
@@ -442,7 +431,13 @@ include('../public/header.php');
 											<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 										</div>
 										<div class="modal-body" style="height:75vh;">
-											<iframe id="recuIframe" src="../caisse/imprimer_recu.php?affectation=<?php echo (int)$affForReceipt; ?>" style="width:100%;height:100%;border:0;"></iframe>
+											<iframe id="recuIframe" src="../caisse/imprimer_recu.php?affectation=<?php echo (int)$affForReceipt; ?><?php echo ($paiementForReceipt > 0 ? '&paiement=' . (int)$paiementForReceipt : ''); ?>" style="width:100%;height:100%;border:0;"></iframe>
+										</div>
+										<div class="modal-footer">
+											<button type="button" class="btn btn-primary" id="btnImprimerRecuModal">
+												<i class="fa fa-print"></i> Imprimer
+											</button>
+											<button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
 										</div>
 									</div>
 								</div>
@@ -472,6 +467,19 @@ include('../public/header.php');
 						if (!el) return;
 						var modal = window.bootstrap.Modal.getInstance(el) || new window.bootstrap.Modal(el);
 						modal.show();
+					} catch (e) {}
+				});
+			}
+
+			// Bouton imprimer dans le modal (imprime le contenu de l'iframe)
+			var btnPrintModal = document.getElementById('btnImprimerRecuModal');
+			if (btnPrintModal) {
+				btnPrintModal.addEventListener('click', function () {
+					try {
+						var iframe = document.getElementById('recuIframe');
+						if (!iframe || !iframe.contentWindow) return;
+						iframe.contentWindow.focus();
+						iframe.contentWindow.print();
 					} catch (e) {}
 				});
 			}
@@ -511,6 +519,7 @@ include('../public/header.php');
 				btn.addEventListener('click', function () {
 					try {
 						var idPaiement = this.getAttribute('data-idpaiement') || '';
+						var idAffectation = this.getAttribute('data-affectation') || '';
 						var aff = this.getAttribute('data-affectation') || '';
 						var montant = parseFloat(this.getAttribute('data-montant') || '0') || 0;
 						var paye = parseFloat(this.getAttribute('data-paye') || '0') || 0;
@@ -536,6 +545,8 @@ include('../public/header.php');
 						document.getElementById('lblPaye').textContent = formatNumber(paye) + ' <?php echo h($devise); ?>';
 						document.getElementById('lblReste').textContent = formatNumber(reste) + ' <?php echo h($devise); ?>';
 						document.getElementById('inpIdPaiement').value = idPaiement;
+						var inpAff = document.getElementById('inpIdAffectation');
+						if (inpAff) inpAff.value = idAffectation;
 						document.getElementById('inpMontantAjout').value = formatNumber(reste);
 						var compteSelect = document.getElementById('inpCompte');
 						if (compteSelect) {

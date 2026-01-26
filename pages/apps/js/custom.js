@@ -154,8 +154,11 @@
     const motifId = document.getElementById("motifSelect").value;
     console.log("Motif sélectionné :", motifId); // Vérifier l'ID sélectionné
 
+        const assurancePriceEl = document.getElementById("productPriceAssurance");
+
     if (!motifId) {
         document.getElementById("productPrice").value = "";
+        if (assurancePriceEl) assurancePriceEl.value = "";
         document.getElementById("hiddenMotifId").value = "";
         return;
     }
@@ -174,15 +177,25 @@
                 // Affiche le prix et met à jour le champ caché
                 const formattedPrice = Number(data.montant).toLocaleString('en-US');
                 document.getElementById("productPrice").value = formattedPrice;
+
+                if (assurancePriceEl) {
+                    const pa = (data.prix_assurance !== undefined && data.prix_assurance !== null && String(data.prix_assurance).trim() !== '')
+                        ? Number(data.prix_assurance)
+                        : NaN;
+                    assurancePriceEl.value = Number.isFinite(pa) ? pa.toLocaleString('en-US') : '—';
+                }
+
                 document.getElementById("hiddenMotifId").value = motifId; // Enregistre l'ID du motif pour l'envoi
             } else {
                 document.getElementById("productPrice").value = "Non disponible";
+                if (assurancePriceEl) assurancePriceEl.value = "—";
                 document.getElementById("hiddenMotifId").value = "";
             }
         })
         .catch(error => {
             console.error("Erreur lors de la récupération du prix :", error);
             document.getElementById("productPrice").value = "Erreur";
+            if (assurancePriceEl) assurancePriceEl.value = "—";
             document.getElementById("hiddenMotifId").value = "";
         });
 }

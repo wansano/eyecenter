@@ -89,7 +89,10 @@ include('../public/header.php');
                                             echo '
                                                 <div class="alert alert-success">
                                                 <strong>'.model($type).' de '.nom_patient($id_patient).' validé avec succès </strong> <br/> 
-                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="imprimer_consultation.php?affectation='.$affectation.'" target="_blank">imprimer les données</a></li>
+                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. L\'impression se fait dans le modal ci-dessous.</li>
+                                                <div class="mt-2">
+                                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#printConsultationModal">Imprimer les données</button>
+                                                </div>
                                                 </div>
                                                 ';
                                                     }
@@ -97,7 +100,10 @@ include('../public/header.php');
                                             echo '
                                                 <div class="alert alert-danger">
                                                     <strong>Erreur de validation de '.model($type).'  de '.nom_patient($id_patient).'</strong> <br/>  
-                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="imprimer_consultation.php?affectation='.$affectation.'" target="_blank">d\'imprimer les données</a></li>
+                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Vous pouvez aussi imprimer via le bouton ci-dessous.</li>
+                                                    <div class="mt-2">
+                                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#printConsultationModal">Imprimer les données</button>
+                                                    </div>
                                                 </div>
                                                 ';}
                                     ?>
@@ -208,7 +214,7 @@ include('../public/header.php');
                                 </div>
                             
                             <footer class="card-footer text-end">
-                                <button class="btn btn-primary" type="submit" name="ajouter">Valider la consultation</button>
+                                <button class="btn btn-primary" type="submit" name="ajouter" id="btnValiderConsultation" <?php echo ($errors == 4) ? 'disabled' : ''; ?>>Valider la consultation</button>
                             </footer>
                         </form>
                         <!-- Fin du formulaire de consultation -->
@@ -218,11 +224,29 @@ include('../public/header.php');
         <!-- end: page -->
     </section>
     </div>
-        <?php if ($errors == 4 && $affectation): ?>
-            <script>
-                window.onload = function() {
-                    window.open('imprimer_consultation.php?affectation=<?= $affectation ?>', '_blank');
-                };
-            </script>
-        <?php endif; ?>
+
+        <!-- Modal impression consultation -->
+        <div class="modal fade" id="printConsultationModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Impression consultation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="height: 75vh;">
+                        <?php if (!empty($affectation)): ?>
+                            <iframe
+                                src="imprimer_consultation.php?affectation=<?php echo urlencode((string)$affectation); ?>"
+                                style="width:100%;height:100%;border:0;"
+                            ></iframe>
+                        <?php else: ?>
+                            <div class="alert alert-warning mb-0">Aucune affectation disponible pour l'impression.</div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     <?php include('../public/footer.php');?>

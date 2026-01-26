@@ -1325,4 +1325,128 @@ function pdf_text_compat($text): string {
     return $text;
 }
 
+if (!function_exists('appecEnsureAssuranceFacturationTables')) {
+    /**
+     * Crée (si nécessaire) les tables utilisées pour la facturation mensuelle des assurances.
+     *
+     * Note: On évite toute mise à jour d'une éventuelle colonne générée (ex: assurances.solde).
+     */
+    function appecEnsureAssuranceFacturationTables(PDO $bdd): void
+    {
+        // Table des créances (lignes) générées lors des paiements patient (part assurance)
+        $bdd->exec(
+            "CREATE TABLE IF NOT EXISTS assurance_creances (\n"
+            . "  id INT UNSIGNED NOT NULL AUTO_INCREMENT,\n"
+            . "  assurance_id INT NOT NULL,\n"
+            . "  id_affectation INT NOT NULL,\n"
+            . "  id_paiement INT NULL,\n"
+            . "  patient_id INT NOT NULL,\n"
+            . "  type_traitement INT NULL,\n"
+            . "  code_paiement VARCHAR(50) NULL,\n"
+            . "  date_operation DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n"
+            . "  montant_total DECIMAL(12,2) NOT NULL DEFAULT 0,\n"
+            . "  montant_assurance DECIMAL(12,2) NOT NULL DEFAULT 0,\n"
+            . "  montant_patient DECIMAL(12,2) NOT NULL DEFAULT 0,\n"
+            . "  taux_prise_en_charge DECIMAL(6,2) NOT NULL DEFAULT 0,\n"
+            . "  created_by INT NULL,\n"
+            . "  PRIMARY KEY (id),\n"
+            . "  KEY idx_ac_assurance_date (assurance_id, date_operation),\n"
+            . "  KEY idx_ac_affectation (id_affectation),\n"
+            . "  KEY idx_ac_patient (patient_id)\n"
+            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        // Table des règlements effectués par les assureurs (paiements reçus)
+        $bdd->exec(
+            "CREATE TABLE IF NOT EXISTS assurance_reglements (\n"
+            . "  id INT UNSIGNED NOT NULL AUTO_INCREMENT,\n"
+            . "  assurance_id INT NOT NULL,\n"
+            . "  date_paiement DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n"
+            . "  montant DECIMAL(12,2) NOT NULL DEFAULT 0,\n"
+            . "  mode_paiement VARCHAR(50) NULL,\n"
+            . "  reference VARCHAR(100) NULL,\n"
+            . "  periode_debut DATE NULL,\n"
+            . "  periode_fin DATE NULL,\n"
+            . "  commentaire TEXT NULL,\n"
+            . "  caisse INT NULL,\n"
+            . "  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n"
+            . "  PRIMARY KEY (id),\n"
+            . "  KEY idx_ar_assurance_date (assurance_id, date_paiement),\n"
+            . "  KEY idx_ar_periode (periode_debut, periode_fin)\n"
+            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        // Colonnes optionnelles (ajouts non destructifs)
+        // - compte_id : compte de caisse utilisé lors du règlement
+        // - preuve : chemin relatif du document justificatif
+        if (function_exists('dbTableHasColumn')) {
+            try {
+                if (!dbTableHasColumn($bdd, 'assurance_reglements', 'compte_id')) {
+                    $bdd->exec('ALTER TABLE assurance_reglements ADD COLUMN compte_id INT NULL AFTER montant');
+                    $bdd->exec('CREATE INDEX idx_ar_compte ON assurance_reglements (compte_id)');
+                }
+            } catch (Throwable $e) {
+                // ignore
+            }
+
+            try {
+                if (!dbTableHasColumn($bdd, 'assurance_reglements', 'preuve')) {
+                    $bdd->exec('ALTER TABLE assurance_reglements ADD COLUMN preuve VARCHAR(255) NULL AFTER commentaire');
+                }
+            } catch (Throwable $e) {
+                // ignore
+            }
+        }
+    }
+}
+
+if (!function_exists('appecEnsurePartAssurancesTable')) {
+    /**
+     * Crée (si nécessaire) la table `partAssurances`.
+     * Schéma demandé : id_part, id_paiement, id_affectation, types, montant, montant_paye, solde (GENERATED), patient, datepaiement.
+     */
+    function appecEnsurePartAssurancesTable(PDO $bdd): void
+    {
+        // Certains MySQL n'acceptent pas CURRENT_TIMESTAMP sur un champ DATE.
+        // On tente d'abord la version demandée, puis fallback si erreur.
+        $sql1 = "CREATE TABLE IF NOT EXISTS partAssurances (\n"
+            . "  id_part INT(11) NOT NULL AUTO_INCREMENT,\n"
+            . "  id_paiement INT(11) NOT NULL,\n"
+            . "  id_affectation INT(11) NOT NULL,\n"
+            . "  types INT(11) NOT NULL,\n"
+            . "  montant DECIMAL(15,0) NOT NULL,\n"
+            . "  montant_paye DECIMAL(15,0) NOT NULL DEFAULT 0,\n"
+            . "  solde DECIMAL(15,0) GENERATED ALWAYS AS (COALESCE(montant,0) - COALESCE(montant_paye,0)) STORED,\n"
+            . "  patient INT(11) NOT NULL,\n"
+            . "  datepaiement DATE NOT NULL DEFAULT (CURRENT_TIMESTAMP),\n"
+            . "  PRIMARY KEY (id_part),\n"
+            . "  KEY idx_pa_patient_date (patient, datepaiement),\n"
+            . "  KEY idx_pa_affectation (id_affectation),\n"
+            . "  KEY idx_pa_paiement (id_paiement)\n"
+            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+        $sql2 = "CREATE TABLE IF NOT EXISTS partAssurances (\n"
+            . "  id_part INT(11) NOT NULL AUTO_INCREMENT,\n"
+            . "  id_paiement INT(11) NOT NULL,\n"
+            . "  id_affectation INT(11) NOT NULL,\n"
+            . "  types INT(11) NOT NULL,\n"
+            . "  montant DECIMAL(15,0) NOT NULL,\n"
+            . "  montant_paye DECIMAL(15,0) NOT NULL DEFAULT 0,\n"
+            . "  solde DECIMAL(15,0) GENERATED ALWAYS AS (COALESCE(montant,0) - COALESCE(montant_paye,0)) STORED,\n"
+            . "  patient INT(11) NOT NULL,\n"
+            . "  datepaiement DATE NOT NULL DEFAULT (CURRENT_DATE),\n"
+            . "  PRIMARY KEY (id_part),\n"
+            . "  KEY idx_pa_patient_date (patient, datepaiement),\n"
+            . "  KEY idx_pa_affectation (id_affectation),\n"
+            . "  KEY idx_pa_paiement (id_paiement)\n"
+            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+        try {
+            $bdd->exec($sql1);
+        } catch (Throwable $e) {
+            $bdd->exec($sql2);
+        }
+    }
+}
+
 ?>

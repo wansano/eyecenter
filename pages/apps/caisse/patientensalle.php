@@ -22,6 +22,58 @@ try {
 }                 
 
 include('../PUBLIC/header.php');
+
+// Détection colonne prix_assurance (selon schéma DB)
+$traitementsHasPrixAssurance = false;
+try {
+    $bdd->query('SELECT prix_assurance FROM traitements LIMIT 1');
+    $traitementsHasPrixAssurance = true;
+} catch (PDOException $e) {
+    $traitementsHasPrixAssurance = false;
+}
+
+if (!function_exists('appec_isCardValid')) {
+    function appec_isCardValid($dateStr): bool
+    {
+        $s = trim((string)$dateStr);
+        if ($s === '') return false;
+
+        $tryFormats = ['Y-m-d', 'd/m/Y', 'm/d/Y', 'Y/m/d', 'd-m-Y', 'm-d-Y'];
+        $dt = null;
+        foreach ($tryFormats as $fmt) {
+            $tmp = DateTimeImmutable::createFromFormat($fmt, $s);
+            if ($tmp instanceof DateTimeImmutable) {
+                $errors = DateTimeImmutable::getLastErrors();
+                if (empty($errors['warning_count']) && empty($errors['error_count'])) {
+                    $dt = $tmp;
+                    break;
+                }
+            }
+        }
+
+        if (!$dt) {
+            $ts = strtotime($s);
+            if ($ts === false) return false;
+            $dt = (new DateTimeImmutable())->setTimestamp($ts);
+        }
+
+        $expiryEnd = $dt->setTime(23, 59, 59);
+        $now = new DateTimeImmutable();
+        return $expiryEnd >= $now;
+    }
+}
+
+if (!function_exists('appec_toFloat')) {
+    function appec_toFloat($value): float
+    {
+        if ($value === null) return 0.0;
+        if (is_float($value) || is_int($value)) return (float)$value;
+        $s = trim((string)$value);
+        if ($s === '') return 0.0;
+        $s = str_replace([' ', ','], ['', '.'], $s);
+        return (float)$s;
+    }
+}
 ?>
 
 <?php if (!$allComptesClotures): ?>
@@ -65,6 +117,7 @@ include('../PUBLIC/header.php');
                                     <thead>
                                         <tr>
                                             <th>AFFECTATION</th>
+                                            <th>N° PAT</th>
                                             <th>PATIENT</th>
                                             <th>CONTACT</th>
                                             <th>EXAMEN</th>
@@ -74,6 +127,7 @@ include('../PUBLIC/header.php');
                                     </thead>
                                     <tbody>
                                     <?php
+                                        $prixAssuranceCache = [];
                                         try {
                                             $sql = "SELECT id_affectation, id_patient, id_service, type, date, status FROM affectations WHERE status IN (6, 3) AND id_service IN (1, 2, 3, 4) ORDER BY id_affectation";
                                             $stmt = $bdd->prepare($sql);
@@ -85,11 +139,44 @@ include('../PUBLIC/header.php');
                                                     'nom_patient' => '—',
                                                     'phone'       => '—',
                                                 ];
-                                                $montant = (float) montant($row['type']);
+                                                $montantTotal = (float) montant($row['type']);
+
+                                                // Si assuré + carte valide => le montant total peut être prix_assurance (si disponible)
+                                                $assureFlag = (int)($patientInfo['assure'] ?? 0);
+                                                $dateExp = (string)($patientInfo['dateExpiration'] ?? '');
+                                                $carteValide = ($assureFlag === 1) ? appec_isCardValid($dateExp) : false;
+
+                                                if ($traitementsHasPrixAssurance && $assureFlag === 1 && $carteValide) {
+                                                    $typeId = (int)($row['type'] ?? 0);
+                                                    if ($typeId > 0) {
+                                                        if (!array_key_exists($typeId, $prixAssuranceCache)) {
+                                                            $stPA = $bdd->prepare('SELECT prix_assurance FROM traitements WHERE id_type = ? LIMIT 1');
+                                                            $stPA->execute([$typeId]);
+                                                            $prixAssuranceCache[$typeId] = (float)($stPA->fetchColumn() ?: 0);
+                                                        }
+                                                        if (($prixAssuranceCache[$typeId] ?? 0) > 0) {
+                                                            $montantTotal = (float)$prixAssuranceCache[$typeId];
+                                                        }
+                                                    }
+                                                }
+
+                                                // Montant affiché = part patient (reste) si assuré + carte valide + taux de prise en charge
+                                                $montant = $montantTotal;
+                                                $tauxPrise = appec_toFloat($patientInfo['tauxPrisecharge'] ?? 0);
+                                                if ($tauxPrise < 0) $tauxPrise = 0;
+                                                if ($tauxPrise > 100) $tauxPrise = 100;
+                                                if ($assureFlag === 1 && $carteValide && $tauxPrise > 0) {
+                                                    $partAssurance = ($montantTotal * $tauxPrise / 100);
+                                                    $montant = $montantTotal - $partAssurance;
+                                                    if ($montant < 0) $montant = 0.0;
+                                                }
                                                 $modele  = model($row['type']);
+
+                                                $typePatient = $row["type"];
 
                                                 echo '<tr>';
                                                 echo '<td>'.htmlspecialchars($row["date"], ENT_QUOTES, "UTF-8").'</td>';
+                                                echo '<td>'.htmlspecialchars($row["id_patient"], ENT_QUOTES, "UTF-8").'</td>';
                                                 echo '<td>'.htmlspecialchars($patientInfo["nom_patient"], ENT_QUOTES, "UTF-8").'</td>';
                                                 echo '<td>'.htmlspecialchars($patientInfo["phone"], ENT_QUOTES, "UTF-8").'</td>';
                                                 echo '<td>'.htmlspecialchars($modele, ENT_QUOTES, "UTF-8").'</td>';
@@ -131,10 +218,56 @@ include('../PUBLIC/header.php');
                     <div class="modal-body">
                         <div id="paiementAlert" class="alert d-none" role="alert"></div>
 
-                        <div class="mb-3">
-                            <div><strong>Patient :</strong> <span id="paiementPatient">—</span></div>
-                            <div><strong>Examen :</strong> <span id="paiementExamen">—</span></div>
-                            <div><strong>Montant :</strong> <span id="paiementMontant">—</span></div>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-bordered table-sm mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 35%;">Patient</th>
+                                        <td id="paiementPatientNom">—</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Contact</th>
+                                        <td id="paiementPatientPhone">—</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Profession</th>
+                                        <td id="paiementPatientProfession">—</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Examen</th>
+                                        <td id="paiementExamen">—</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Part patient</th>
+                                        <td id="paiementMontant">—</td>
+                                    </tr>
+                                    <tr class="paiementSplitRow d-none">
+                                        <th>Part assurance</th>
+                                        <td id="paiementPartAssurance">—</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Assuré</th>
+                                        <td id="paiementPatientAssure">—</td>
+                                    </tr>
+
+                                    <tr class="paiementAssuranceRow d-none">
+                                        <th>Assurance</th>
+                                        <td id="paiementAssuranceNom">—</td>
+                                    </tr>
+                                    <tr class="paiementAssuranceRow d-none">
+                                        <th>N° Carte</th>
+                                        <td id="paiementAssuranceCarte">—</td>
+                                    </tr>
+                                    <tr class="paiementAssuranceRow d-none">
+                                        <th>Taux prise en charge</th>
+                                        <td id="paiementAssuranceTaux">—</td>
+                                    </tr>
+                                    <tr class="paiementAssuranceRow d-none">
+                                        <th>Expiration</th>
+                                        <td id="paiementAssuranceExpiration">—</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
                         <form id="paiementForm" autocomplete="off">
@@ -218,9 +351,21 @@ include('../PUBLIC/header.php');
                 }, delay);
             }
 
-            const patientEl = document.getElementById('paiementPatient');
+            const patientNomEl = document.getElementById('paiementPatientNom');
+            const patientPhoneEl = document.getElementById('paiementPatientPhone');
+            const patientProfessionEl = document.getElementById('paiementPatientProfession');
+            const patientAssureEl = document.getElementById('paiementPatientAssure');
             const examenEl = document.getElementById('paiementExamen');
             const montantEl = document.getElementById('paiementMontant');
+
+            const splitRowEls = Array.prototype.slice.call(document.querySelectorAll('.paiementSplitRow'));
+            const partAssuranceEl = document.getElementById('paiementPartAssurance');
+
+            const assuranceRowEls = Array.prototype.slice.call(document.querySelectorAll('.paiementAssuranceRow'));
+            const assuranceNomEl = document.getElementById('paiementAssuranceNom');
+            const assuranceCarteEl = document.getElementById('paiementAssuranceCarte');
+            const assuranceTauxEl = document.getElementById('paiementAssuranceTaux');
+            const assuranceExpEl = document.getElementById('paiementAssuranceExpiration');
             const idPatientEl = document.getElementById('paiementIdPatient');
             const idAffectEl = document.getElementById('paiementIdAffectation');
             const typeEl = document.getElementById('paiementType');
@@ -269,6 +414,12 @@ include('../PUBLIC/header.php');
                 });
             }
 
+            function formatAmount(value) {
+                const n = Number(value);
+                if (!isFinite(n)) return '0';
+                return Math.round(n).toLocaleString('fr-FR');
+            }
+
             async function loadPaymentForm(idPatient, idAffectation) {
                 hideAlert();
                 recuBtnEl.classList.add('d-none');
@@ -276,9 +427,21 @@ include('../PUBLIC/header.php');
                 submitEl.disabled = true;
                 submitEl.textContent = 'Chargement…';
 
-                patientEl.textContent = '—';
+                if (patientNomEl) patientNomEl.textContent = '—';
+                if (patientPhoneEl) patientPhoneEl.textContent = '—';
+                if (patientProfessionEl) patientProfessionEl.textContent = '—';
+                if (patientAssureEl) patientAssureEl.textContent = '—';
                 examenEl.textContent = '—';
                 montantEl.textContent = '—';
+
+                splitRowEls.forEach(function (row) { row.classList.add('d-none'); });
+                if (partAssuranceEl) partAssuranceEl.textContent = '—';
+
+                assuranceRowEls.forEach(function (row) { row.classList.add('d-none'); });
+                if (assuranceNomEl) assuranceNomEl.textContent = '—';
+                if (assuranceCarteEl) assuranceCarteEl.textContent = '—';
+                if (assuranceTauxEl) assuranceTauxEl.textContent = '—';
+                if (assuranceExpEl) assuranceExpEl.textContent = '—';
 
                 idPatientEl.value = String(idPatient || '');
                 idAffectEl.value = String(idAffectation || '');
@@ -299,9 +462,45 @@ include('../PUBLIC/header.php');
 
                 const pat = data.patient || {};
                 const aff = data.affectation || {};
-                patientEl.textContent = pat.nom_patient || '—';
+                if (patientNomEl) patientNomEl.textContent = pat.nom_patient || '—';
+                if (patientPhoneEl) patientPhoneEl.textContent = pat.phone || '—';
+                if (patientProfessionEl) patientProfessionEl.textContent = pat.profession || '—';
                 examenEl.textContent = aff.motif || '—';
                 montantEl.textContent = (aff.montant_label || '0') + ' <?php echo htmlspecialchars($devise ?? "", ENT_QUOTES, "UTF-8"); ?>';
+
+                const partAssurance = (aff && aff.montant_assurance !== undefined && aff.montant_assurance !== null)
+                    ? Number(aff.montant_assurance)
+                    : 0;
+
+                const hasValidCard = !!(aff && aff.carte_valide);
+                const isAssure = String(pat.assure || '0') === '1' && hasValidCard;
+
+                if (patientAssureEl) {
+                    if (String(pat.assure || '0') === '1' && !hasValidCard) {
+                        patientAssureEl.textContent = 'Non (carte expirée)';
+                    } else {
+                        patientAssureEl.textContent = isAssure ? 'Oui' : 'Non';
+                    }
+                }
+
+                if (isAssure) {
+                    if (partAssuranceEl) {
+                        partAssuranceEl.textContent = (partAssurance > 0 ? formatAmount(partAssurance) : '0') + ' <?php echo htmlspecialchars($devise ?? "", ENT_QUOTES, "UTF-8"); ?>';
+                    }
+                    splitRowEls.forEach(function (row) { row.classList.remove('d-none'); });
+
+                    assuranceRowEls.forEach(function (row) { row.classList.remove('d-none'); });
+                    if (assuranceNomEl) assuranceNomEl.textContent = pat.assurance_nom || '—';
+                    if (assuranceCarteEl) assuranceCarteEl.textContent = pat.carte_adhesion || '—';
+                    if (assuranceExpEl) assuranceExpEl.textContent = pat.date_expiration || '—';
+
+                    var tauxVal = (pat.taux_prisecharge !== undefined && pat.taux_prisecharge !== null) ? String(pat.taux_prisecharge).trim() : '';
+                    if (assuranceTauxEl) assuranceTauxEl.textContent = tauxVal !== '' ? (tauxVal + '%') : '—';
+                } else {
+                    splitRowEls.forEach(function (row) { row.classList.add('d-none'); });
+                    if (partAssuranceEl) partAssuranceEl.textContent = '—';
+                    assuranceRowEls.forEach(function (row) { row.classList.add('d-none'); });
+                }
 
                 const comptes = (data.options && data.options.comptes) ? data.options.comptes : [];
                 const taux = (data.options && data.options.taux) ? data.options.taux : [{ value: 0, label: 'Non Appliqué' }];
@@ -401,9 +600,21 @@ include('../PUBLIC/header.php');
                 recuBtnEl.setAttribute('href', '#');
                 submitEl.disabled = false;
                 submitEl.textContent = 'Valider le paiement';
-                patientEl.textContent = '—';
+                if (patientNomEl) patientNomEl.textContent = '—';
+                if (patientPhoneEl) patientPhoneEl.textContent = '—';
+                if (patientProfessionEl) patientProfessionEl.textContent = '—';
+                if (patientAssureEl) patientAssureEl.textContent = '—';
                 examenEl.textContent = '—';
                 montantEl.textContent = '—';
+
+                splitRowEls.forEach(function (row) { row.classList.add('d-none'); });
+                if (partAssuranceEl) partAssuranceEl.textContent = '—';
+
+                assuranceRowEls.forEach(function (row) { row.classList.add('d-none'); });
+                if (assuranceNomEl) assuranceNomEl.textContent = '—';
+                if (assuranceCarteEl) assuranceCarteEl.textContent = '—';
+                if (assuranceTauxEl) assuranceTauxEl.textContent = '—';
+                if (assuranceExpEl) assuranceExpEl.textContent = '—';
                 typeEl.innerHTML = '<option value="">Sélectionner…</option>';
                 tauxEl.innerHTML = '<option value="0">Non Appliqué</option>';
 

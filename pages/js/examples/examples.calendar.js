@@ -13,6 +13,7 @@ Theme Version:  4.1.0
 		  var calendarEl = document.getElementById('calendar');
 
 		  var calendar = new FullCalendar.Calendar(calendarEl, {
+			locale: 'fr',
 		    initialView: 'dayGridMonth',
 		    initialDate: '2023-01-07',
 		    headerToolbar: {

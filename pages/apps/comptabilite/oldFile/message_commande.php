@@ -36,7 +36,7 @@ function genererMessageCommande(
 <head>
     <meta charset="UTF-8">
     <title>EXPRESSION DE BESOIN</title>
-    <link href="https://fonts.googleapis.com/css?family=Poppins:400,600&display=swap" rel="stylesheet">
+    <!-- Web Fonts (local-first: éviter les timeouts réseau sans Internet) -->
     <style>
         body { background: #fff; color: #111; font-family: "Poppins", Arial, sans-serif; }
         .container { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #eee; padding: 32px; max-width: 700px; margin: 30px auto; }

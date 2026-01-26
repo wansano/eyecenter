@@ -1,5 +1,6 @@
 <?php
 include('../PUBLIC/connect.php');
+require_once('../PUBLIC/fonction.php');
 session_start();
 
 // Ajout quartier (AJAX) : renvoie JSON et stoppe l'exécution pour ne pas afficher toute la page.
@@ -90,53 +91,84 @@ if (isset($_POST['ajouter'])) {
         $error_messages[] = "L'adresse est requise";
     }
 
+    // Champs assurance si assuré
+    $assurePost = isset($_POST['estAssure']) && (string)$_POST['estAssure'] === '1';
+    if ($assurePost) {
+        $entrepriseAssurance = (int)($_POST['entrepriseAssurance'] ?? 0);
+        if ($entrepriseAssurance <= 0) {
+            $error_messages[] = "Veuillez choisir l'assureur.";
+        }
+
+        $taux = trim((string)($_POST['tauxPrisecharge'] ?? ''));
+        if ($taux !== '' && (!is_numeric($taux) || (float)$taux < 0 || (float)$taux > 100)) {
+            $error_messages[] = "Le taux de prise en charge doit être compris entre 0 et 100.";
+        }
+    }
+
     // Si pas d'erreurs, procéder à l'insertion
     if (empty($error_messages)) {
         try {
             $bdd->beginTransaction();
 
             // Vérification de l'existence du patient
-            $req1 = $bdd->prepare('SELECT id_patient FROM patients WHERE profession = ? AND sexe = ? AND adresse = ?, carteAdhesion = ?');
+            $req1 = $bdd->prepare('SELECT id_patient FROM patients WHERE phone = ? AND profession = ? AND sexe = ? AND adresse = ? LIMIT 1');
             $req1->execute([
+                $_POST['phone'],
                 $_POST['profession'], 
                 $_POST['sexe'], 
-                $_POST['adresse'],
-                $_POST['carteAdhesion']
+                $_POST['adresse']
             ]);
 
             if ($data = $req1->fetch()) {
                 $existe = 1;
                 $patientid = $data['id_patient'];
+                $id_patient = (int)$patientid;
             } else {
                 // Insertion du patient
-                $assure = $_POST['estAssure'] == 1 ? 1 : 0;
+                $assure = $assurePost ? 1 : 0;
                 $responsable = !empty($_POST['responsable']) ? $_POST['responsable'] : null;
-                $entrepriseAssurance = $assure ? $_POST['entrepriseAssurance'] : 0;
 
-                $req = $bdd->prepare('INSERT INTO patients (nom_patient, sexe, profession, age, adresse, phone, responsable, assure, assurance, carteAdhesion, tauxPrisecharge, dateExpiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $req->execute([
-                    $_POST['nom_patient'], 
-                    $_POST['sexe'], 
-                    $_POST['profession'], 
-                    $_POST['age'], 
-                    $_POST['adresse'], 
-                    $_POST['phone'], 
+                $entrepriseAssurance = $assure ? (int)($_POST['entrepriseAssurance'] ?? 0) : 0;
+                $carteAdhesion = $assure ? trim((string)($_POST['carteAdhesion'] ?? '')) : null;
+                $tauxPrisecharge = $assure ? trim((string)($_POST['tauxPrisecharge'] ?? '')) : null;
+                $dateExpiration = $assure ? (($_POST['dateExpiration'] ?? null) ?: null) : null;
+
+                $cols = ['nom_patient','sexe','profession','age','adresse','phone','responsable','assure','assurance'];
+                $vals = [
+                    $_POST['nom_patient'],
+                    $_POST['sexe'],
+                    $_POST['profession'],
+                    $_POST['age'],
+                    $_POST['adresse'],
+                    $_POST['phone'],
                     $responsable,
-                    $assure, 
+                    $assure,
                     $entrepriseAssurance,
-                    $_POST['carteAdhesion'],
-                    $_POST['tauxPrisecharge'],
-                    $_POST['dateExpiration']
-                ]);
+                ];
+
+                // Champs optionnels (uniquement si les colonnes existent en base)
+                if (dbTableHasColumn($bdd, 'patients', 'carteAdhesion')) {
+                    $cols[] = 'carteAdhesion';
+                    $vals[] = $carteAdhesion;
+                }
+                if (dbTableHasColumn($bdd, 'patients', 'tauxPrisecharge')) {
+                    $cols[] = 'tauxPrisecharge';
+                    $vals[] = $tauxPrisecharge;
+                }
+                if (dbTableHasColumn($bdd, 'patients', 'dateExpiration')) {
+                    $cols[] = 'dateExpiration';
+                    $vals[] = $dateExpiration;
+                }
+
+                $placeholders = implode(',', array_fill(0, count($cols), '?'));
+                $sql = 'INSERT INTO patients (' . implode(',', $cols) . ') VALUES (' . $placeholders . ')';
+                $req = $bdd->prepare($sql);
+                $req->execute($vals);
+
+                $id_patient = (int)$bdd->lastInsertId();
 
                 $errors = 2;
                 
-            }
-
-            // Récupération du dernier patient ajouté
-            $dossier = $bdd->query('SELECT id_patient FROM patients ORDER BY id_patient DESC LIMIT 1');
-            if ($id = $dossier->fetch()) {
-                $id_patient = $id['id_patient'];
             }
 
             $bdd->commit();
@@ -144,6 +176,7 @@ if (isset($_POST['ajouter'])) {
             $bdd->rollBack();
             $errors = 3;
             error_log("Erreur lors de l'insertion du patient: " . $e->getMessage());
+            $error_messages[] = $e->getMessage();
         }
     }
 }
@@ -267,7 +300,7 @@ require('../PUBLIC/header.php');
                                         </div>
                                     </div>
                                 </div>
-                                <div id="assuranceField" style="display:none;">
+                                <div id="assuranceField" style="display: <?php echo (isset($_POST['estAssure']) && (string)$_POST['estAssure'] === '1') ? 'block' : 'none'; ?>;">
                                     <div class="row form-group pb-3">
                                         <div class="col-md-3">
                                         <div class="form-group">
@@ -295,7 +328,7 @@ require('../PUBLIC/header.php');
                                     <div class="col-md-2">
                                         <div class="form-group">
                                             <label class="col-form-label" for="formGroupExampleInput">Taux de prise en charge %</label>
-                                            <input type="number" class="form-control" name="tauxPrisecharge" step="10" min="0" max="100" id="formGroupExampleInput" value="<?php echo isset($_POST['tauxPrisecharge']) ? htmlspecialchars($_POST['tauxPrisecharge']) : ''; ?>" placeholder="">
+                                            <input type="number" class="form-control" name="tauxPrisecharge" step="0.01" min="0" max="100" id="formGroupExampleInput" value="<?php echo isset($_POST['tauxPrisecharge']) ? htmlspecialchars($_POST['tauxPrisecharge']) : ''; ?>" placeholder="">
                                         </div>
                                     </div>
                                     <div class="col-md-2">
@@ -304,6 +337,7 @@ require('../PUBLIC/header.php');
                                             <input type="date" class="form-control" name="dateExpiration" id="formGroupExampleInput" value="<?php echo isset($_POST['dateExpiration']) ? htmlspecialchars($_POST['dateExpiration']) : ''; ?>" placeholder="">
                                         </div>
                                     </div>
+                                </div>
                                 </div>
                                 <footer class="card-footer text-end">
                                     <button class="btn btn-primary" type="submit" name="ajouter">Ajouter</button>
@@ -320,6 +354,10 @@ require('../PUBLIC/header.php');
                 var estAssure = document.querySelector('input[name="estAssure"]:checked').value;
                 assuranceField.style.display = estAssure === "1" ? "block" : "none";
             }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                try { toggleAssuranceField(); } catch (e) {}
+            });
         </script>
 
         <!-- Modal: Ajout quartier (formulaire intégré) -->

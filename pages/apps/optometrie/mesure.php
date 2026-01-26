@@ -86,7 +86,7 @@ include('../PUBLIC/header.php');
                                             echo '
                                                 <div class="alert alert-success">
                                                 <strong>'.model($type).' de '.nom_patient($id_patient).' validé avec succès </strong> <br/> 
-                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <button type="button" class="btn btn-success btn-sm" id="btnImprimerOrdonnance"><i class="fa fa-file-pdf-o"></i> Imprimer l\'ordonnance</button></li>
+                                                <li>Les informations relatives au traitement ont été enregistrées avec succès dans l\'espace du patient. Il peut toujours le consulter dans son propre espace ou <a href="#" onclick="btnImprimerOrdonnanceAlt(); return false;" id="btnImprimerOrdonnanceAlt"> imprimer l\'ordonnance</a></li>
                                                 </div>
                                                 ';
                                                     }
@@ -94,7 +94,7 @@ include('../PUBLIC/header.php');
                                             echo '
                                                 <div class="alert alert-danger">
                                                     <strong>Erreur de validation de '.model($type).'  de '.nom_patient($id_patient).'</strong> <br/>  
-                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <button type="button" class="btn btn-default btn-sm" id="btnImprimerOrdonnanceAlt"><i class="fa fa-file-pdf-o"></i> Imprimer l\'ordonnance</button></li>
+                                                    <li>Cette '.model($type).' a déjà été approuvé ou veuillez vérifier les informations requises à fournir. Il est également possible <a href="#" onclick="btnImprimerOrdonnanceAlt(); return false;" id="btnImprimerOrdonnanceAlt"> imprimer l\'ordonnance</a></li>
                                                 </div>
                                                 ';}
                                     ?>

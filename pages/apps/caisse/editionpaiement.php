@@ -201,14 +201,17 @@ if (isset($_POST['ajax_update'])) {
             $bdd->commit();
 
             $receiptUrl = '';
+            $receiptPdfUrl = '';
             if ($idAff > 0) {
                 $receiptUrl = 'imprimer_recu.php?affectation=' . urlencode((string)$idAff);
+                $receiptPdfUrl = '../impression/_recudecaisse.php?affectation=' . urlencode((string)$idAff);
             }
 
             echo json_encode([
                 'success' => true,
                 'message' => 'Type de paiement modifié avec succès.',
                 'receipt_url' => $receiptUrl,
+                'receipt_pdf_url' => $receiptPdfUrl,
                 'new_montant' => $newMontant,
                 'new_montant_label' => number_format($newMontant, 0, ',', ' '),
             ]);
@@ -274,9 +277,9 @@ include('../PUBLIC/header.php');
                     <div class="modal-body">
                         <div id="modalAlert" class="alert d-none" role="alert"></div>
 
-                        <a id="btnImprimerNouveauRecu" href="#" class="btn btn-info btn-sm d-none mb-3">
+                        <button type="button" id="btnImprimerNouveauRecu" class="btn btn-info btn-sm d-none mb-3">
                             <i class="fa fa-file-pdf-o"></i> Imprimer le nouveau reçu
-                        </a>
+                        </button>
 
                         <div class="mb-3">
                             <div><strong>Numéro :</strong> <span id="mCode">—</span></div>
@@ -308,12 +311,37 @@ include('../PUBLIC/header.php');
             </div>
         </div>
 
+        <!-- Modal impression reçu (iframe) -->
+        <div class="modal fade" id="recuPrintModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reçu de paiement</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="recuModalAlert" class="alert d-none" role="alert"></div>
+                        <iframe id="recuPrintIframe" src="about:blank" style="width:100%;height:75vh;border:1px solid #e5e5e5;"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="btnPrintIframe">Imprimer</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script>
         document.addEventListener('DOMContentLoaded', function () {
             const pageAlert = document.getElementById('pageAlert');
             const modalEl = document.getElementById('paiementEditModal');
             const modalAlert = document.getElementById('modalAlert');
             const btnImprimer = document.getElementById('btnImprimerNouveauRecu');
+
+            const recuModalEl = document.getElementById('recuPrintModal');
+            const recuModalAlert = document.getElementById('recuModalAlert');
+            const recuIframe = document.getElementById('recuPrintIframe');
+            const btnPrintIframe = document.getElementById('btnPrintIframe');
 
             const rechercheForm = document.getElementById('recherchePaiementForm');
             const codeInput = document.getElementById('codePaiement');
@@ -348,7 +376,36 @@ include('../PUBLIC/header.php');
             function hidePrintButton() {
                 if (!btnImprimer) return;
                 btnImprimer.classList.add('d-none');
-                btnImprimer.setAttribute('href', '#');
+                btnImprimer.dataset.url = '';
+            }
+
+            function showModalAlert(el, message, kind) {
+                if (!el) return;
+                el.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning', 'alert-info');
+                el.classList.add('alert-' + (kind || 'info'));
+                el.textContent = message || '';
+                el.classList.remove('d-none');
+            }
+
+            function hideModalAlert(el) {
+                if (!el) return;
+                el.classList.add('d-none');
+                el.textContent = '';
+            }
+
+            function openReceiptInModal(url) {
+                hideModalAlert(recuModalAlert);
+                if (!url) {
+                    showModalAlert(recuModalAlert, 'Aucun reçu à afficher.', 'warning');
+                    return;
+                }
+                if (recuIframe) {
+                    recuIframe.src = url;
+                }
+                if (window.bootstrap && recuModalEl) {
+                    const instance = window.bootstrap.Modal.getInstance(recuModalEl) || new window.bootstrap.Modal(recuModalEl);
+                    instance.show();
+                }
             }
 
             function setSelectOptions(selectEl, options, placeholder) {
@@ -450,9 +507,10 @@ include('../PUBLIC/header.php');
 
                     showAlert(modalAlert, data.message || 'Modifié.', 'success');
 
-                    if (data.receipt_url) {
+                    const receiptUrl = (data.receipt_pdf_url || data.receipt_url || '');
+                    if (receiptUrl) {
                         btnImprimer.classList.remove('d-none');
-                        btnImprimer.setAttribute('href', data.receipt_url);
+                        btnImprimer.dataset.url = receiptUrl;
                     }
 
                     // Met à jour l'affichage du montant si fourni
@@ -482,6 +540,39 @@ include('../PUBLIC/header.php');
                 mCompteActuel.textContent = '—';
                 mNewCompte.innerHTML = '<option value="">Sélectionner…</option>';
             });
+
+            if (btnImprimer) {
+                btnImprimer.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const url = (btnImprimer.dataset && btnImprimer.dataset.url) ? String(btnImprimer.dataset.url) : '';
+                    openReceiptInModal(url);
+                });
+            }
+
+            if (btnPrintIframe) {
+                btnPrintIframe.addEventListener('click', function () {
+                    hideModalAlert(recuModalAlert);
+                    try {
+                        if (recuIframe && recuIframe.contentWindow) {
+                            recuIframe.contentWindow.focus();
+                            recuIframe.contentWindow.print();
+                        } else {
+                            showModalAlert(recuModalAlert, 'Impossible d\'imprimer: contenu non chargé.', 'warning');
+                        }
+                    } catch (err) {
+                        showModalAlert(recuModalAlert, 'Impression impossible dans ce navigateur. Essayez d\'ouvrir le reçu depuis la caisse.', 'danger');
+                    }
+                });
+            }
+
+            if (recuModalEl) {
+                recuModalEl.addEventListener('hidden.bs.modal', function () {
+                    hideModalAlert(recuModalAlert);
+                    if (recuIframe) {
+                        recuIframe.src = 'about:blank';
+                    }
+                });
+            }
         });
         </script>
     </section>
