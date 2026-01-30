@@ -3,36 +3,59 @@ include('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 session_start();
 
+// Devise de l'entreprise (fallback)
+if (!isset($devise) || trim((string)$devise) === '') {
+    $devise = 'GNF';
+}
+
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-function buildPlageConnexion($type) {
-    $t = strtolower(trim((string)$type));
-    $jours = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
-    $parts = [];
-    foreach ($jours as $j) {
-        $parts[] = $j . ':' . $t;
+function parseMoneyToFloatOrNull(string $raw): ?float {
+    $v = trim($raw);
+    if ($v === '') {
+        return null;
     }
-    return implode(';', $parts);
+    // Supporter 150 000, 150.000, 150000, 150000,00
+    $v = str_replace([' ', '\u{00A0}'], '', $v);
+    $v = str_replace(',', '.', $v);
+    // Retirer séparateurs de milliers simples (ex: 150.000)
+    if (substr_count($v, '.') > 1) {
+        $v = str_replace('.', '', $v);
+    }
+    if (!is_numeric($v)) {
+        return null;
+    }
+    return (float)$v;
 }
 
-function resolveResponsableUserId(PDO $bdd, ?int $superieurEmployeId): int {
-    if (!$superieurEmployeId || $superieurEmployeId <= 0) {
-        return 0;
+function getEmployesColumnMap(PDO $bdd): array {
+    $fields = [];
+    try {
+        $stmt = $bdd->query('SHOW COLUMNS FROM employes');
+        $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        foreach ($rows as $r) {
+            $f = (string)($r['Field'] ?? '');
+            if ($f !== '') {
+                $fields[$f] = true;
+            }
+        }
+    } catch (PDOException $e) {
+        // Fallback: on utilise les noms historiques
+        $fields = [];
     }
 
-    $stmt = $bdd->prepare('SELECT email FROM employes WHERE id_employe = ? LIMIT 1');
-    $stmt->execute([$superieurEmployeId]);
-    $email = (string)($stmt->fetchColumn() ?? '');
-    $email = trim($email);
-    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return 0;
-    }
+    $nameCol = isset($fields['nomEmploye']) ? 'nomEmploye' : (isset($fields['nom_employe']) ? 'nom_employe' : 'nomEmploye');
+    $salaryCol = isset($fields['salaireBase']) ? 'salaireBase' : (isset($fields['salaire']) ? 'salaire' : 'salaireBase');
 
-    $stmt = $bdd->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
-    $stmt->execute([$email]);
-    return (int)($stmt->fetchColumn() ?: 0);
+    return [
+        'name' => $nameCol,
+        'salary' => $salaryCol,
+        'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
+        'prime_logement' => isset($fields['PrimeLogement']) ? 'PrimeLogement' : null,
+        'prime_vie' => isset($fields['PrimeVie']) ? 'PrimeVie' : null,
+    ];
 }
 
 function redirectWith($params) {
@@ -43,52 +66,35 @@ function redirectWith($params) {
 
 $alert = null; // ['type' => 'success|danger|warning|info', 'message' => '...']
 
+$empCols = getEmployesColumnMap($bdd);
+
 // Feedback PRG
 if (isset($_GET['ok']) && (int)$_GET['ok'] === 1) {
-    if (isset($_SESSION['flash_new_user']) && is_array($_SESSION['flash_new_user'])) {
-        $f = $_SESSION['flash_new_user'];
-        unset($_SESSION['flash_new_user']);
-        $alert = [
-            'type' => 'success',
-            'message' => "Employé ajouté et compte utilisateur créé. Email: " . ($f['email'] ?? '') . " | Mot de passe: " . ($f['password'] ?? '') . " | Code secret: " . ($f['code'] ?? '')
-        ];
-    } else {
-        $alert = ['type' => 'success', 'message' => "Employé ajouté avec succès."];
-    }
+    $alert = ['type' => 'success', 'message' => "Employé ajouté avec succès."];
 } elseif (isset($_GET['ok']) && (int)$_GET['ok'] === 2) {
-    if (isset($_SESSION['flash_user_created_on_edit']) && is_array($_SESSION['flash_user_created_on_edit'])) {
-        $f = $_SESSION['flash_user_created_on_edit'];
-        unset($_SESSION['flash_user_created_on_edit']);
-        $alert = [
-            'type' => 'success',
-            'message' => "Employé modifié et compte utilisateur créé. Email: " . ($f['email'] ?? '') . " | Mot de passe: " . ($f['password'] ?? '') . " | Code secret: " . ($f['code'] ?? '')
-        ];
-    } else {
-        $alert = ['type' => 'success', 'message' => "Employé modifié avec succès."];
-    }
+    $alert = ['type' => 'success', 'message' => "Employé modifié avec succès."];
 } elseif (isset($_GET['err'])) {
     $err = (int)$_GET['err'];
     if ($err === 1) $alert = ['type' => 'danger', 'message' => "Le nom de l'employé est obligatoire."];
     if ($err === 2) $alert = ['type' => 'danger', 'message' => "Le format de l'email est invalide."];
     if ($err === 3) $alert = ['type' => 'danger', 'message' => "Cet email est déjà utilisé par un autre employé."];
     if ($err === 4) $alert = ['type' => 'danger', 'message' => "Le supérieur hiérarchique sélectionné est introuvable."];
-    if ($err === 5) $alert = ['type' => 'danger', 'message' => "Le salaire doit être un nombre."];
+    if ($err === 5) $alert = ['type' => 'danger', 'message' => "Le salaire / les primes doivent être des nombres."];
     if ($err === 6) $alert = ['type' => 'danger', 'message' => "Photo invalide. Formats autorisés: JPG/PNG."];
     if ($err === 7) $alert = ['type' => 'danger', 'message' => "Impossible d'enregistrer la photo (vérifier les permissions)."];
     if ($err === 8) $alert = ['type' => 'danger', 'message' => "Erreur base de données."];
     if ($err === 9) $alert = ['type' => 'danger', 'message' => "Service invalide."];
-    if ($err === 10) $alert = ['type' => 'danger', 'message' => "Le profil (type d'utilisateur) est obligatoire pour créer une session."];
-    if ($err === 11) $alert = ['type' => 'danger', 'message' => "L'email est obligatoire pour créer une session."];
-    if ($err === 12) $alert = ['type' => 'danger', 'message' => "Cet email existe déjà dans les utilisateurs."];
+    // 10-12 réservés à l'ancienne création de compte utilisateur (désactivée)
     if ($err === 13) $alert = ['type' => 'danger', 'message' => "Employé introuvable."];
     if ($err === 14) $alert = ['type' => 'danger', 'message' => "Cet email est déjà utilisé par un autre employé."];
-    if ($err === 15) $alert = ['type' => 'danger', 'message' => "Cet email est déjà utilisé par un autre utilisateur."];
+    // 15 réservé à l'ancienne création de compte utilisateur (désactivée)
 }
 
 // Liste des supérieurs (pour le modal)
 $superieurs = [];
 try {
-    $stmt = $bdd->prepare('SELECT id_employe, nom_employe FROM employes ORDER BY nom_employe');
+    $nameCol = $empCols['name'];
+    $stmt = $bdd->prepare('SELECT id_employe, `' . $nameCol . '` AS nom_employe FROM employes ORDER BY `' . $nameCol . '`');
     $stmt->execute();
     $superieurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -132,12 +138,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
     $telephone = trim((string)($_POST['telephone'] ?? ''));
     $email = trim((string)($_POST['email'] ?? ''));
     $oldEmail = trim((string)($_POST['old_email'] ?? ''));
-    $userType = trim((string)($_POST['user_type'] ?? ''));
     $dateEmbauche = trim((string)($_POST['date_embauche'] ?? ''));
     $poste = trim((string)($_POST['poste'] ?? ''));
     $serviceId = isset($_POST['service_id']) ? (int)$_POST['service_id'] : 0;
     $service = '';
     $salaire = trim((string)($_POST['salaire'] ?? ''));
+    $primeTransport = trim((string)($_POST['prime_transport'] ?? ''));
+    $primeLogement = trim((string)($_POST['prime_logement'] ?? ''));
+    $primeVie = trim((string)($_POST['prime_vie'] ?? ''));
     $status = isset($_POST['status']) ? (int)$_POST['status'] : 1;
     $superieur = isset($_POST['superieur_hierarchique']) ? (int)$_POST['superieur_hierarchique'] : 0;
     $notes = trim((string)($_POST['notes'] ?? ''));
@@ -148,14 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
     if ($nom === '') {
         redirectWith(['err' => 1, 'edit' => $idEmploye]);
     }
-    if ($email === '') {
-        redirectWith(['err' => 11, 'edit' => $idEmploye]);
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         redirectWith(['err' => 2, 'edit' => $idEmploye]);
-    }
-    if ($userType === '') {
-        redirectWith(['err' => 10, 'edit' => $idEmploye]);
     }
 
     // Service depuis organigramme (on stocke la cellule)
@@ -176,14 +178,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
         redirectWith(['err' => 8, 'edit' => $idEmploye]);
     }
 
-    // Normaliser salaire
+    // Normaliser salaire/primes
     $salaireDb = null;
     if ($salaire !== '') {
-        $salaireNorm = str_replace([' ', ','], ['', '.'], $salaire);
-        if (!is_numeric($salaireNorm)) {
+        $parsed = parseMoneyToFloatOrNull($salaire);
+        if ($parsed === null) {
             redirectWith(['err' => 5, 'edit' => $idEmploye]);
         }
-        $salaireDb = (float)$salaireNorm;
+        $salaireDb = $parsed;
+    }
+
+    $primeTransportDb = null;
+    if ($empCols['prime_transport'] !== null && $primeTransport !== '') {
+        $parsed = parseMoneyToFloatOrNull($primeTransport);
+        if ($parsed === null) {
+            redirectWith(['err' => 5, 'edit' => $idEmploye]);
+        }
+        $primeTransportDb = $parsed;
+    }
+
+    $primeLogementDb = null;
+    if ($empCols['prime_logement'] !== null && $primeLogement !== '') {
+        $parsed = parseMoneyToFloatOrNull($primeLogement);
+        if ($parsed === null) {
+            redirectWith(['err' => 5, 'edit' => $idEmploye]);
+        }
+        $primeLogementDb = $parsed;
+    }
+
+    $primeVieDb = null;
+    if ($empCols['prime_vie'] !== null && $primeVie !== '') {
+        $parsed = parseMoneyToFloatOrNull($primeVie);
+        if ($parsed === null) {
+            redirectWith(['err' => 5, 'edit' => $idEmploye]);
+        }
+        $primeVieDb = $parsed;
     }
 
     // Upload photo (optionnel)
@@ -238,32 +267,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
 
         $emailBefore = $oldEmail !== '' ? $oldEmail : (string)($existing['email'] ?? '');
 
-        // Unicité email employes (hors courant)
-        $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? AND id_employe <> ? LIMIT 1');
-        $stmt->execute([$email, $idEmploye]);
-        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
-            if (!empty($newPhotoPath)) {
-                $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-                if ($abs && is_file($abs)) { @unlink($abs); }
+        // Unicité email employes (hors courant) si l'email est renseigné
+        if ($email !== '') {
+            $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? AND id_employe <> ? LIMIT 1');
+            $stmt->execute([$email, $idEmploye]);
+            if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+                if (!empty($newPhotoPath)) {
+                    $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
+                    if ($abs && is_file($abs)) { @unlink($abs); }
+                }
+                redirectWith(['err' => 14, 'edit' => $idEmploye]);
             }
-            redirectWith(['err' => 14, 'edit' => $idEmploye]);
-        }
-
-        // Trouver user lié par l'ancien email (fallback: email courant)
-        $stmt = $bdd->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
-        $stmt->execute([$emailBefore]);
-        $userRow = $stmt->fetch(PDO::FETCH_ASSOC);
-        $userId = $userRow ? (int)$userRow['id'] : 0;
-
-        // Unicité email users (hors courant)
-        $stmt = $bdd->prepare('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1');
-        $stmt->execute([$email, $userId > 0 ? $userId : -1]);
-        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
-            if (!empty($newPhotoPath)) {
-                $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-                if ($abs && is_file($abs)) { @unlink($abs); }
-            }
-            redirectWith(['err' => 15, 'edit' => $idEmploye]);
         }
 
         // Supérieur valide
@@ -288,12 +302,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             $superieurDb = $superieur;
         }
 
-        $responsableUserId = resolveResponsableUserId($bdd, $superieurDb);
-
         $bdd->beginTransaction();
 
         // Update employe
-        $sql = 'UPDATE employes SET nom_employe = ?, date_naissance = ?, adresse = ?, telephone = ?, email = ?, date_embauche = ?, poste = ?, service = ?, salaire = ?, status = ?, superieur_hierarchique = ?, notes = ?';
+        $nameCol = $empCols['name'];
+        $salaryCol = $empCols['salary'];
+        $sql = 'UPDATE employes SET `' . $nameCol . '` = ?, date_naissance = ?, adresse = ?, telephone = ?, email = ?, date_embauche = ?, poste = ?, service = ?, `' . $salaryCol . '` = ?';
         $params = [
             $nom,
             ($dateNaissance !== '' ? $dateNaissance : null),
@@ -304,10 +318,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             ($poste !== '' ? $poste : null),
             ($service !== '' ? $service : null),
             $salaireDb,
-            $status,
-            $superieurDb,
-            ($notes !== '' ? $notes : null),
         ];
+
+        if ($empCols['prime_transport'] !== null) {
+            $sql .= ', `' . $empCols['prime_transport'] . '` = ?';
+            $params[] = $primeTransportDb;
+        }
+        if ($empCols['prime_logement'] !== null) {
+            $sql .= ', `' . $empCols['prime_logement'] . '` = ?';
+            $params[] = $primeLogementDb;
+        }
+        if ($empCols['prime_vie'] !== null) {
+            $sql .= ', `' . $empCols['prime_vie'] . '` = ?';
+            $params[] = $primeVieDb;
+        }
+
+        $sql .= ', status = ?, superieur_hierarchique = ?, notes = ?';
+        $params[] = $status;
+        $params[] = $superieurDb;
+        $params[] = ($notes !== '' ? $notes : null);
 
         $oldPhotoPath = (string)($existing['photo'] ?? '');
         if ($newPhotoPath !== null) {
@@ -320,64 +349,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
 
         $stmt = $bdd->prepare($sql);
         $stmt->execute($params);
-
-        // Update ou create user
-        $plageConnexion = buildPlageConnexion($userType);
-        if ($userId > 0) {
-            $stmtU = $bdd->prepare('UPDATE users SET pseudo = ?, email = ?, type = ?, id_service = ?, date_engagement = ?, responsable = ?, plage_connexion = ?, status = ? WHERE id = ?');
-            $stmtU->execute([
-                $nom,
-                $email,
-                strtolower($userType),
-                $serviceId > 0 ? $serviceId : 0,
-                ($dateEmbauche !== '' ? $dateEmbauche : date('Y-m-d')),
-                $responsableUserId,
-                $plageConnexion,
-                ($status === 1 ? 1 : 0),
-                $userId,
-            ]);
-        } else {
-            $plainPassword = bin2hex(random_bytes(4));
-            $plainCode = (string)random_int(100000, 999999);
-
-            // Pseudo unique
-            $basePseudo = trim($nom);
-            $pseudo = $basePseudo;
-            $suffix = 1;
-            while (true) {
-                $check = $bdd->prepare('SELECT COUNT(*) FROM users WHERE pseudo = ?');
-                $check->execute([$pseudo]);
-                if ((int)$check->fetchColumn() === 0) {
-                    break;
-                }
-                $suffix++;
-                $pseudo = $basePseudo . ' ' . $suffix;
-                if ($suffix > 50) {
-                    $pseudo = $basePseudo . ' ' . $idEmploye;
-                    break;
-                }
-            }
-
-            $stmtU = $bdd->prepare('INSERT INTO users (pseudo, email, type, id_service, date_engagement, responsable, plage_connexion, mdp, token, status) VALUES (?,?,?,?,?,?,?,?,?,?)');
-            $stmtU->execute([
-                $pseudo,
-                $email,
-                strtolower($userType),
-                $serviceId > 0 ? $serviceId : 0,
-                ($dateEmbauche !== '' ? $dateEmbauche : date('Y-m-d')),
-                $responsableUserId,
-                $plageConnexion,
-                password_hash($plainPassword, PASSWORD_DEFAULT),
-                password_hash($plainCode, PASSWORD_DEFAULT),
-                ($status === 1 ? 1 : 0),
-            ]);
-
-            $_SESSION['flash_user_created_on_edit'] = [
-                'email' => $email,
-                'password' => $plainPassword,
-                'code' => $plainCode,
-            ];
-        }
 
         $bdd->commit();
 
@@ -420,12 +391,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     $adresse = trim((string)($_POST['adresse'] ?? ''));
     $telephone = trim((string)($_POST['telephone'] ?? ''));
     $email = trim((string)($_POST['email'] ?? ''));
-    $userType = trim((string)($_POST['user_type'] ?? ''));
     $dateEmbauche = trim((string)($_POST['date_embauche'] ?? ''));
     $poste = trim((string)($_POST['poste'] ?? ''));
     $serviceId = isset($_POST['service_id']) ? (int)$_POST['service_id'] : 0;
     $service = '';
     $salaire = trim((string)($_POST['salaire'] ?? ''));
+    $primeTransport = trim((string)($_POST['prime_transport'] ?? ''));
+    $primeLogement = trim((string)($_POST['prime_logement'] ?? ''));
+    $primeVie = trim((string)($_POST['prime_vie'] ?? ''));
     $status = isset($_POST['status']) ? (int)$_POST['status'] : 1;
     $superieur = isset($_POST['superieur_hierarchique']) ? (int)$_POST['superieur_hierarchique'] : 0;
     $notes = trim((string)($_POST['notes'] ?? ''));
@@ -433,14 +406,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     if ($nom === '') {
         redirectWith(['err' => 1, 'add' => 1]);
     }
-    if ($email === '') {
-        redirectWith(['err' => 11, 'add' => 1]);
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         redirectWith(['err' => 2, 'add' => 1]);
-    }
-    if ($userType === '') {
-        redirectWith(['err' => 10, 'add' => 1]);
     }
 
     try {
@@ -457,18 +424,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $service = '';
         }
 
-        // Email unique (employes)
-        $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? LIMIT 1');
-        $stmt->execute([$email]);
-        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
-            redirectWith(['err' => 3, 'add' => 1]);
-        }
-
-        // Email unique (users)
-        $stmt = $bdd->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
-        $stmt->execute([$email]);
-        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
-            redirectWith(['err' => 12, 'add' => 1]);
+        // Email unique (employes) si renseigné
+        if ($email !== '') {
+            $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? LIMIT 1');
+            $stmt->execute([$email]);
+            if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+                redirectWith(['err' => 3, 'add' => 1]);
+            }
         }
 
         // Supérieur existe
@@ -482,14 +444,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $superieurDb = $superieur;
         }
 
-        // Salaire
+        // Salaire/primes
         $salaireDb = null;
         if ($salaire !== '') {
-            $salaireNorm = str_replace([' ', ','], ['', '.'], $salaire);
-            if (!is_numeric($salaireNorm)) {
+            $parsed = parseMoneyToFloatOrNull($salaire);
+            if ($parsed === null) {
                 redirectWith(['err' => 5, 'add' => 1]);
             }
-            $salaireDb = (float)$salaireNorm;
+            $salaireDb = $parsed;
+        }
+
+        $primeTransportDb = null;
+        if ($empCols['prime_transport'] !== null && $primeTransport !== '') {
+            $parsed = parseMoneyToFloatOrNull($primeTransport);
+            if ($parsed === null) {
+                redirectWith(['err' => 5, 'add' => 1]);
+            }
+            $primeTransportDb = $parsed;
+        }
+        $primeLogementDb = null;
+        if ($empCols['prime_logement'] !== null && $primeLogement !== '') {
+            $parsed = parseMoneyToFloatOrNull($primeLogement);
+            if ($parsed === null) {
+                redirectWith(['err' => 5, 'add' => 1]);
+            }
+            $primeLogementDb = $parsed;
+        }
+        $primeVieDb = null;
+        if ($empCols['prime_vie'] !== null && $primeVie !== '') {
+            $parsed = parseMoneyToFloatOrNull($primeVie);
+            if ($parsed === null) {
+                redirectWith(['err' => 5, 'add' => 1]);
+            }
+            $primeVieDb = $parsed;
         }
 
         // Upload photo
@@ -548,23 +535,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $superieurDb = $superieur;
         }
 
-        $responsableUserId = resolveResponsableUserId($bdd, $superieurDb);
-
-        // Transaction: employe + user
+        // Transaction: employe
         $bdd->beginTransaction();
 
-        $stmt = $bdd->prepare(
-            'INSERT INTO employes (
-                nom_employe, date_naissance, adresse, telephone, email,
-                date_embauche, poste, service, salaire, status,
-                superieur_hierarchique, notes, photo
-            ) VALUES (
-                :nom, :date_naissance, :adresse, :telephone, :email,
-                :date_embauche, :poste, :service, :salaire, :status,
-                :superieur, :notes, :photo
-            )'
-        );
-        $stmt->execute([
+        $nameCol = $empCols['name'];
+        $salaryCol = $empCols['salary'];
+
+        $columns = [
+            '`' . $nameCol . '`',
+            'date_naissance',
+            'adresse',
+            'telephone',
+            'email',
+            'date_embauche',
+            'poste',
+            'service',
+            '`' . $salaryCol . '`',
+        ];
+        $placeholders = [
+            ':nom',
+            ':date_naissance',
+            ':adresse',
+            ':telephone',
+            ':email',
+            ':date_embauche',
+            ':poste',
+            ':service',
+            ':salaire',
+        ];
+        $paramsEmp = [
             ':nom' => $nom,
             ':date_naissance' => ($dateNaissance !== '' ? $dateNaissance : null),
             ':adresse' => ($adresse !== '' ? $adresse : null),
@@ -574,58 +573,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             ':poste' => ($poste !== '' ? $poste : null),
             ':service' => ($service !== '' ? $service : null),
             ':salaire' => $salaireDb,
-            ':status' => $status,
-            ':superieur' => $superieurDb,
-            ':notes' => ($notes !== '' ? $notes : null),
-            ':photo' => $photoPath,
-        ]);
+        ];
 
-        $newEmpId = (int)$bdd->lastInsertId();
-
-        // Générer identifiants user
-        $plainPassword = bin2hex(random_bytes(4)); // 8 chars
-        $plainCode = (string)random_int(100000, 999999);
-        $plageConnexion = buildPlageConnexion($userType);
-
-        // Pseudo unique
-        $basePseudo = trim($nom);
-        $pseudo = $basePseudo;
-        $suffix = 1;
-        while (true) {
-            $check = $bdd->prepare('SELECT COUNT(*) FROM users WHERE pseudo = ?');
-            $check->execute([$pseudo]);
-            if ((int)$check->fetchColumn() === 0) {
-                break;
-            }
-            $suffix++;
-            $pseudo = $basePseudo . ' ' . $suffix;
-            if ($suffix > 50) {
-                $pseudo = $basePseudo . ' ' . $newEmpId;
-                break;
-            }
+        if ($empCols['prime_transport'] !== null) {
+            $columns[] = '`' . $empCols['prime_transport'] . '`';
+            $placeholders[] = ':prime_transport';
+            $paramsEmp[':prime_transport'] = $primeTransportDb;
+        }
+        if ($empCols['prime_logement'] !== null) {
+            $columns[] = '`' . $empCols['prime_logement'] . '`';
+            $placeholders[] = ':prime_logement';
+            $paramsEmp[':prime_logement'] = $primeLogementDb;
+        }
+        if ($empCols['prime_vie'] !== null) {
+            $columns[] = '`' . $empCols['prime_vie'] . '`';
+            $placeholders[] = ':prime_vie';
+            $paramsEmp[':prime_vie'] = $primeVieDb;
         }
 
-        $stmtU = $bdd->prepare('INSERT INTO users (pseudo, email, type, id_service, date_engagement, responsable, plage_connexion, mdp, token, status) VALUES (?,?,?,?,?,?,?,?,?,?)');
-        $stmtU->execute([
-            $pseudo,
-            $email,
-            strtolower($userType),
-            $serviceId > 0 ? $serviceId : 0,
-            ($dateEmbauche !== '' ? $dateEmbauche : date('Y-m-d')),
-            $responsableUserId,
-            $plageConnexion,
-            password_hash($plainPassword, PASSWORD_DEFAULT),
-            password_hash($plainCode, PASSWORD_DEFAULT),
-            1,
-        ]);
+        $columns[] = 'status';
+        $placeholders[] = ':status';
+        $paramsEmp[':status'] = $status;
+
+        $columns[] = 'superieur_hierarchique';
+        $placeholders[] = ':superieur';
+        $paramsEmp[':superieur'] = $superieurDb;
+
+        $columns[] = 'notes';
+        $placeholders[] = ':notes';
+        $paramsEmp[':notes'] = ($notes !== '' ? $notes : null);
+
+        $columns[] = 'photo';
+        $placeholders[] = ':photo';
+        $paramsEmp[':photo'] = $photoPath;
+
+        $stmt = $bdd->prepare('INSERT INTO employes (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')');
+        $stmt->execute($paramsEmp);
 
         $bdd->commit();
-
-        $_SESSION['flash_new_user'] = [
-            'email' => $email,
-            'password' => $plainPassword,
-            'code' => $plainCode,
-        ];
 
         redirectWith(['ok' => 1]);
     } catch (PDOException $e) {
@@ -660,12 +645,19 @@ $rows = [];
 $error = null;
 
 try {
+    $nameCol = $empCols['name'];
+    $salaryCol = $empCols['salary'];
+    $sNameExpr = 's.`' . $nameCol . '`';
+    $primeTransportExpr = $empCols['prime_transport'] !== null ? ('e.`' . $empCols['prime_transport'] . '`') : 'NULL';
+    $primeLogementExpr = $empCols['prime_logement'] !== null ? ('e.`' . $empCols['prime_logement'] . '`') : 'NULL';
+    $primeVieExpr = $empCols['prime_vie'] !== null ? ('e.`' . $empCols['prime_vie'] . '`') : 'NULL';
+
     $stmt = $bdd->prepare(
-        'SELECT e.id_employe, e.nom_employe, e.date_naissance, e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
-                e.service, e.salaire, e.status, e.superieur_hierarchique, e.notes, e.photo,
-                s.nom_employe AS superieur_nom,
-                o.id_org AS service_id,
-                u.type AS user_type
+        'SELECT e.id_employe, e.`' . $nameCol . '` AS nom_employe, e.date_naissance, e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
+                e.service, e.`' . $salaryCol . '` AS salaire, ' . $primeTransportExpr . ' AS prime_transport, ' . $primeLogementExpr . ' AS prime_logement, ' . $primeVieExpr . ' AS prime_vie,
+                e.status, e.superieur_hierarchique, e.notes, e.photo,
+                ' . $sNameExpr . ' AS superieur_nom,
+                     o.id_org AS service_id
          FROM employes e
          LEFT JOIN employes s ON s.id_employe = e.superieur_hierarchique
          LEFT JOIN (
@@ -673,7 +665,6 @@ try {
             FROM organigramme
             GROUP BY celulle
          ) o ON o.celulle = e.service
-         LEFT JOIN users u ON u.email = e.email
          ORDER BY e.id_employe DESC'
     );
     $stmt->execute();
@@ -752,9 +743,9 @@ include('../PUBLIC/header.php');
                                                 <td>
                                                     <button
                                                         type="button"
-                                                        class="btn btn-sm btn-primary btn-edit-emp"
+                                                        class="btn btn-sm btn-info btn-details-emp"
                                                         data-bs-toggle="modal"
-                                                        data-bs-target="#modalEditEmploye"
+                                                        data-bs-target="#modalDetailEmploye"
                                                         data-id_employe="<?php echo h($r['id_employe'] ?? ''); ?>"
                                                         data-nom_employe="<?php echo h($r['nom_employe'] ?? ''); ?>"
                                                         data-date_naissance="<?php echo h($r['date_naissance'] ?? ''); ?>"
@@ -764,13 +755,18 @@ include('../PUBLIC/header.php');
                                                         data-date_embauche="<?php echo h($r['date_embauche'] ?? ''); ?>"
                                                         data-poste="<?php echo h($r['poste'] ?? ''); ?>"
                                                         data-service_id="<?php echo h($r['service_id'] ?? '0'); ?>"
+                                                        data-service="<?php echo h($r['service'] ?? ''); ?>"
                                                         data-salaire="<?php echo h($r['salaire'] ?? ''); ?>"
+                                                        data-prime_transport="<?php echo h($r['prime_transport'] ?? ''); ?>"
+                                                        data-prime_logement="<?php echo h($r['prime_logement'] ?? ''); ?>"
+                                                        data-prime_vie="<?php echo h($r['prime_vie'] ?? ''); ?>"
                                                         data-status="<?php echo h($r['status'] ?? '1'); ?>"
                                                         data-superieur_hierarchique="<?php echo h($r['superieur_hierarchique'] ?? '0'); ?>"
+                                                        data-superieur_nom="<?php echo h($r['superieur_nom'] ?? ''); ?>"
                                                         data-notes="<?php echo h($r['notes'] ?? ''); ?>"
-                                                        data-user_type="<?php echo h($r['user_type'] ?? ''); ?>"
+                                                        data-photo="<?php echo h($r['photo'] ?? ''); ?>"
                                                     >
-                                                        Modifier
+                                                        Détails
                                                     </button>
                                                 </td>
                                             </tr>
@@ -782,6 +778,98 @@ include('../PUBLIC/header.php');
                     </section>
                 </div>
             </section>
+        </div>
+
+        <!-- Modal: Modifier un employé -->
+        <div class="modal fade" id="modalDetailEmploye" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Détails de l'employé</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3 text-center">
+                            <img id="detail_photo" src="" alt="Photo employé" class="img-thumbnail" style="max-width: 140px; max-height: 140px; object-fit: cover; display:none;" />
+                            <div id="detail_photo_placeholder" class="text-muted" style="display:none;">Aucune photo</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th>ID</th>
+                                        <td><span id="detail_id_employe"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Statut</th>
+                                        <td><span id="detail_status"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Nom</th>
+                                        <td><span id="detail_nom_employe"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Téléphone</th>
+                                        <td><span id="detail_telephone"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Email</th>
+                                        <td><span id="detail_email"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Poste</th>
+                                        <td><span id="detail_poste"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Service</th>
+                                        <td><span id="detail_service"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Date embauche</th>
+                                        <td><span id="detail_date_embauche"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Date naissance</th>
+                                        <td><span id="detail_date_naissance"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Supérieur</th>
+                                        <td><span id="detail_superieur_nom"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Adresse</th>
+                                        <td><span id="detail_adresse"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Salaire de base</th>
+                                        <td><span id="detail_salaire"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Prime transport</th>
+                                        <td><span id="detail_prime_transport"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Prime logement</th>
+                                        <td><span id="detail_prime_logement"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Prime vie</th>
+                                        <td><span id="detail_prime_vie"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Notes</th>
+                                        <td><span id="detail_notes"></span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                        <button type="button" class="btn btn-primary" id="btn_open_edit_from_details">Modifier</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Modal: Modifier un employé -->
@@ -820,8 +908,21 @@ include('../PUBLIC/header.php');
                                     <input type="date" class="form-control" name="date_embauche" id="edit_date_embauche">
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="col-form-label">Salaire</label>
+                                    <label class="col-form-label">Salaire de base</label>
                                     <input type="text" class="form-control" name="salaire" id="edit_salaire" placeholder="ex: 150000">
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Prime transport</label>
+                                    <input type="text" class="form-control" name="prime_transport" id="edit_prime_transport" placeholder="ex: 10000">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Prime logement</label>
+                                    <input type="text" class="form-control" name="prime_logement" id="edit_prime_logement" placeholder="ex: 20000">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Prime vie</label>
+                                    <input type="text" class="form-control" name="prime_vie" id="edit_prime_vie" placeholder="ex: 5000">
                                 </div>
 
                                 <div class="col-md-6 mb-3">
@@ -833,22 +934,7 @@ include('../PUBLIC/header.php');
                                     <input type="email" class="form-control" name="email" id="edit_email" required>
                                 </div>
 
-                                <div class="col-md-6 mb-3">
-                                    <label class="col-form-label">Profil (type d'utilisateur) *</label>
-                                    <select name="user_type" class="form-control populate" data-plugin-selectTwo required id="edit_user_type">
-                                        <option value="">— Choisir —</option>
-                                        <option value="technologie">Technologie</option>
-                                        <option value="secretariat">Secrétariat</option>
-                                        <option value="caisse">Caisse</option>
-                                        <option value="boutique">Boutique</option>
-                                        <option value="comptabilite">Comptabilité</option>
-                                        <option value="logistique">Logistique</option>
-                                        <option value="ophtalmologue">Ophtalmologue</option>
-                                        <option value="infirmier">Infirmier</option>
-                                        <option value="optometriste">Optométriste</option>
-                                        <option value="medecin">Médecin</option>
-                                    </select>
-                                </div>
+                                <div class="col-md-6 mb-3"></div>
                                 <div class="col-md-6 mb-3"></div>
 
                                 <div class="col-md-6 mb-3">
@@ -914,40 +1000,186 @@ include('../PUBLIC/header.php');
 
         <script>
             (function () {
+                var lastDetailsDataset = null;
+                var companyCurrency = '<?php echo h($devise ?? ''); ?>';
+
                 function setValue(id, value) {
                     var el = document.getElementById(id);
                     if (!el) return;
                     el.value = value == null ? '' : String(value);
                 }
 
+                function setText(id, value) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    el.textContent = value == null || value === '' ? '—' : String(value);
+                }
+
+                function formatAmount(value) {
+                    if (value == null) return '';
+                    var raw = String(value).trim();
+                    if (!raw || raw === '—') return '';
+                    // tolérer "150 000" / "150.000" / "150000,50"
+                    raw = raw.replace(/\s+/g, '').replace(/\u00A0/g, '').replace(',', '.');
+                    if ((raw.match(/\./g) || []).length > 1) {
+                        raw = raw.replace(/\./g, '');
+                    }
+                    var n = Number(raw);
+                    if (!isFinite(n)) return '';
+                    var hasDecimals = Math.abs(n % 1) > 0;
+                    try {
+                        var formatted = new Intl.NumberFormat('fr-FR', {
+                            minimumFractionDigits: hasDecimals ? 2 : 0,
+                            maximumFractionDigits: hasDecimals ? 2 : 0
+                        }).format(n);
+                        return formatted + (companyCurrency ? ' ' + companyCurrency : '');
+                    } catch (e) {
+                        return String(n) + (companyCurrency ? ' ' + companyCurrency : '');
+                    }
+                }
+
+                function normalizePhotoUrl(path) {
+                    var p = (path || '').trim();
+                    if (!p) return '';
+                    if (/^(https?:)?\/\//i.test(p) || p.startsWith('/')) return p;
+                    // Dans ce module, les photos sont stockées dans ../documents/...
+                    if (p.startsWith('../')) return p;
+                    if (p.startsWith('documents/')) return '../' + p;
+                    return '../' + p;
+                }
+
+                function fillEditFromDataset(ds) {
+                    if (!ds) return;
+                    setValue('edit_id_employe', ds.id_employe);
+                    setValue('edit_nom_employe', ds.nom_employe);
+                    setValue('edit_date_naissance', ds.date_naissance);
+                    setValue('edit_adresse', ds.adresse);
+                    setValue('edit_telephone', ds.telephone);
+                    setValue('edit_email', ds.email);
+                    setValue('edit_old_email', ds.email);
+                    setValue('edit_date_embauche', ds.date_embauche);
+                    setValue('edit_poste', ds.poste);
+                    setValue('edit_service_id', ds.service_id || '0');
+                    setValue('edit_salaire', ds.salaire);
+                    setValue('edit_prime_transport', ds.prime_transport);
+                    setValue('edit_prime_logement', ds.prime_logement);
+                    setValue('edit_prime_vie', ds.prime_vie);
+                    setValue('edit_status', ds.status || '1');
+                    setValue('edit_superieur_hierarchique', ds.superieur_hierarchique || '0');
+                    setValue('edit_notes', ds.notes);
+                }
+
+                function fillDetailsFromDataset(ds) {
+                    if (!ds) return;
+
+                    setText('detail_id_employe', ds.id_employe);
+                    setText('detail_nom_employe', ds.nom_employe);
+                    setText('detail_date_naissance', ds.date_naissance);
+                    setText('detail_adresse', ds.adresse);
+                    setText('detail_telephone', ds.telephone);
+                    setText('detail_email', ds.email);
+                    setText('detail_date_embauche', ds.date_embauche);
+                    setText('detail_poste', ds.poste);
+                    setText('detail_service', ds.service);
+                    setText('detail_superieur_nom', ds.superieur_nom);
+                    setText('detail_salaire', formatAmount(ds.salaire));
+                    setText('detail_prime_transport', formatAmount(ds.prime_transport));
+                    setText('detail_prime_logement', formatAmount(ds.prime_logement));
+                    setText('detail_prime_vie', formatAmount(ds.prime_vie));
+                    setText('detail_notes', ds.notes);
+
+                    var st = (ds.status === '1' || ds.status === 1) ? 'Actif' : 'Inactif';
+                    setText('detail_status', st);
+
+                    var img = document.getElementById('detail_photo');
+                    var ph = document.getElementById('detail_photo_placeholder');
+                    var url = normalizePhotoUrl(ds.photo);
+                    if (img && ph) {
+                        if (url) {
+                            img.src = url;
+                            img.style.display = '';
+                            ph.style.display = 'none';
+                        } else {
+                            img.src = '';
+                            img.style.display = 'none';
+                            ph.style.display = '';
+                        }
+                    }
+                }
+
                 document.addEventListener('DOMContentLoaded', function () {
-                    document.querySelectorAll('.btn-edit-emp').forEach(function (btn) {
+                    document.querySelectorAll('.btn-details-emp').forEach(function (btn) {
                         btn.addEventListener('click', function () {
-                            setValue('edit_id_employe', btn.getAttribute('data-id_employe'));
-                            setValue('edit_nom_employe', btn.getAttribute('data-nom_employe'));
-                            setValue('edit_date_naissance', btn.getAttribute('data-date_naissance'));
-                            setValue('edit_adresse', btn.getAttribute('data-adresse'));
-                            setValue('edit_telephone', btn.getAttribute('data-telephone'));
-                            setValue('edit_email', btn.getAttribute('data-email'));
-                            setValue('edit_old_email', btn.getAttribute('data-email'));
-                            setValue('edit_date_embauche', btn.getAttribute('data-date_embauche'));
-                            setValue('edit_poste', btn.getAttribute('data-poste'));
-                            setValue('edit_service_id', btn.getAttribute('data-service_id') || '0');
-                            setValue('edit_salaire', btn.getAttribute('data-salaire'));
-                            setValue('edit_status', btn.getAttribute('data-status') || '1');
-                            setValue('edit_superieur_hierarchique', btn.getAttribute('data-superieur_hierarchique') || '0');
-                            setValue('edit_notes', btn.getAttribute('data-notes'));
-                            setValue('edit_user_type', btn.getAttribute('data-user_type'));
+                            lastDetailsDataset = {
+                                id_employe: btn.getAttribute('data-id_employe'),
+                                nom_employe: btn.getAttribute('data-nom_employe'),
+                                date_naissance: btn.getAttribute('data-date_naissance'),
+                                adresse: btn.getAttribute('data-adresse'),
+                                telephone: btn.getAttribute('data-telephone'),
+                                email: btn.getAttribute('data-email'),
+                                date_embauche: btn.getAttribute('data-date_embauche'),
+                                poste: btn.getAttribute('data-poste'),
+                                service_id: btn.getAttribute('data-service_id'),
+                                service: btn.getAttribute('data-service'),
+                                salaire: btn.getAttribute('data-salaire'),
+                                prime_transport: btn.getAttribute('data-prime_transport'),
+                                prime_logement: btn.getAttribute('data-prime_logement'),
+                                prime_vie: btn.getAttribute('data-prime_vie'),
+                                status: btn.getAttribute('data-status'),
+                                superieur_hierarchique: btn.getAttribute('data-superieur_hierarchique'),
+                                superieur_nom: btn.getAttribute('data-superieur_nom'),
+                                notes: btn.getAttribute('data-notes'),
+                                photo: btn.getAttribute('data-photo')
+                            };
+                            fillDetailsFromDataset(lastDetailsDataset);
                         });
                     });
+
+                    var btnOpenEdit = document.getElementById('btn_open_edit_from_details');
+                    if (btnOpenEdit) {
+                        btnOpenEdit.addEventListener('click', function () {
+                            if (!lastDetailsDataset || typeof bootstrap === 'undefined') return;
+                            fillEditFromDataset(lastDetailsDataset);
+                            var detailsEl = document.getElementById('modalDetailEmploye');
+                            if (detailsEl) {
+                                bootstrap.Modal.getOrCreateInstance(detailsEl).hide();
+                            }
+                            var editEl = document.getElementById('modalEditEmploye');
+                            if (editEl) {
+                                bootstrap.Modal.getOrCreateInstance(editEl).show();
+                            }
+                        });
+                    }
 
                     // Ouvrir automatiquement le modal d'édition si ?edit=<id>
                     var url = new URL(window.location.href);
                     var editId = url.searchParams.get('edit');
                     if (editId && typeof bootstrap !== 'undefined') {
-                        var trigger = document.querySelector('.btn-edit-emp[data-id_employe="' + editId.replace(/"/g, '') + '"]');
+                        var trigger = document.querySelector('.btn-details-emp[data-id_employe="' + editId.replace(/"/g, '') + '"]');
                         if (trigger) {
-                            trigger.click();
+                            // Remplir & ouvrir directement le modal d'édition
+                            lastDetailsDataset = {
+                                id_employe: trigger.getAttribute('data-id_employe'),
+                                nom_employe: trigger.getAttribute('data-nom_employe'),
+                                date_naissance: trigger.getAttribute('data-date_naissance'),
+                                adresse: trigger.getAttribute('data-adresse'),
+                                telephone: trigger.getAttribute('data-telephone'),
+                                email: trigger.getAttribute('data-email'),
+                                date_embauche: trigger.getAttribute('data-date_embauche'),
+                                poste: trigger.getAttribute('data-poste'),
+                                service_id: trigger.getAttribute('data-service_id'),
+                                service: trigger.getAttribute('data-service'),
+                                salaire: trigger.getAttribute('data-salaire'),
+                                prime_transport: trigger.getAttribute('data-prime_transport'),
+                                prime_logement: trigger.getAttribute('data-prime_logement'),
+                                prime_vie: trigger.getAttribute('data-prime_vie'),
+                                status: trigger.getAttribute('data-status'),
+                                superieur_hierarchique: trigger.getAttribute('data-superieur_hierarchique'),
+                                superieur_nom: trigger.getAttribute('data-superieur_nom'),
+                                notes: trigger.getAttribute('data-notes'),
+                                photo: trigger.getAttribute('data-photo')
+                            };
+                            fillEditFromDataset(lastDetailsDataset);
                             var el = document.getElementById('modalEditEmploye');
                             if (el) {
                                 bootstrap.Modal.getOrCreateInstance(el).show();
@@ -992,8 +1224,21 @@ include('../PUBLIC/header.php');
                                     <input type="date" class="form-control" name="date_embauche">
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="col-form-label">Salaire</label>
+                                    <label class="col-form-label">Salaire de base</label>
                                     <input type="text" class="form-control" name="salaire" placeholder="ex: 150000">
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Prime transport</label>
+                                    <input type="text" class="form-control" name="prime_transport" placeholder="ex: 10000">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Prime logement</label>
+                                    <input type="text" class="form-control" name="prime_logement" placeholder="ex: 20000">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Prime vie</label>
+                                    <input type="text" class="form-control" name="prime_vie" placeholder="ex: 5000">
                                 </div>
 
                                 <div class="col-md-6 mb-3">
@@ -1005,22 +1250,7 @@ include('../PUBLIC/header.php');
                                     <input type="email" class="form-control" name="email" required>
                                 </div>
 
-                                <div class="col-md-6 mb-3">
-                                    <label class="col-form-label">Profil (type d'utilisateur) *</label>
-                                    <select name="user_type" class="form-control populate" data-plugin-selectTwo required>
-                                        <option value="">— Choisir —</option>
-                                        <option value="technologie">Technologie</option>
-                                        <option value="secretariat">Secrétariat</option>
-                                        <option value="caisse">Caisse</option>
-                                        <option value="boutique">Boutique</option>
-                                        <option value="comptabilite">Comptabilité</option>
-                                        <option value="logistique">Logistique</option>
-                                        <option value="ophtalmologue">Ophtalmologue</option>
-                                        <option value="infirmier">Infirmier</option>
-                                        <option value="optometriste">Optométriste</option>
-                                        <option value="medecin">Médecin</option>
-                                    </select>
-                                </div>
+                                <div class="col-md-6 mb-3"></div>
                                 <div class="col-md-6 mb-3"></div>
 
                                 <div class="col-md-6 mb-3">

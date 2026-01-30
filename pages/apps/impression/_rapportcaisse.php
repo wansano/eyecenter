@@ -11,6 +11,43 @@ if (!isset($_SESSION['auth'])) {
     die('Accès non autorisé.');
 }
 
+function user_can_view_any_rapport_caisse(PDO $bdd, int $userId): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+
+    // Autoriser les profils ayant accès au module technologie (admin) ou comptabilité (trésorerie).
+    $allowedModules = ['technologie', 'comptabilite'];
+
+    try {
+        $stmt = $bdd->prepare('SELECT plage_connexion FROM users WHERE id = ? LIMIT 1');
+        $stmt->execute([$userId]);
+        $plage = (string)($stmt->fetchColumn() ?: '');
+    } catch (Exception $e) {
+        return false;
+    }
+
+    if ($plage === '') {
+        return false;
+    }
+
+    foreach (explode(';', $plage) as $entry) {
+        $entry = trim($entry);
+        if ($entry === '') {
+            continue;
+        }
+
+        // Format attendu: "lundi:technologie" etc.
+        $parts = explode(':', $entry, 2);
+        $module = isset($parts[1]) ? trim(strtolower($parts[1])) : '';
+        if ($module !== '' && in_array($module, $allowedModules, true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) {
     http_response_code(400);
@@ -36,7 +73,8 @@ if (!$rapport) {
 }
 
 // Sécurité: uniquement le propriétaire (comme la page "mes rapports")
-if ((int)$rapport['id_user'] !== (int)$_SESSION['auth']) {
+$currentUserId = (int)$_SESSION['auth'];
+if ((int)$rapport['id_user'] !== $currentUserId && !user_can_view_any_rapport_caisse($bdd, $currentUserId)) {
     http_response_code(403);
     die('Accès refusé.');
 }

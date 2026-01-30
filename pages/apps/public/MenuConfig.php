@@ -55,7 +55,7 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle">Gestion HR</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="listeemployes.php">Liste des employés</a></li>
-                <li><a class="nav-link" href="#">Liste des congés</a></li>
+                <li><a class="nav-link" href="bulletinsalaire.php">Bulletin de salaire</a></li>
                 <li><a class="nav-link" href="realisationindividuelle.php">Réalisation individuelle</a></li>
             </ul>
         </li>
@@ -71,13 +71,7 @@ class MenuConfig {
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Preuve de caisse</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="modificationpreuvecaisse.php">Modification preuve</a></li>
-                    </ul>
-                </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Bulletin de paie</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="#">Liste des bulletins</a></li>
+                        <li><a class="nav-link" href="listepreuvecaisse.php">Liste des preuves</a></li>
                     </ul>
                 </li>
             </ul>
@@ -154,7 +148,7 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Edition</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="findingproduct.php">Délivrer une vente </a></li>
+                <li><a class="nav-link" href="findingproduct.php">Délivrer une vente</a></li>
                 <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Reimpression document</a></li>
             </ul>
         </li>

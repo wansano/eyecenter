@@ -120,6 +120,16 @@ include('../PUBLIC/header.php');
 						$entreePreuve = getEntreePreuve($_GET['compte'], $_GET['debut'], $_GET['fin'], $bdd);
 
 						$solde = $entree - $entreePreuve;
+						$remboursementTotal = 0;
+						$rembStmt = $bdd->prepare('SELECT COALESCE(SUM(montant), 0) AS remboursement_total FROM paiements WHERE compte = :compte AND (remboursement <> 0 AND remboursement IS NOT NULL) AND datepaiement BETWEEN :debut AND :fin');
+						$rembStmt->execute([
+							':compte' => $_GET['compte'],
+							':debut' => $_GET['debut'],
+							':fin' => $_GET['fin'],
+						]);
+						if ($rowRemb = $rembStmt->fetch(PDO::FETCH_ASSOC)) {
+							$remboursementTotal = ($rowRemb['remboursement_total'] !== null) ? (float)$rowRemb['remboursement_total'] : 0;
+						}
 						
 						if ($compte!=0) {
 						echo '
@@ -135,6 +145,7 @@ include('../PUBLIC/header.php');
 														<th>COMPTE</th>
 														<th>TYPE</th>
 														<th>ENTREE</th>
+														<th>REMBOURSEMENT</th>
 														<th>RAPPORT CAISSIER</th>
 														<th>DIFFERENCE</th>
 														<th>ACTION</th>
@@ -148,11 +159,11 @@ include('../PUBLIC/header.php');
 														echo '<td>' . htmlspecialchars(($_GET['debut'])) . ' au '.$_GET['fin'].'</td>';
 														echo '<td>' . htmlspecialchars($donnees1['nom_compte']) . '</td>';
 														echo '<td>' . htmlspecialchars($donnees1['types']) . '</td>';
-														echo '<td>' . number_format($entree) . ' ' . htmlspecialchars($devise) . ' </td>';
-														echo '<td>' . number_format($entreePreuve) . ' ' . htmlspecialchars($devise) . ' </td>';
-														echo '<td>' . number_format($solde) . ' ' . htmlspecialchars($devise) . ' </td>';
-														echo '<td>
-																					'.($entreePreuve > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
+														echo '<td>' . number_format($entree, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
+														echo '<td>' . number_format($remboursementTotal, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
+														echo '<td>' . number_format($entreePreuve, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
+														echo '<td>' . number_format($solde, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
+														echo '<td>' . ($entreePreuve > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
 															<a href="cumulationdesfaits.php?debut='.$_GET['debut'].'&fin='.$_GET['fin'].'" class="btn btn-sm btn-info">cumul global</a></td>';
 														echo '</tr>';
 													}
@@ -167,9 +178,20 @@ include('../PUBLIC/header.php');
 						';}
 						} else {
 
-						$montant = $bdd->prepare('SELECT compte, SUM(montant) AS entree FROM paiements WHERE remboursement=0 AND datepaiement BETWEEN :debut AND :fin GROUP BY compte');
+						$montant = $bdd->prepare('SELECT compte, SUM(montant) AS entree FROM paiements WHERE (remboursement = 0 OR remboursement IS NULL) AND datepaiement BETWEEN :debut AND :fin GROUP BY compte');
 						$montant -> execute(array(':debut' => $_GET['debut'],':fin' => $_GET['fin']));
 						$data_montants = $montant->fetchAll(PDO::FETCH_ASSOC);
+
+						$remboursementsByCompte = [];
+						$remboursementTotal = 0;
+						$remb = $bdd->prepare('SELECT compte, COALESCE(SUM(montant), 0) AS remboursement_total FROM paiements WHERE (remboursement <> 0 AND remboursement IS NOT NULL) AND datepaiement BETWEEN :debut AND :fin GROUP BY compte');
+						$remb->execute([':debut' => $_GET['debut'], ':fin' => $_GET['fin']]);
+						foreach ($remb->fetchAll(PDO::FETCH_ASSOC) as $rowRemb) {
+							$compteKey = $rowRemb['compte'];
+							$val = ($rowRemb['remboursement_total'] !== null) ? (float)$rowRemb['remboursement_total'] : 0;
+							$remboursementsByCompte[$compteKey] = $val;
+							$remboursementTotal += $val;
+						}
 						
 						// Pré-calcul des totaux pour conditionner le bouton Rapport
 						$montanttotal = 0;
@@ -193,6 +215,7 @@ include('../PUBLIC/header.php');
 														<th>COMPTE</th>
 														<th>TYPE</th>
 														<th>ENTREE</th>
+														<th>REMBOURSEMENT</th>
 														<th>RAPPORT CAISSIER</th>
 														<th>DIFFERENCE</th>
 														<th>ACTION</th>
@@ -203,15 +226,17 @@ include('../PUBLIC/header.php');
 													$rowIndex = 0;
 													foreach ($data_montants as $data_montant) { 
 														$entree = ($data_montant['entree'] !== null) ? $data_montant['entree'] : 0;
+														$remboursement = isset($remboursementsByCompte[$data_montant['compte']]) ? $remboursementsByCompte[$data_montant['compte']] : 0;
 														$entreePreuve = getEntreePreuve($data_montant['compte'], $_GET['debut'], $_GET['fin'], $bdd);
 														$solde = $entree - $entreePreuve;
 														echo '<tr>';
 														echo '<td>' . htmlspecialchars($_GET['debut']) . ' au ' . htmlspecialchars($_GET['fin']) . '</td>';
 														echo '<td>' . htmlspecialchars(compte($data_montant['compte'])) . '</td>';
 														echo '<td>' . htmlspecialchars(type_paiement($data_montant['compte'])) . '</td>';
-														echo '<td>' . number_format($entree) . ' ' . htmlspecialchars($devise) . '</td>';
-														echo '<td>' . number_format($entreePreuve) . ' ' . htmlspecialchars($devise) . '</td>';
-														echo '<td>' . number_format($solde) . ' ' . htmlspecialchars($devise) . '</td>';
+														echo '<td>' . number_format($entree, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
+														echo '<td>' . number_format($remboursement, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
+														echo '<td>' . number_format($entreePreuve, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
+														echo '<td>' . number_format($solde, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
 														if ($rowIndex === 0) {
 															echo '<td rowspan="' . $rowCount . '" class="align-middle text-center">
 																				'.($entreePreuveTotal > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$montanttotal.'&rapportcaisse='.$entreePreuveTotal.'&solde='.$soldetotal.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'

@@ -138,6 +138,23 @@ if (!$donnees1 || !$donnees2 || !$profil) {
     die('Données non trouvées');
 }
 
+// Pour les achats de lunettes: l'assurance ne prend pas en charge => ne pas afficher la ligne de prise en charge.
+$isVenteLunette = false;
+try {
+    $venteLunetteTypeId = 0;
+    $stType = $bdd->prepare("SELECT id_type FROM traitements WHERE LOWER(nom_type) LIKE '%lunet%' OR LOWER(nom_type) LIKE '%monture%' ORDER BY id_type ASC LIMIT 1");
+    $stType->execute();
+    $venteLunetteTypeId = (int)($stType->fetchColumn() ?: 0);
+    if ($venteLunetteTypeId <= 0) {
+        $stType = $bdd->prepare("SELECT id_type FROM traitements WHERE LOWER(nom_type) LIKE '%vente%' ORDER BY id_type ASC LIMIT 1");
+        $stType->execute();
+        $venteLunetteTypeId = (int)($stType->fetchColumn() ?: 0);
+    }
+    $isVenteLunette = ($venteLunetteTypeId > 0 && (int)($donnees1['type'] ?? 0) === $venteLunetteTypeId);
+} catch (Throwable $e) {
+    $isVenteLunette = false;
+}
+
 // Recalcul du solde: plusieurs paiements possibles. Total payé jusqu'à ce paiement.
 $montantTotal = 0.0;
 if (isset($donnees1['montant'])) {
@@ -183,6 +200,12 @@ if ($idRdv > 0 && function_exists('getRdvInfo')) {
 $assuranceRowsHtml = '';
 $hidePaymentMethod = false;
 try {
+    if ($isVenteLunette) {
+        // Aucun affichage de prise en charge pour les ventes lunettes
+        $assuranceRowsHtml = '';
+        $hidePaymentMethod = false;
+        throw new Exception('skip');
+    }
     if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assure')) {
         $patCols = ['assure'];
         foreach (['assurance', 'tauxPrisecharge', 'dateExpiration'] as $col) {
@@ -222,8 +245,10 @@ try {
         }
     }
 } catch (Exception $e) {
-    $assuranceRowsHtml = '';
-    $hidePaymentMethod = false;
+    if ((string)$e->getMessage() !== 'skip') {
+        $assuranceRowsHtml = '';
+        $hidePaymentMethod = false;
+    }
 }
 
 // --------- 1) REÇU (deux exemplaires) ---------

@@ -16,31 +16,6 @@ $pdf->SetAutoPageBreak(false,0);//Creation d'une nouvelle page auto à false
 setlocale(LC_CTYPE, 'fr_FR');
 $pdf->SetFont('courier','',14);
 
-function assurance($nom){
-include('../PUBLIC/connect.php');
-$reponse1 = $bdd->prepare('SELECT * FROM assurance WHERE id_assurance = ?');
-$reponse1 -> execute(array($nom));
-$assurance=" ";
-  while ($donnees1 = $reponse1->fetch())
-  {
-      $assurance=$donnees1['assurance'];
-
-    }
-    return $assurance;
-  }
-
-function service($nom){
-include('../PUBLIC/connect.php');
-$reponse1 = $bdd->prepare('SELECT * FROM services WHERE id_service = ?');
-$reponse1 -> execute(array($nom));
-$service=" ";
-  while ($donnees1 = $reponse1->fetch())
-  {
-      $service=$donnees1['nom_service'];
-
-    }
-    return $service;
-  } 
   
 function adresse($nom){
 include('../PUBLIC/connect.php');
@@ -118,7 +93,7 @@ $html.='<tr style="line-height:1px;">
 </tr>';
 
 $html.='<tr style="line-height:1px;">
-<td width="350" height="50" >'.utf8_decode('MOTIF : '.type($donnees1['type'])).'</td>
+<td width="350" height="50" >'.utf8_decode('MOTIF : '.type_traitement($donnees1['type'])).'</td>
 </tr>';
 $html.='<tr style="line-height:1px;border:1px;">
 <td width="350" height="50">'.utf8_decode('MONTANT PAYÉ : '.number_format($donnees1['montant'])).' GNF </td>
@@ -170,7 +145,7 @@ $html.='<tr style="line-height:1px;">
 </tr>';
 
 $html.='<tr style="line-height:1px;">
-<td width="350" height="50" >'.utf8_decode('MOTIF : '.type($donnees1['type'])).'</td>
+<td width="350" height="50" >'.utf8_decode('MOTIF : '.type_traitement($donnees1['type'])).'</td>
 </tr>';
 $html.='<tr style="line-height:1px;border:1px;">
 <td width="350" height="50">'.utf8_decode('MONTANT PAYÉ : '.number_format($donnees1['montant'])).' GNF </td>

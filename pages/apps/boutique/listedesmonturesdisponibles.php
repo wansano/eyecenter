@@ -126,7 +126,7 @@ if (isset($_POST['modifier_monture'])) {
 
                 // Ajuster quantités si la marque change
                 if ($oldMarque > 0 && $oldMarque !== $idMarque) {
-                    $stDec = $bdd->prepare('UPDATE marques SET quantite = GREATEST(quantite - 1, 0) WHERE id_marque = ?');
+                    $stDec = $bdd->prepare('UPDATE marques SET quantite = CASE WHEN quantite > 0 THEN quantite - 1 ELSE 0 END WHERE id_marque = ?');
                     $stDec->execute([$oldMarque]);
 
                     $stInc = $bdd->prepare('UPDATE marques SET quantite = quantite + 1 WHERE id_marque = ?');
@@ -202,7 +202,7 @@ if (isset($_POST['retourner_monture'])) {
             $noLivraison = (string)($cur['no_livraison'] ?? '');
 
             if ($idMarque > 0) {
-                $stDec = $bdd->prepare('UPDATE marques SET quantite = GREATEST(quantite - 1, 0) WHERE id_marque = ?');
+                $stDec = $bdd->prepare('UPDATE marques SET quantite = CASE WHEN quantite > 0 THEN quantite - 1 ELSE 0 END WHERE id_marque = ?');
                 $stDec->execute([$idMarque]);
             }
 

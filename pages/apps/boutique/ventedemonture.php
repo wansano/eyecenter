@@ -23,13 +23,27 @@ if (isset($_POST['vendre'])) {
     $codeproduit = $_GET['codeproduit'] ?? null;
     $modePaiement = $_POST['estAssure'] ?? 0;
     $categorie = $_POST['categorie'] ?? null;
-    $compte = $_POST['compte'] ?? null;
+    $compte = isset($_POST['compte']) ? (int)$_POST['compte'] : 0;
     $collaborateur = $_POST['collaborateur'] ?? null;
     $taux = $_POST['taux'] ?? 0;
     $acompte = 0;
     
     if (!$affectation || !$patient || !$codeproduit || !$categorie || !$compte || !$collaborateur) {
         $errors = 1;
+    } else {
+        // Interdire une vente sur un compte déjà clôturé aujourd'hui (preuve de caisse)
+        try {
+            $stClosed = $bdd->prepare('SELECT 1 FROM preuvedecaisse WHERE date_rapportement = ? AND id_user = ? AND compte = ? LIMIT 1');
+            $stClosed->execute([date('Y-m-d'), $_SESSION['auth'], $compte]);
+            if ($stClosed->fetchColumn()) {
+                $errors = 5;
+            }
+        } catch (Throwable $e) {
+            // noop
+        }
+    }
+    if ($errors === 5) {
+        // stop
     } elseif (paiementDejaEffectue($bdd, $affectation)) {
         $existe = 3;
     } else {
@@ -157,6 +171,14 @@ include('../PUBLIC/header.php');
                         <div class="col-md-12">
 							<section class="card">
 								<div class="card-body">';
+                                if ($errors==5) {
+                                    echo '
+                                        <div class="alert alert-warning">
+                                            <strong>Compte clôturé.</strong><br/>
+                                            <li>La preuve de caisse a déjà été effectuée aujourd\'hui pour ce compte. Veuillez choisir un autre compte.</li>
+                                        </div>
+                                    ';
+                                }
                                 if ($errors==6) {
                                     echo '
                                         <div class="alert alert-success">
@@ -278,14 +300,26 @@ include('../PUBLIC/header.php');
                                                 <div class="form-group">
                                                     <label class="col-form-label" for="formGroupExampleInput">Mode de reglement</label>
                                                     <select class="form-control" name="compte" required="">';
-                                                        $type = $bdd->prepare('SELECT * FROM comptes WHERE status=? AND compte_pour=?');
-                                                        $type -> execute([1,2]);
-                                                        while ($type_paiement = $type->fetch(PDO::FETCH_ASSOC))
-                                                        {   $conf = $type_paiement['defaut'];
-                                                            if ($conf==1) {
-                                                                echo '<option value="'.$type_paiement['id_compte'].'">'.$type_paiement['nom_compte'].'</option>';
+                                                        $available = 0;
+                                                        try {
+                                                            $stC = $bdd->prepare(
+                                                                'SELECT c.id_compte, c.nom_compte '
+                                                                . 'FROM comptes c '
+                                                                . 'WHERE c.status = 1 AND c.defaut = 1 AND c.compte_pour = ? '
+                                                                . 'AND NOT EXISTS (SELECT 1 FROM preuvedecaisse p WHERE p.date_rapportement = ? AND p.id_user = ? AND p.compte = c.id_compte) '
+                                                                . 'ORDER BY c.nom_compte'
+                                                            );
+                                                            $stC->execute([2, date('Y-m-d'), $_SESSION['auth']]);
+                                                            while ($c = $stC->fetch(PDO::FETCH_ASSOC)) {
+                                                                $available++;
+                                                                echo '<option value="'.$c['id_compte'].'">'.$c['nom_compte'].'</option>';
                                                             }
-                                                        } 
+                                                        } catch (Throwable $e) {
+                                                            $available = 0;
+                                                        }
+                                                        if ($available === 0) {
+                                                            echo '<option value="" selected disabled>Aucun compte disponible (preuve de caisse effectuée)</option>';
+                                                        }
                                                         echo '
                                                     </select>
                                                 </div>

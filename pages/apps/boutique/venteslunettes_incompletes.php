@@ -45,8 +45,20 @@ $successAffectation = 0;
 // Options comptes (mode de règlement) pour la boutique
 $comptesOptions = [];
 try {
-	$stC = $bdd->prepare('SELECT id_compte, nom_compte, types FROM comptes WHERE status = 1 AND compte_pour = ? AND defaut = 1');
-	$stC->execute([2]);
+	$userId = (int)($_SESSION['auth'] ?? 0);
+	if ($userId > 0) {
+		// N'afficher que les comptes non clôturés (preuve de caisse non faite aujourd'hui pour ce caissier)
+		$stC = $bdd->prepare(
+			'SELECT c.id_compte, c.nom_compte, c.types '
+			. 'FROM comptes c '
+			. 'WHERE c.status = 1 AND c.compte_pour = ? AND c.defaut = 1 '
+			. 'AND NOT EXISTS (SELECT 1 FROM preuvedecaisse p WHERE p.date_rapportement = ? AND p.id_user = ? AND p.compte = c.id_compte)'
+		);
+		$stC->execute([2, date('Y-m-d'), $userId]);
+	} else {
+		$stC = $bdd->prepare('SELECT id_compte, nom_compte, types FROM comptes WHERE status = 1 AND compte_pour = ? AND defaut = 1');
+		$stC->execute([2]);
+	}
 	while ($c = $stC->fetch(PDO::FETCH_ASSOC)) {
 		$label = (string)($c['nom_compte'] ?? '');
 		if (trim($label) === '') {
@@ -118,7 +130,22 @@ if (isset($_POST['complete_payment'])) {
 					throw new Exception('Le montant saisi dépasse le reste à payer.');
 				}
 
+				// Autoriser la réutilisation d'un même compte pour compléter une vente,
+				// MAIS interdire un compte clôturé aujourd'hui (preuve de caisse déjà effectuée).
+				$stClosed = $bdd->prepare('SELECT 1 FROM preuvedecaisse WHERE date_rapportement = ? AND id_user = ? AND compte = ? LIMIT 1');
+				$stClosed->execute([date('Y-m-d'), (int)($_SESSION['auth'] ?? 0), (int)$newCompte]);
+				if ($stClosed->fetchColumn()) {
+					throw new Exception("Ce compte est clôturé (preuve de caisse déjà effectuée aujourd'hui). Veuillez choisir un autre compte.");
+				}
+
 				$newSolde = $montantTotal - ($montantPaye + $montantAjout);
+
+				// Frais paiement électronique (même logique que paiementdesfrais)
+				$frais = 0.0;
+				$montantAjoutFinal = $montantAjout;
+				$montantTotalFinal = $montantTotal;
+				$tauxCompte = 0.0;
+				$isMobile = (function_exists('IsPaiementElectronique') && IsPaiementElectronique($newCompte) === 1);
 
 				// Insérer une nouvelle ligne de paiement pour garder l'historique (datepaiement)
 				$code = genererNumeroPaiement();
@@ -126,18 +153,38 @@ if (isset($_POST['complete_payment'])) {
 				$types = (int)($aff['type'] ?? 0);
 				$caissier = (int)($_SESSION['auth'] ?? 0);
 
+				// Lire le taux du compte et appliquer les frais si mobile
+				$stOne = $bdd->prepare('SELECT debit, taux FROM comptes WHERE id_compte = ? FOR UPDATE');
+				$stOne->execute([$newCompte]);
+				$compteInfo = $stOne->fetch(PDO::FETCH_ASSOC);
+				if (!$compteInfo) {
+					throw new Exception('Compte de règlement invalide.');
+				}
+				$debit = (float)($compteInfo['debit'] ?? 0);
+				$tauxCompte = (float)($compteInfo['taux'] ?? 0);
+				if ($tauxCompte < 0) $tauxCompte = 0.0;
+				if ($tauxCompte > 100) $tauxCompte = 100.0;
+
+				if ($isMobile && $tauxCompte > 0) {
+					$frais = ($montantAjout * $tauxCompte / 100);
+					$montantAjoutFinal = $montantAjout + $frais;
+					$montantTotalFinal = $montantTotal + $frais;
+				}
+
+				$newSolde = $montantTotalFinal - ($montantPaye + $montantAjoutFinal);
+
+				// Mettre à jour le montant total si des frais sont appliqués
+				if ($montantTotalFinal !== $montantTotal) {
+					$bdd->prepare('UPDATE affectations SET montant = ? WHERE id_affectation = ?')
+						->execute([$montantTotalFinal, $idAffectation]);
+				}
+
 				$ins = $bdd->prepare('INSERT INTO paiements (id_affectation, code, types, montant, montant_paye, compte, patient, caisse) VALUES (?,?,?,?,?,?,?,?)');
-				$ins->execute([$idAffectation, $code, $types, $montantTotal, $montantAjout, $newCompte, $idPatient, $caissier]);
+				$ins->execute([$idAffectation, $code, $types, $montantTotalFinal, $montantAjoutFinal, $newCompte, $idPatient, $caissier]);
 				$newPaiementId = (int)$bdd->lastInsertId();
 
 				// Créditer le compte du montant ajouté (sur le compte choisi)
-				$stOne = $bdd->prepare('SELECT debit FROM comptes WHERE id_compte = ? FOR UPDATE');
-				$stOne->execute([$newCompte]);
-				$debit = $stOne->fetchColumn();
-				if ($debit === false) {
-					throw new Exception('Compte de règlement invalide.');
-				}
-				$bdd->prepare('UPDATE comptes SET debit = ? WHERE id_compte = ?')->execute([(float)$debit + $montantAjout, $newCompte]);
+				$bdd->prepare('UPDATE comptes SET debit = ? WHERE id_compte = ?')->execute([$debit + $montantAjoutFinal, $newCompte]);
 
 				// Si soldé, marquer l'affectation comme payée/traitée
 				if ($newSolde <= 0.00001) {
@@ -187,6 +234,7 @@ if ($lunetteTypeId > 0) {
 						a.id_affectation,
 						COALESCE(a.montant, 0) AS montant_total,
 						COALESCE(ps.total_paye, 0) AS total_paye,
+						ps.used_comptes,
 						pl.id_paiement,
 						pl.code,
 						pl.datepaiement,
@@ -205,7 +253,8 @@ if ($lunetteTypeId > 0) {
 					INNER JOIN (
 						SELECT id_affectation,
 							   SUM(COALESCE(montant_paye,0)) AS total_paye,
-							   MAX(id_paiement) AS last_paiement_id
+							   MAX(id_paiement) AS last_paiement_id,
+							   GROUP_CONCAT(DISTINCT compte) AS used_comptes
 						FROM paiements
 						GROUP BY id_affectation
 					) ps ON ps.id_affectation = a.id_affectation
@@ -222,6 +271,7 @@ if ($lunetteTypeId > 0) {
 						a.id_affectation,
 						COALESCE(a.montant, 0) AS montant_total,
 						COALESCE(ps.total_paye, 0) AS total_paye,
+						ps.used_comptes,
 						pl.id_paiement,
 						pl.code,
 						pl.datepaiement,
@@ -234,7 +284,8 @@ if ($lunetteTypeId > 0) {
 					INNER JOIN (
 						SELECT id_affectation,
 							   SUM(COALESCE(montant_paye,0)) AS total_paye,
-							   MAX(id_paiement) AS last_paiement_id
+							   MAX(id_paiement) AS last_paiement_id,
+							   GROUP_CONCAT(DISTINCT compte) AS used_comptes
 						FROM paiements
 						GROUP BY id_affectation
 					) ps ON ps.id_affectation = a.id_affectation
@@ -328,6 +379,7 @@ include('../public/header.php');
 										$codePaiement = (string)($r['code'] ?? '');
 										$compteId = (int)($r['compte'] ?? 0);
 										$compteLabel = (string)($r['compte_label'] ?? '');
+										$usedComptes = (string)($r['used_comptes'] ?? '');
 									?>
 										<tr>
 											<td><?php echo 'EC_AFF' . (int)($r['id_affectation'] ?? 0); ?></td>
@@ -355,6 +407,7 @@ include('../public/header.php');
 													data-codepaiement="<?php echo h($codePaiement); ?>"
 													data-compteid="<?php echo (int)$compteId; ?>"
 													data-comptelabel="<?php echo h($compteLabel); ?>"
+													data-usedcomptes="<?php echo h($usedComptes); ?>"
 												>
 													Compléter
 												</button>
@@ -404,6 +457,9 @@ include('../public/header.php');
 													</div>
 													<div class="col-md-4 mb-3">
 														<label class="form-label">Mode de règlement</label>
+														<div class="alert alert-warning py-2 px-3 mb-2 d-none" id="noCompteMsg">
+															Aucun compte disponible (preuve de caisse déjà effectuée aujourd'hui). Veuillez créer/activer un autre compte.
+														</div>
 														<select class="form-control" name="compte" id="inpCompte" required>
 															<option value="">--- Choisir ---</option>
 															<?php foreach ($comptesOptions as $co): ?>
@@ -457,6 +513,9 @@ include('../public/header.php');
 		}
 
 		document.addEventListener('DOMContentLoaded', function () {
+			var compteSelect = document.getElementById('inpCompte');
+			var originalCompteOptions = compteSelect ? compteSelect.innerHTML : '';
+
 			// Bouton imprimer reçu
 			var btnPrint = document.getElementById('btnImprimerRecu');
 			if (btnPrint) {
@@ -527,6 +586,7 @@ include('../public/header.php');
 						var codePaiement = this.getAttribute('data-codepaiement') || '';
 						var compteLabel = this.getAttribute('data-comptelabel') || '';
 						var compteId = parseInt(this.getAttribute('data-compteid') || '0', 10) || 0;
+						var usedComptesStr = this.getAttribute('data-usedcomptes') || '';
 						var mCode = this.getAttribute('data-monture') || '';
 						var mMarque = this.getAttribute('data-marque') || '';
 						var mLentille = this.getAttribute('data-lentille') || '';
@@ -548,15 +608,23 @@ include('../public/header.php');
 						var inpAff = document.getElementById('inpIdAffectation');
 						if (inpAff) inpAff.value = idAffectation;
 						document.getElementById('inpMontantAjout').value = formatNumber(reste);
-						var compteSelect = document.getElementById('inpCompte');
+						var noCompteMsg = document.getElementById('noCompteMsg');
 						if (compteSelect) {
-							if (compteId > 0) {
-								compteSelect.value = String(compteId);
-							} else {
-								// Si on ne connait pas, choisir la première option valide
-								for (var i = 0; i < compteSelect.options.length; i++) {
-									if (compteSelect.options[i].value) { compteSelect.selectedIndex = i; break; }
+							// Reset options avant filtrage
+							if (originalCompteOptions) compteSelect.innerHTML = originalCompteOptions;
+
+							// Sélectionner la première option valide restante
+							var selected = false;
+							for (var j = 0; j < compteSelect.options.length; j++) {
+								if (compteSelect.options[j].value) {
+									compteSelect.selectedIndex = j;
+									selected = true;
+									break;
 								}
+							}
+
+							if (noCompteMsg) {
+								noCompteMsg.classList.toggle('d-none', selected);
 							}
 						}
 
@@ -567,6 +635,19 @@ include('../public/header.php');
 					} catch (e) {}
 				});
 			});
+
+			// Auto-ouvrir le modal compléter si redirection depuis la délivrance
+			try {
+				var params = new URLSearchParams(window.location.search || '');
+				var open = params.get('open');
+				var aff = params.get('affectation');
+				if (open === '1' && aff && !shouldOpen) {
+					var target = document.querySelector('.btnCompleter[data-affectation="' + String(aff).replace(/"/g, '') + '"]');
+					if (target) {
+						target.click();
+					}
+				}
+			} catch (e) {}
 		});
 	</script>
 

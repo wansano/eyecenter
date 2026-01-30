@@ -138,7 +138,7 @@ if (isset($_POST['vendre'])) {
 	$codeMonture = isset($_GET['codeproduit']) ? trim((string)$_GET['codeproduit']) : null;
     $modePaiement = $_POST['estAssure'] ?? 0;
     $categorie = $_POST['categorie'] ?? null;
-    $compte = $_POST['compte'] ?? null;
+	$compte = isset($_POST['compte']) ? (int)$_POST['compte'] : 0;
     $taux = $_POST['taux'] ?? 0;
     $acompte = 0;
 
@@ -153,6 +153,20 @@ if (isset($_POST['vendre'])) {
 	if (!$patient || !$codeMonture || !$categorie || !$compte) {
         $errors = 1;
     } else {
+		// Interdire une vente sur un compte déjà clôturé aujourd'hui (preuve de caisse effectuée)
+		try {
+			$stClosed = $bdd->prepare('SELECT 1 FROM preuvedecaisse WHERE date_rapportement = ? AND id_user = ? AND compte = ? LIMIT 1');
+			$stClosed->execute([date('Y-m-d'), $userId, $compte]);
+			if ($stClosed->fetchColumn()) {
+				$errors = 5;
+			}
+		} catch (Throwable $e) {
+			// noop
+		}
+
+		if ($errors === 5) {
+			// stop
+		} else {
 		// Si aucune affectation n'a été fournie, on en crée une automatiquement
 		if (empty($affectation) || (int)$affectation <= 0) {
 			$newAff = createAffectationForVente($bdd, (int)$patient, $userId);
@@ -219,29 +233,52 @@ if (isset($_POST['vendre'])) {
 
 				// Mise à jour des stocks et débits (schéma montures/lentilles)
 				if ($idMarque > 0) {
-					$bdd->prepare('UPDATE marques SET quantite = GREATEST(quantite - 1, 0) WHERE id_marque = ?')
+					$bdd->prepare('UPDATE marques SET quantite = CASE WHEN quantite > 0 THEN quantite - 1 ELSE 0 END WHERE id_marque = ?')
 						->execute([$idMarque]);
 				}
-				$bdd->prepare('UPDATE lentilles SET quantite = GREATEST(quantite - 1, 0) WHERE id_lentille = ?')
+				$bdd->prepare('UPDATE lentilles SET quantite = CASE WHEN quantite > 0 THEN quantite - 1 ELSE 0 END WHERE id_lentille = ?')
 					->execute([$categorie]);
 				$bdd->prepare('UPDATE montures SET id_lentille = ?, vendu = 1, date_modification = CURRENT_TIMESTAMP WHERE id_monture = ?')
 					->execute([$categorie, $produit]);
                 // Paiement
                 $code = genererNumeroPaiement();
                 $mtotal = $prixmonture + $prixverre;
-                $bdd->prepare('UPDATE affectations SET status=?, montant=?, taux=?, type_paiement=?, datetraitement=? WHERE id_affectation=?')
-                    ->execute([4, $mtotal, $taux, $compte, date('Y-m-d'), $affectation]);
+
+				// Frais paiement électronique (même logique que paiementdesfrais)
+				$montantPayeBase = ($modePaiement == 0) ? (float)$mtotal : (float)$acompte;
+				$montantPayeFinal = $montantPayeBase;
+				$montantTotalFinal = (float)$mtotal;
+				try {
+					$isMobile = (function_exists('IsPaiementElectronique') && IsPaiementElectronique((int)$compte) === 1);
+					if ($isMobile) {
+						$stT = $bdd->prepare('SELECT taux FROM comptes WHERE id_compte = ? LIMIT 1');
+						$stT->execute([(int)$compte]);
+						$tauxCompte = (float)($stT->fetchColumn() ?: 0);
+						if ($tauxCompte < 0) $tauxCompte = 0;
+						if ($tauxCompte > 100) $tauxCompte = 100;
+						if ($tauxCompte > 0) {
+							$frais = ($montantPayeBase * $tauxCompte / 100);
+							$montantPayeFinal = $montantPayeBase + $frais;
+							$montantTotalFinal = (float)$mtotal + $frais;
+						}
+					}
+				} catch (Throwable $e) {
+					// fallback silencieux
+				}
+
+				$bdd->prepare('UPDATE affectations SET status=?, montant=?, taux=?, type_paiement=?, datetraitement=? WHERE id_affectation=?')
+					->execute([4, $montantTotalFinal, $taux, $compte, date('Y-m-d'), $affectation]);
                 $motif = $bdd->prepare('SELECT type FROM affectations WHERE id_affectation=?');
                 $motif->execute([$affectation]);
                 $motif = $motif->fetchColumn();
                 if ($modePaiement == 0) {
                     $paie = $bdd->prepare('INSERT INTO paiements (id_affectation, code, types, montant, montant_paye, compte, patient, caisse) VALUES(?,?,?,?,?,?,?,?)');
-                    $paie->execute([$affectation, $code, $motif, $mtotal, $mtotal, $compte, $patient, $_SESSION['auth']]);
-                    updateCompteDebit($bdd, $compte, $mtotal);
+					$paie->execute([$affectation, $code, $motif, $montantTotalFinal, $montantPayeFinal, $compte, $patient, $_SESSION['auth']]);
+					updateCompteDebit($bdd, $compte, $montantPayeFinal);
                 } else {
                     $paie = $bdd->prepare('INSERT INTO paiements (id_affectation, code, types, montant, montant_paye, compte, patient, caisse) VALUES(?,?,?,?,?,?,?,?)');
-                    $paie->execute([$affectation, $code, $motif, $mtotal, $acompte, $compte, $patient, $_SESSION['auth']]);
-                    updateCompteDebit($bdd, $compte, $acompte);
+					$paie->execute([$affectation, $code, $motif, $montantTotalFinal, $montantPayeFinal, $compte, $patient, $_SESSION['auth']]);
+					updateCompteDebit($bdd, $compte, $montantPayeFinal);
                 }
 				$errors = 6;
 				// PRG: évite la resoumission du POST (refresh)
@@ -249,7 +286,8 @@ if (isset($_POST['vendre'])) {
 				$redirect = 'ventelunette.php?client=' . (int)$patient . '&codeproduit=' . urlencode((string)$codeMonture) . '&open=1&affectation=' . (int)$affectation;
 				header('Location: ' . $redirect);
 				exit;
-            }
+			}
+			}
         }
     }
 }
@@ -333,6 +371,12 @@ include('../PUBLIC/header.php');
 							<div class="alert alert-danger">
 								<strong>Impossible de créer l'affectation.</strong><br>
 								<li>Vérifiez la configuration du service/traitement puis réessayez.</li>
+							</div>
+						<?php endif; ?>
+						<?php if ($errors === 5): ?>
+							<div class="alert alert-warning">
+								<strong>Compte clôturé.</strong><br>
+								<li>La preuve de caisse a déjà été effectuée aujourd'hui pour ce compte. Veuillez choisir un autre compte.</li>
 							</div>
 						<?php endif; ?>
 						<?php
@@ -419,14 +463,26 @@ include('../PUBLIC/header.php');
 										<label class="col-form-label">Mode de règlement</label>
 										<select class="form-control" name="compte" required>
 											<?php
-											$type = $bdd->prepare('SELECT * FROM comptes WHERE status=? AND compte_pour=?');
-											$type->execute([1, 2]);
-											while ($type_paiement = $type->fetch(PDO::FETCH_ASSOC)) {
-												$conf = $type_paiement['defaut'];
-												if ((int)$conf === 1) {
-													echo '<option value="' . h($type_paiement['id_compte']) . '">' . h($type_paiement['nom_compte']) . '</option>';
+												$available = 0;
+												try {
+													$stC = $bdd->prepare(
+														'SELECT c.id_compte, c.nom_compte '
+														. 'FROM comptes c '
+														. 'WHERE c.status = 1 AND c.defaut = 1 AND c.compte_pour = ? '
+														. 'AND NOT EXISTS (SELECT 1 FROM preuvedecaisse p WHERE p.date_rapportement = ? AND p.id_user = ? AND p.compte = c.id_compte) '
+														. 'ORDER BY c.nom_compte'
+													);
+													$stC->execute([2, date('Y-m-d'), (int)($_SESSION['auth'] ?? 0)]);
+													while ($c = $stC->fetch(PDO::FETCH_ASSOC)) {
+														$available++;
+														echo '<option value="' . h($c['id_compte']) . '">' . h($c['nom_compte']) . '</option>';
+													}
+												} catch (Throwable $e) {
+													$available = 0;
 												}
-											}
+												if ($available === 0) {
+													echo '<option value="" selected disabled>Aucun compte disponible (preuve de caisse effectuée)</option>';
+												}
 											?>
 										</select>
 									</div>

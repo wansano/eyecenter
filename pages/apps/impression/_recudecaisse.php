@@ -138,6 +138,23 @@ if (!$donnees1 || !$donnees2) {
     die("Données non trouvées");
 }
 
+// Pour les achats de lunettes: l'assurance ne prend pas en charge => ne pas afficher la ligne de prise en charge.
+$isVenteLunette = false;
+try {
+    $venteLunetteTypeId = 0;
+    $stType = $bdd->prepare("SELECT id_type FROM traitements WHERE LOWER(nom_type) LIKE '%lunet%' OR LOWER(nom_type) LIKE '%monture%' ORDER BY id_type ASC LIMIT 1");
+    $stType->execute();
+    $venteLunetteTypeId = (int)($stType->fetchColumn() ?: 0);
+    if ($venteLunetteTypeId <= 0) {
+        $stType = $bdd->prepare("SELECT id_type FROM traitements WHERE LOWER(nom_type) LIKE '%vente%' ORDER BY id_type ASC LIMIT 1");
+        $stType->execute();
+        $venteLunetteTypeId = (int)($stType->fetchColumn() ?: 0);
+    }
+    $isVenteLunette = ($venteLunetteTypeId > 0 && (int)($donnees1['type'] ?? 0) === $venteLunetteTypeId);
+} catch (Throwable $e) {
+    $isVenteLunette = false;
+}
+
 // Recalcul du solde: plusieurs paiements possibles. On calcule le total payé jusqu'à ce paiement.
 $montantTotal = 0.0;
 if (isset($donnees1['montant'])) {
@@ -185,48 +202,50 @@ if ($idRdv > 0 && function_exists('getRdvInfo')) {
 // Infos assurance (si patient assuré)
 $assuranceRowsHtml = '';
 $hidePaymentMethod = false;
-try {
-    if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assure')) {
-        $patCols = ['assure'];
-        foreach (['assurance', 'tauxPrisecharge', 'dateExpiration'] as $col) {
-            if (dbTableHasColumn($bdd, 'patients', $col)) {
-                $patCols[] = $col;
-            }
-        }
-        $stPat = $bdd->prepare('SELECT ' . implode(', ', $patCols) . ' FROM patients WHERE id_patient = ?');
-        $stPat->execute([(int)$donnees1['id_patient']]);
-        $pat = $stPat->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        $assureFlag = (int)($pat['assure'] ?? 0);
-        if ($assureFlag === 1) {
-            $dateExp = (string)($pat['dateExpiration'] ?? '');
-            $carteValide = appec_isCardValid($dateExp);
-            $tauxPrise = appec_toFloat($pat['tauxPrisecharge'] ?? 0);
-            $assuranceId = (int)($pat['assurance'] ?? 0);
-            $assuranceNom = '';
-            if ($assuranceId > 0) {
-                $assuranceIdCol = appec_getAssuranceIdColumn($bdd);
-                if ($assuranceIdCol) {
-                    $stAss = $bdd->prepare('SELECT assurance FROM assurances WHERE ' . $assuranceIdCol . ' = ? LIMIT 1');
-                    $stAss->execute([$assuranceId]);
-                    $assuranceNom = (string)($stAss->fetchColumn() ?: '');
+if (!$isVenteLunette) {
+    try {
+        if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assure')) {
+            $patCols = ['assure'];
+            foreach (['assurance', 'tauxPrisecharge', 'dateExpiration'] as $col) {
+                if (dbTableHasColumn($bdd, 'patients', $col)) {
+                    $patCols[] = $col;
                 }
             }
+            $stPat = $bdd->prepare('SELECT ' . implode(', ', $patCols) . ' FROM patients WHERE id_patient = ?');
+            $stPat->execute([(int)$donnees1['id_patient']]);
+            $pat = $stPat->fetch(PDO::FETCH_ASSOC) ?: [];
 
-            if ($carteValide && $tauxPrise > 0 && $assuranceNom !== '') {
-                $tauxStr = rtrim(rtrim(number_format($tauxPrise, 2, '.', ''), '0'), '.');
-                $assuranceRowsHtml .= '<tr style="line-height:1px;"><td width="350" height="50">' . ('Pris en charge à ' . $tauxStr . '% par ' . $assuranceNom) . '</td></tr>';
-            }
+            $assureFlag = (int)($pat['assure'] ?? 0);
+            if ($assureFlag === 1) {
+                $dateExp = (string)($pat['dateExpiration'] ?? '');
+                $carteValide = appec_isCardValid($dateExp);
+                $tauxPrise = appec_toFloat($pat['tauxPrisecharge'] ?? 0);
+                $assuranceId = (int)($pat['assurance'] ?? 0);
+                $assuranceNom = '';
+                if ($assuranceId > 0) {
+                    $assuranceIdCol = appec_getAssuranceIdColumn($bdd);
+                    if ($assuranceIdCol) {
+                        $stAss = $bdd->prepare('SELECT assurance FROM assurances WHERE ' . $assuranceIdCol . ' = ? LIMIT 1');
+                        $stAss->execute([$assuranceId]);
+                        $assuranceNom = (string)($stAss->fetchColumn() ?: '');
+                    }
+                }
 
-            // Si prise en charge à 100% et carte valide : ne pas afficher le moyen de paiement
-            if ($carteValide && $tauxPrise >= 99.999) {
-                $hidePaymentMethod = true;
+                if ($carteValide && $tauxPrise > 0 && $assuranceNom !== '') {
+                    $tauxStr = rtrim(rtrim(number_format($tauxPrise, 2, '.', ''), '0'), '.');
+                    $assuranceRowsHtml .= '<tr style="line-height:1px;"><td width="350" height="50">' . ('Pris en charge à ' . $tauxStr . '% par ' . $assuranceNom) . '</td></tr>';
+                }
+
+                // Si prise en charge à 100% et carte valide : ne pas afficher le moyen de paiement
+                if ($carteValide && $tauxPrise >= 99.999) {
+                    $hidePaymentMethod = true;
+                }
             }
         }
+    } catch (Exception $e) {
+        $assuranceRowsHtml = '';
+        $hidePaymentMethod = false;
     }
-} catch (Exception $e) {
-    $assuranceRowsHtml = '';
-    $hidePaymentMethod = false;
 }
 
 // Premier reçu

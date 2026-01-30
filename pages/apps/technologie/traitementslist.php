@@ -327,7 +327,11 @@ try {
 							<div class="col">
 								<section class="card">
 									<div class="card-body">
-                                        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addTraitementModal"><i class="fa fa-plus"></i> ajouter un traitement</button> <br/> <br>
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addTraitementModal"><i class="fa fa-plus"></i> ajouter un traitement</button>
+                                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#printTraitementsModal"><i class="fa fa-print"></i> imprimer la liste</button>
+                                            </div>
+                                            <br/>
                                         <?php 
                                             if ($errors==1) {
                                                 echo '
@@ -451,8 +455,10 @@ try {
                                                         echo '<td>' . h((string)$idTypeRow) . '</td>';
                                                         echo '<td>' . h($nomTypeRow) . '</td>';
                                                         echo '<td>' . h(operation_label($operationRow)) . '</td>';
-                                                        echo '<td>' . h(number_format((float)$montantRow)) . ' '.$devise . '</td>';
-                                                        echo '<td>' . h(number_format((float)$prixAssuranceRow)) . ' '.$devise . '</td>';
+                                                        $montantAff = ($montantRow > 0) ? (number_format((float)$montantRow) . ' ' . $devise) : '';
+                                                        $prixAssuranceAff = ($prixAssuranceRow > 0) ? (number_format((float)$prixAssuranceRow) . ' ' . $devise) : '';
+                                                        echo '<td>' . h($montantAff) . '</td>';
+                                                        echo '<td>' . h($prixAssuranceAff) . '</td>';
                                                         echo '<td>' . h(service($idCell)) . '</td>';
                                                         echo '<td>';
 
@@ -492,6 +498,25 @@ try {
                                             ?>
 											</tbody>
 										</table>
+
+                                        <!-- Modal impression liste traitements -->
+                                        <div class="modal fade" id="printTraitementsModal" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-xl modal-dialog-centered">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Liste des traitements (PDF)</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body" style="height: 80vh;">
+                                                        <iframe id="traitementsPdfFrame" src="" style="width:100%; height:100%;" frameborder="0"></iframe>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Fermer</button>
+                                                        <button type="button" class="btn btn-primary" onclick="printTraitementsPdf()"><i class="fa fa-print"></i> Imprimer</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
 
                                         <!-- Modal ajout traitement -->
                                         <div class="modal fade" id="addTraitementModal" tabindex="-1" aria-hidden="true">
@@ -655,6 +680,42 @@ try {
                     setValue('edit_id_organigramme', btn.getAttribute('data-id_organigramme'));
                 });
             })();
+            </script>
+
+            <script>
+                (function () {
+                    var modalEl = document.getElementById('printTraitementsModal');
+                    var frameEl = document.getElementById('traitementsPdfFrame');
+
+                    function buildUrl() {
+                        var base = 'imprimer_liste_traitements.php?autoprint=0';
+                        return base + '&t=' + Date.now();
+                    }
+
+                    window.printTraitementsPdf = function () {
+                        try {
+                            if (!frameEl || !frameEl.contentWindow) return;
+                            if (typeof frameEl.contentWindow.printPdf === 'function') {
+                                frameEl.contentWindow.printPdf();
+                                return;
+                            }
+                            if (typeof frameEl.contentWindow.print === 'function') {
+                                frameEl.contentWindow.print();
+                            }
+                        } catch (e) {
+                            // noop
+                        }
+                    };
+
+                    if (modalEl && frameEl) {
+                        modalEl.addEventListener('shown.bs.modal', function () {
+                            frameEl.src = buildUrl();
+                        });
+                        modalEl.addEventListener('hidden.bs.modal', function () {
+                            frameEl.src = '';
+                        });
+                    }
+                })();
             </script>
             <?php include('../PUBLIC/footer.php');?>
 		

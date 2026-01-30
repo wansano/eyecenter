@@ -950,7 +950,17 @@ function extrairePremiersMots($texte, $nombre = 10) {
 
  // Fonction pour récupérer la somme des montants de entree compte pour un compte et une période donnée
 function getEntreePaiements($compte, $debut, $fin, $bdd) {
-    $stmt = $bdd->prepare('SELECT SUM(montant) AS entree FROM paiements WHERE remboursement=0 AND compte = ? AND datepaiement BETWEEN ? AND ?');
+    // Utiliser le montant réellement payé (montant_paye) quand disponible.
+    $expr = 'montant';
+    try {
+        if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'paiements', 'montant_paye')) {
+            $expr = 'COALESCE(montant_paye, montant)';
+        }
+    } catch (Throwable $e) {
+        $expr = 'montant';
+    }
+
+    $stmt = $bdd->prepare('SELECT SUM(' . $expr . ') AS entree FROM paiements WHERE remboursement=0 AND compte = ? AND datepaiement BETWEEN ? AND ?');
     $stmt->execute([$compte, $debut, $fin]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row && isset($row['entree']) ? $row['entree'] : 0;

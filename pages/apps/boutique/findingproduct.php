@@ -39,7 +39,38 @@ function h($value) {
     if (isset($_GET['codeproduit'])) {
         $codeGet = trim((string)$_GET['codeproduit']);
         if ($codeGet !== '') {
-            $st = $bdd->prepare('SELECT m.*, ma.marque AS marque_nom FROM montures m LEFT JOIN marques ma ON ma.id_marque = m.id_marque WHERE m.code_monture = ? LIMIT 1');
+            // Détection colonnes "délivrance" selon schéma
+            $vpCols = [];
+            try {
+                $stCols = $bdd->query('SHOW COLUMNS FROM ventes_produits');
+                while ($r = $stCols->fetch(PDO::FETCH_ASSOC)) {
+                    if (isset($r['Field'])) {
+                        $vpCols[(string)$r['Field']] = true;
+                    }
+                }
+            } catch (Throwable $e) {
+                $vpCols = [];
+            }
+
+            $selectVp = ', vp.id_vente AS vp_id_vente';
+            if (isset($vpCols['delivre'])) {
+                $selectVp .= ', vp.delivre AS vp_delivre';
+            }
+            if (isset($vpCols['date_delivrance'])) {
+                $selectVp .= ', vp.date_delivrance AS vp_date_delivrance';
+            }
+
+            $st = $bdd->prepare(
+                'SELECT m.*, ma.marque AS marque_nom, l.lentille AS lentille_nom'
+                . $selectVp . ' '
+                . 'FROM montures m '
+                . 'LEFT JOIN marques ma ON ma.id_marque = m.id_marque '
+                . 'LEFT JOIN lentilles l ON l.id_lentille = m.id_lentille '
+                . 'LEFT JOIN ventes_produits vp '
+                . '  ON vp.id_monture = m.id_monture '
+                . ' AND vp.id_vente = (SELECT MAX(vp2.id_vente) FROM ventes_produits vp2 WHERE vp2.id_monture = m.id_monture) '
+                . 'WHERE m.code_monture = ? LIMIT 1'
+            );
             $st->execute([$codeGet]);
             $monture = $st->fetch(PDO::FETCH_ASSOC);
             if ($monture) {
@@ -109,9 +140,25 @@ function h($value) {
                         $marqueNom = (string)($monture['marque_nom'] ?? '');
                         $couleur = (string)($monture['couleur'] ?? '');
                         $typeMonture = (string)($monture['monture_pour'] ?? '');
+                        $lentilleNom = (string)($monture['lentille_nom'] ?? '');
                         $vendu = (int)($monture['vendu'] ?? 0);
                         $retour = (int)($monture['retour'] ?? 0);
                         $prix = (float)($monture['prix'] ?? 0);
+
+                        $isDelivre = false;
+                        if (isset($monture['vp_delivre']) && (int)$monture['vp_delivre'] === 1) {
+                            $isDelivre = true;
+                        }
+                        if (!$isDelivre && !empty($monture['vp_date_delivrance'])) {
+                            $isDelivre = true;
+                        }
+                        if (!$isDelivre && isset($_GET['delivre']) && (string)$_GET['delivre'] === '1') {
+                            $isDelivre = true;
+                        }
+                        if (!$isDelivre && !empty($flashSuccess)) {
+                            // Cas PRG/redirect: on vient de délivrer
+                            $isDelivre = true;
+                        }
 
                         if ($vendu === 1) {
                             $statusLabel = 'Déjà vendu';
@@ -174,9 +221,18 @@ function h($value) {
                                             <input type="text" class="form-control" value="<?php echo h($typeMonture); ?>" disabled>
                                         </div>
                                     </div>
+
+                                    <?php if ($vendu === 1): ?>
+                                        <div class="row form-group pb-3">
+                                            <div class="col-md-4">
+                                                <label class="col-form-label">Lentille vendue avec la monture</label>
+                                                <input type="text" class="form-control" value="<?php echo h($lentilleNom !== '' ? $lentilleNom : '-'); ?>" disabled>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="modal-footer">
-                                    <?php if ($vendu === 1 && $retour !== 1): ?>
+                                    <?php if ($vendu === 1 && $retour !== 1 && !$isDelivre): ?>
                                         <a class="btn btn-success" href="delivrerlunette.php?id_monture=<?php echo (int)($monture['id_monture'] ?? 0); ?>&code=<?php echo urlencode($codeMonture); ?>">Délivrer la lunette</a>
                                     <?php endif; ?>
                                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Fermer</button>
