@@ -393,7 +393,7 @@ include('../PUBLIC/header.php');
                     <section class="card">
                         <div class="card-body">
                             <form method="get" class="row g-2 align-items-end mb-3">
-                                <div class="col-sm-3">
+                                <div class="col-sm-2">
                                     <label class="form-label">Année</label>
                                     <select name="annee" class="form-control" id="filterYear" required>
                                         <?php for ($y = (int)$yearMin; $y <= (int)$yearMax; $y++): ?>
@@ -403,7 +403,7 @@ include('../PUBLIC/header.php');
                                         <?php endfor; ?>
                                     </select>
                                 </div>
-                                <div class="col-sm-3">
+                                <div class="col-sm-2">
                                     <label class="form-label">Mois</label>
                                     <select name="mois_num" class="form-control" id="filterMonth" required>
                                         <?php foreach ($monthLabels as $mNum => $mLabel): ?>
@@ -416,6 +416,7 @@ include('../PUBLIC/header.php');
                                 <div class="col-sm-3">
                                     <button type="submit" class="btn btn-primary">Afficher</button>
                                     <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalBulletin" onclick="openCreateBulletin()">Nouveau bulletin</button>
+                                    <button type="button" class="btn btn-default" data-bs-toggle="modal" data-bs-target="#modalEtatSalaires" onclick="openEtatSalairesFromPageFilter()">Etat des salaires</button>
                                 </div>
                             </form>
 
@@ -487,6 +488,51 @@ include('../PUBLIC/header.php');
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
                                 <button type="button" class="btn btn-primary" id="btnPrintBulletin"><i class="fa fa-print"></i> Imprimer</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal état des salaires (PDF) -->
+                <div class="modal fade" id="modalEtatSalaires" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Etat des salaires</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" style="min-height:70vh;">
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-sm-3">
+                                        <label class="form-label">Année</label>
+                                        <select class="form-control" id="etatYear" required>
+                                            <?php for ($y = (int)$yearMin; $y <= (int)$yearMax; $y++): ?>
+                                                <option value="<?php echo (int)$y; ?>" <?php echo ((int)$y === (int)$selectedYear) ? 'selected' : ''; ?>>
+                                                    <?php echo (int)$y; ?>
+                                                </option>
+                                            <?php endfor; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <label class="form-label">Mois</label>
+                                        <select class="form-control" id="etatMonth" required>
+                                            <?php foreach ($monthLabels as $mNum => $mLabel): ?>
+                                                <option value="<?php echo (int)$mNum; ?>" <?php echo ((int)$mNum === (int)$selectedMonthNum) ? 'selected' : ''; ?>>
+                                                    <?php echo h($mLabel); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-6 text-end">
+                                        <button type="button" class="btn btn-primary" onclick="refreshEtatSalaires()">Afficher</button>
+                                        <button type="button" class="btn btn-primary" id="btnPrintEtatSalaires"><i class="fa fa-print"></i> Imprimer</button>
+                                    </div>
+                                </div>
+
+                                <iframe id="etatSalairesFrame" title="Etat des salaires" style="width:100%; height:62vh; border:1px solid #e5e5e5;"></iframe>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
                             </div>
                         </div>
                     </div>
@@ -766,6 +812,68 @@ include('../PUBLIC/header.php');
             if (frame) frame.src = url;
         }
 
+        function etatUpdateMonthOptions(){
+            var yearSel = document.getElementById('etatYear');
+            var monthSel = document.getElementById('etatMonth');
+            if (!yearSel || !monthSel) return;
+
+            var currentYear = <?php echo (int)$currentYear; ?>;
+            var currentMonthNum = <?php echo (int)$currentMonthNum; ?>;
+
+            var y = Number(yearSel.value || 0);
+            var maxAllowed = 12;
+            if (y === currentYear) {
+                maxAllowed = Number(currentMonthNum || 12);
+            } else if (y > currentYear) {
+                maxAllowed = 0;
+            }
+
+            var hasAllowed = false;
+            Array.prototype.forEach.call(monthSel.options, function(opt){
+                var m = Number(opt.value || 0);
+                var allowed = (maxAllowed > 0) ? (m >= 1 && m <= maxAllowed) : false;
+                opt.disabled = !allowed;
+                if (allowed) hasAllowed = true;
+            });
+
+            monthSel.disabled = !hasAllowed;
+
+            var curM = Number(monthSel.value || 0);
+            if (!hasAllowed) {
+                monthSel.value = '';
+                return;
+            }
+            if (!(curM >= 1 && curM <= maxAllowed)) {
+                monthSel.value = String(maxAllowed);
+            }
+        }
+
+        function refreshEtatSalaires(){
+            var yearSel = document.getElementById('etatYear');
+            var monthSel = document.getElementById('etatMonth');
+            var frame = document.getElementById('etatSalairesFrame');
+            if (!yearSel || !monthSel || !frame) return;
+
+            etatUpdateMonthOptions();
+
+            var y = parseInt(yearSel.value || 0, 10);
+            var m = parseInt(monthSel.value || 0, 10);
+            if (!y || !m) return;
+
+            var url = '../impression/_etat_salaires.php?annee=' + encodeURIComponent(String(y)) + '&mois_num=' + encodeURIComponent(String(m));
+            frame.src = url;
+        }
+
+        function openEtatSalairesFromPageFilter(){
+            var fy = document.getElementById('filterYear');
+            var fm = document.getElementById('filterMonth');
+            var yearSel = document.getElementById('etatYear');
+            var monthSel = document.getElementById('etatMonth');
+            if (fy && yearSel) yearSel.value = fy.value;
+            if (fm && monthSel) monthSel.value = fm.value;
+            refreshEtatSalaires();
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             const modalEl = document.getElementById('modalPrintBulletin');
             if (!modalEl) return;
@@ -788,6 +896,40 @@ include('../PUBLIC/header.php');
                         }
                     } catch (e) {
                         // Si le navigateur bloque l'accès, on ne fait rien
+                    }
+                });
+            }
+
+            // Etat des salaires: initialisation + impression
+            var etatModalEl = document.getElementById('modalEtatSalaires');
+            if (etatModalEl) {
+                etatModalEl.addEventListener('shown.bs.modal', function(){
+                    etatUpdateMonthOptions();
+                    var frame = document.getElementById('etatSalairesFrame');
+                    if (frame && !frame.src) {
+                        openEtatSalairesFromPageFilter();
+                    }
+                });
+                etatModalEl.addEventListener('hidden.bs.modal', function(){
+                    var frame = document.getElementById('etatSalairesFrame');
+                    if (frame) frame.src = '';
+                });
+            }
+
+            var etatYear = document.getElementById('etatYear');
+            if (etatYear) etatYear.addEventListener('change', function(){ etatUpdateMonthOptions(); });
+
+            var btnPrintEtat = document.getElementById('btnPrintEtatSalaires');
+            if (btnPrintEtat) {
+                btnPrintEtat.addEventListener('click', function(){
+                    var frame = document.getElementById('etatSalairesFrame');
+                    if (!frame) return;
+                    try {
+                        if (frame.contentWindow) {
+                            frame.contentWindow.focus();
+                            frame.contentWindow.print();
+                        }
+                    } catch (e) {
                     }
                 });
             }

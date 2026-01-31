@@ -358,18 +358,6 @@ class MenuConfig {
                     </ul>
                 </li>
                 <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Assurances</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="listedesassurances.php">Liste des assurances</a></li>
-                    </ul>
-                </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Fournisseurs</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="listedesfournisseurs.php">Liste des fournisseurs</a></li>
-                    </ul>
-                </li>
-                <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Commandes</a>
                     <ul class="dropdown-menu">
                         <li><a class="nav-link" href="listedescommandes.php?commande=guessing">En attente</a></li>
@@ -384,7 +372,7 @@ class MenuConfig {
     private static function getComptabiliteConfigurationMenu() {
         return '
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Configuration</a>
+            <a href="#" class="nav-link dropdown-toggle">Paramètre</a>
             <ul class="dropdown-menu">
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Comptes</a>
@@ -396,6 +384,18 @@ class MenuConfig {
                     <a class="nav-link" href="#">Budgets</a>
                     <ul class="dropdown-menu">
                         <li><a class="nav-link" href="listedesbudgets.php?addbudgets">Liste des budgets</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Assurances</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listedesassurances.php">Liste des assurances</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Fournisseurs</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listedesfournisseurs.php">Liste des fournisseurs</a></li>
                     </ul>
                 </li>
                 <li class="dropdown-submenu">
@@ -429,16 +429,6 @@ class MenuConfig {
         <li class="dropdown">
             <a href="#" class="nav-link dropdown-toggle">Gestion boutique</a>
             <ul class="dropdown-menu">
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Monture</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addmodelproduct.php">Ajouter une marque</a></li>
-                        <li><a class="nav-link" href="listedesmodelsproduits.php">Liste des marques</a></li>
-                        <li><a class="nav-link" href="listedesproduitsdisponibles.php">Liste globals montures</a></li>
-                        <li><a class="nav-link" href="findingproduct.php">Vérifier une monture</a></li>
-                        <li><a class="nav-link" href="addproduct.php">Ajouter monture</a></li>
-                    </ul>
-                </li>
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Verres</a>
                     <ul class="dropdown-menu">
