@@ -98,7 +98,7 @@ $pdf->Cell(0,5,pdf_text_compat('NB : Conservez ce reçu pour toute réclamation.
 // Séparateur
 $pdf->Ln(15);
 $pdf->Cell(5,0,str_repeat('-',146),0,0,'L');
-$pdf->Ln(12);
+$pdf->Ln(14);
 
 // 2e exemplaire
 genererEntete($pdf,$data,163);
