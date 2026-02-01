@@ -223,7 +223,7 @@ $pdf->WriteHTML($html);
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal, 0, '', ' ')), 1, 1, 'R');
 
     // Remboursement
-    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant Remboursement'), 1, 0, 'R');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant remboursé'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($remboursementTotal, 0, '', ' ')), 1, 1, 'R');
 
