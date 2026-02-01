@@ -162,6 +162,7 @@ include('../PUBLIC/header.php');
 														<th>TYPE</th>
 														<th>ENTREE</th>
 														<th>REMBOURSEMENT</th>
+																								<th>TOTAL</th>
 														<th>RAPPORT CAISSIER</th>
 														<th>DIFFERENCE</th>
 														<th>ACTION</th>
@@ -182,9 +183,12 @@ include('../PUBLIC/header.php');
 																	$rembHtml = '<a href="#" class="js-open-remb" data-url="'.htmlspecialchars($rembUrl).'">'.$rembHtml.'</a>';
 																}
 																echo '<td>' . $rembHtml . ' </td>';
+																$totalLigne = (float)$entree + (float)$remboursementTotal;
+																echo '<td>' . number_format($totalLigne, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
 														echo '<td>' . number_format($entreePreuve, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
-														echo '<td>' . number_format($solde, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
-														echo '<td>' . ($entreePreuve > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
+																$diffLigne = $totalLigne - (float)$entreePreuve;
+																echo '<td>' . number_format($diffLigne, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
+																echo '<td>' . ($entreePreuve > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$totalLigne.'&rapportcaisse='.$entreePreuve.'&solde='.$diffLigne.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
 															<a href="cumulationdesfaits.php?debut='.$_GET['debut'].'&fin='.$_GET['fin'].'" class="btn btn-sm btn-info">cumul global</a></td>';
 														echo '</tr>';
 													}
@@ -253,6 +257,7 @@ include('../PUBLIC/header.php');
 														<th>TYPE</th>
 														<th>ENTREE</th>
 														<th>REMBOURSEMENT</th>
+																								<th>TOTAL</th>
 														<th>RAPPORT CAISSIER</th>
 														<th>DIFFERENCE</th>
 														<th>ACTION</th>
@@ -277,11 +282,14 @@ include('../PUBLIC/header.php');
 																		$rembHtml = '<a href="#" class="js-open-remb" data-url="'.htmlspecialchars($rembUrl).'">'.$rembHtml.'</a>';
 																	}
 																	echo '<td>' . $rembHtml . '</td>';
+																	$totalLigne = (float)$entree + (float)$remboursement;
+																	echo '<td>' . number_format($totalLigne, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
 														echo '<td>' . number_format($entreePreuve, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
-														echo '<td>' . number_format($solde, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
+																	$diffLigne = $totalLigne - (float)$entreePreuve;
+																	echo '<td>' . number_format($diffLigne, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
 														if ($rowIndex === 0) {
 															echo '<td rowspan="' . $rowCount . '" class="align-middle text-center">
-																				'.($entreePreuveTotal > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$montanttotal.'&rapportcaisse='.$entreePreuveTotal.'&solde='.$soldetotal.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
+																				'.($entreePreuveTotal > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.(($montanttotal + $remboursementTotal)).'&rapportcaisse='.$entreePreuveTotal.'&solde='.(($montanttotal + $remboursementTotal) - $entreePreuveTotal).'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
 															<a href="cumulationdesfaits.php?debut=' . htmlspecialchars($_GET['debut']) . '&fin=' . htmlspecialchars($_GET['fin']) . '" class="btn btn-sm btn-info">cumul global</a>
 															</td>';
 														}
@@ -346,6 +354,7 @@ include('../PUBLIC/header.php');
 		const rapportModalEl = document.getElementById('rapportModal');
 		const rapportFrameEl = document.getElementById('rapportFrame');
 		const rapportPrintBtnEl = document.getElementById('rapportPrintBtn');
+		const rapportTitleEl = rapportModalEl ? rapportModalEl.querySelector('.modal-title') : null;
 		const rembModalEl = document.getElementById('rembModal');
 		const rembModalBodyEl = document.getElementById('rembModalBody');
 
@@ -354,13 +363,16 @@ include('../PUBLIC/header.php');
 			return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
 		}
 
-		function openRapportModal(url) {
+		function openPdfModal(url, title) {
 			if (!url) return;
 			if (!window.bootstrap || !rapportModalEl || !rapportFrameEl) {
 				if (typeof window.openPrintModal === 'function') {
-					window.openPrintModal(url, 'Impression');
+					window.openPrintModal(url, title || 'Impression');
 				}
 				return;
+			}
+			if (rapportTitleEl) {
+				rapportTitleEl.textContent = title || 'Impression';
 			}
 			rapportFrameEl.src = withAutoPrintDisabled(url);
 			const instance = window.bootstrap.Modal.getInstance(rapportModalEl) || new window.bootstrap.Modal(rapportModalEl);
@@ -368,12 +380,13 @@ include('../PUBLIC/header.php');
 		}
 
 		document.addEventListener('click', function (e) {
-			const btn = e.target.closest('.js-open-rapport');
+			const btn = e.target.closest('.js-open-rapport, .js-open-pdf');
 			if (!btn) return;
 			const href = btn.getAttribute('href');
 			if (!href || href === '#') return;
 			e.preventDefault();
-			openRapportModal(href);
+			const title = btn.getAttribute('data-title') || (btn.classList.contains('js-open-rapport') ? "Rapport d'interrogation" : 'Impression');
+			openPdfModal(href, title);
 		});
 
 		function openRembModal(url) {

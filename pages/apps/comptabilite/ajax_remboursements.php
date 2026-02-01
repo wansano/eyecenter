@@ -102,7 +102,7 @@ foreach ($rows as $r) {
     echo '<td>' . number_format($montantRemb, 0, '', ' ') . ' ' . htmlspecialchars($deviseLocal) . '</td>';
     echo '<td>';
     if ($idAffectation > 0) {
-        echo '<a class="btn btn-sm btn-secondary" target="_blank" href="imprimer_remboursement.php?affectation=' . urlencode((string)$idAffectation) . '"><i class="fa fa-file-pdf-o"></i> Reçu</a>';
+        echo '<a class="btn btn-sm btn-secondary js-open-pdf" data-title="Reçu de remboursement" href="imprimer_remboursement.php?affectation=' . urlencode((string)$idAffectation) . '"><i class="fa fa-file-pdf-o"></i> Reçu</a>';
     }
     echo '</td>';
     echo '</tr>';

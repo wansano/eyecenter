@@ -2,6 +2,8 @@
 $affectation = isset($_GET['affectation']) ? intval($_GET['affectation']) : 0;
 $remboursement = isset($_GET['remboursement']) ? intval($_GET['remboursement']) : 0;
 
+$autoPrint = !isset($_GET['autoprint']) || (int)$_GET['autoprint'] !== 0;
+
 if ($remboursement > 0) {
     $pdf_url = "../impression/_bonderemboursement.php?remboursement=" . $remboursement;
 } else {
@@ -41,6 +43,8 @@ if ($remboursement > 0) {
         }
 
         window.onload = function() {
+            var auto = <?php echo $autoPrint ? 'true' : 'false'; ?>;
+            if (!auto) return;
             setTimeout(function() {
                 printPdf();
             }, 1000); // attendre que le PDF charge

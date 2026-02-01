@@ -132,7 +132,7 @@ $pdf->WriteHTML($html);
         $remboursementTotal = 0;
     }
 
-    addSection($pdf, 'Montant total :', (number_format($_GET['montant'] < 0 ? 0 : $_GET['montant']) .' '.$devise));
+    addSection($pdf, 'Total :', (number_format($_GET['montant'] < 0 ? 0 : $_GET['montant']) .' '.$devise));
     addSection($pdf, 'Remboursement :', (number_format($remboursementTotal < 0 ? 0 : $remboursementTotal) .' '.$devise));
     addSection($pdf, 'Rapport caissier :', (number_format($_GET['rapportcaisse'] < 0 ? 0 : $_GET['rapportcaisse']) .' '.$devise));
     addSection($pdf, 'Différence :', (number_format($_GET['solde'] < 0 ? 0 : $_GET['solde']) .' '.$devise));

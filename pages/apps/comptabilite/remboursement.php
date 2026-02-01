@@ -183,7 +183,7 @@ include('../PUBLIC/header.php');
                                                         echo '<td>' . number_format($montantRemb, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
                                                         echo '<td>';
                                                         if ($idAffectation > 0) {
-                                                            echo '<a href="imprimer_remboursement.php?affectation=' . urlencode((string)$idAffectation) . '" class="btn btn-sm btn-secondary" target="_blank">reçu</a>';
+                                                            echo '<a href="imprimer_remboursement.php?affectation=' . urlencode((string)$idAffectation) . '" class="btn btn-sm btn-secondary js-open-pdf" data-title="Reçu de remboursement">reçu</a>';
                                                         }
                                                         echo '</td>';
                                                         echo '</tr>';
@@ -224,4 +224,82 @@ include('../PUBLIC/header.php');
                 </div>
             </section>
         </div>
+
+        <!-- Modal Impression (aperçu + impression) -->
+        <div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Impression</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-0" style="height:80vh;">
+                        <iframe id="printFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="printBtn" class="btn btn-primary">Imprimer</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalEl = document.getElementById('printModal');
+            const frameEl = document.getElementById('printFrame');
+            const titleEl = modalEl ? modalEl.querySelector('.modal-title') : null;
+            const printBtnEl = document.getElementById('printBtn');
+
+            function withAutoPrintDisabled(url) {
+                if (!url) return url;
+                return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+            }
+
+            function openPrintModal(url, title) {
+                if (!url) return;
+                if (!window.bootstrap || !modalEl || !frameEl) {
+                    window.open(url, '_blank');
+                    return;
+                }
+                if (titleEl) titleEl.textContent = title || 'Impression';
+                frameEl.src = withAutoPrintDisabled(url);
+                const instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                instance.show();
+            }
+
+            document.addEventListener('click', function (e) {
+                const btn = e.target.closest('.js-open-pdf');
+                if (!btn) return;
+                const href = btn.getAttribute('href');
+                if (!href || href === '#') return;
+                e.preventDefault();
+                openPrintModal(href, btn.getAttribute('data-title') || 'Impression');
+            });
+
+            if (printBtnEl) {
+                printBtnEl.addEventListener('click', function () {
+                    try {
+                        const win = frameEl && frameEl.contentWindow ? frameEl.contentWindow : null;
+                        if (win && typeof win.printPdf === 'function') {
+                            win.printPdf();
+                            return;
+                        }
+                        if (win && typeof win.print === 'function') {
+                            win.print();
+                        }
+                    } catch (err) {
+                        // noop
+                    }
+                });
+            }
+
+            if (modalEl) {
+                modalEl.addEventListener('hidden.bs.modal', function () {
+                    if (frameEl) frameEl.src = 'about:blank';
+                });
+            }
+        });
+        </script>
+
         <?php include('../PUBLIC/footer.php'); ?>
