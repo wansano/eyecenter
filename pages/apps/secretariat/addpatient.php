@@ -199,7 +199,7 @@ require('../PUBLIC/header.php');
                                 <div class="alert alert-success">
                                     <strong>Succès</strong><br/>  
                                     <li>Enregistrement du patient effectué avec succès. Le dossier est ouvert sous le numéro <strong>PAT-<?= $id_patient ?></strong>.</li>
-                                    <li>Vous pouvez l'affecter à un service traitant en cliquant sur <a href="transmission-caisse.php?id_patient=<?= $id_patient ?>">transmettre pour un traitement</a>.</li>
+                                    <!-- <li>Vous pouvez l'affecter à un service traitant en cliquant sur <a href="transmission-caisse.php?id_patient=<?= $id_patient ?>">transmettre pour un traitement</a>.</li> -->
                                 </div>
                             <?php elseif ($errors == 3): ?>
                                 <div class="alert alert-danger">
@@ -533,7 +533,7 @@ require('../PUBLIC/header.php');
             <div class="modal-dialog modal-xl modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="dossierPrintModalTitle">Impression dossier</h5>
+                        <h5 class="modal-title" id="dossierPrintModalTitle">Impression carte d'adhesion</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body p-0" style="height:80vh;">
@@ -552,6 +552,7 @@ require('../PUBLIC/header.php');
         (function () {
             var modalEl = document.getElementById('dossierPrintModal');
             var frameEl = document.getElementById('dossierPrintFrame');
+            var titleEl = document.getElementById('dossierPrintModalTitle');
             var printBtnEl = document.getElementById('dossierPrintBtn');
             var transmitBtnEl = document.getElementById('dossierTransmitBtn');
 
@@ -575,18 +576,22 @@ require('../PUBLIC/header.php');
                 return false;
             }
 
-            function openDossierPrintModal(url, idPatient) {
+            function openDossierPrintModal(url, idPatient, title) {
                 currentPatientId = idPatient ? String(idPatient) : null;
+
+                if (titleEl) {
+                    titleEl.textContent = title ? String(title) : "Impression";
+                }
 
                 if (!modalEl || !frameEl) {
                     // Fallback sans modal
-                    if (url && typeof window.openPrintModal === 'function') window.openPrintModal(url, 'Impression');
+                    if (url && typeof window.openPrintModal === 'function') window.openPrintModal(url, title ? String(title) : 'Impression');
                     return;
                 }
 
                 frameEl.src = withAutoPrintDisabled(url);
                 if (!showModal()) {
-                    if (typeof window.openPrintModal === 'function') window.openPrintModal(url, 'Impression');
+                    if (typeof window.openPrintModal === 'function') window.openPrintModal(url, title ? String(title) : 'Impression');
                 }
             }
 
@@ -638,7 +643,7 @@ require('../PUBLIC/header.php');
             <script>
                 document.addEventListener('DOMContentLoaded', function () {
                     if (typeof window.openDossierPrintModal !== 'function') return;
-                    window.openDossierPrintModal('imprimer_dossier.php?id_patient=<?= (int)$id_patient ?>', <?= (int)$id_patient ?>);
+                    window.openDossierPrintModal('imprimer_carte.php?id_patient=<?= (int)$id_patient ?>', <?= (int)$id_patient ?>, "Impression carte d'adhesion");
                 });
             </script>
         <?php endif; ?>

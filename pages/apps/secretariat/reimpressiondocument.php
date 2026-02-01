@@ -378,7 +378,7 @@ include('../PUBLIC/header.php');
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                    <a href="#" class="btn btn-primary" id="btnImprimerDossier" rel="noopener"> <i class="fa fa-print"></i> dossier</a>
+                    <!-- <a href="#" class="btn btn-primary" id="btnImprimerDossier" rel="noopener"> <i class="fa fa-print"></i> dossier</a> -->
                     <a href="#" class="btn btn-info" id="btnImprimerCarte" rel="noopener"> <i class="fa fa-print"></i> carte d'adhésion</a>
                 </div>
             </div>
