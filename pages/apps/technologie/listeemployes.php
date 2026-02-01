@@ -52,6 +52,7 @@ function getEmployesColumnMap(PDO $bdd): array {
     return [
         'name' => $nameCol,
         'salary' => $salaryCol,
+        'sexe' => isset($fields['sexe']) ? 'sexe' : null,
         'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
         'prime_logement' => isset($fields['PrimeLogement']) ? 'PrimeLogement' : null,
         'prime_vie' => isset($fields['PrimeVie']) ? 'PrimeVie' : null,
@@ -387,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
 // Ajout employé (modal)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     $nom = trim((string)($_POST['nom_employe'] ?? ''));
+    $sexe = isset($_POST['sexe']) ? (int)$_POST['sexe'] : null;
     $dateNaissance = trim((string)($_POST['date_naissance'] ?? ''));
     $adresse = trim((string)($_POST['adresse'] ?? ''));
     $telephone = trim((string)($_POST['telephone'] ?? ''));
@@ -408,6 +410,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     }
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         redirectWith(['err' => 2, 'add' => 1]);
+    }
+
+    // Sexe (1 = Homme, 0 = Femme)
+    if ($sexe !== null && $sexe !== 0 && $sexe !== 1) {
+        $sexe = null;
     }
 
     try {
@@ -543,6 +550,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
 
         $columns = [
             '`' . $nameCol . '`',
+            // sexe est optionnel selon le schéma
             'date_naissance',
             'adresse',
             'telephone',
@@ -574,6 +582,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             ':service' => ($service !== '' ? $service : null),
             ':salaire' => $salaireDb,
         ];
+
+        if ($empCols['sexe'] !== null) {
+            array_splice($columns, 1, 0, ['`' . $empCols['sexe'] . '`']);
+            array_splice($placeholders, 1, 0, [':sexe']);
+            $paramsEmp[':sexe'] = $sexe;
+        }
 
         if ($empCols['prime_transport'] !== null) {
             $columns[] = '`' . $empCols['prime_transport'] . '`';

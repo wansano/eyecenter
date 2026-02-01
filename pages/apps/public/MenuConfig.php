@@ -57,6 +57,8 @@ class MenuConfig {
                 <li><a class="nav-link" href="listeemployes.php">Liste des employés</a></li>
                 <li><a class="nav-link" href="bulletinsalaire.php">Bulletin de salaire</a></li>
                 <li><a class="nav-link" href="realisationindividuelle.php">Réalisation individuelle</a></li>
+                <li><a class="nav-link" href="attestationtravail.php">Attestation de travail</a></li>
+                <li><a class="nav-link" href="notedeservice.php">Note de service</a></li>
             </ul>
         </li>
         <li class="dropdown">
