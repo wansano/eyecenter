@@ -199,7 +199,6 @@ require('../PUBLIC/header.php');
                                 <div class="alert alert-success">
                                     <strong>Succès</strong><br/>  
                                     <li>Enregistrement du patient effectué avec succès. Le dossier est ouvert sous le numéro <strong>PAT-<?= $id_patient ?></strong>.</li>
-                                    <!-- <li>Vous pouvez l'affecter à un service traitant en cliquant sur <a href="transmission-caisse.php?id_patient=<?= $id_patient ?>">transmettre pour un traitement</a>.</li> -->
                                 </div>
                             <?php elseif ($errors == 3): ?>
                                 <div class="alert alert-danger">

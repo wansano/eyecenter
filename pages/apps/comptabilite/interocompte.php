@@ -110,6 +110,22 @@ include('../PUBLIC/header.php');
 				
 					if ($_GET['compte']!=0) {
 
+						// Détecter la colonne montant_paye si elle existe (sinon fallback sur montant)
+						$paiementsAmountCol = 'montant';
+						try {
+							$stCols = $bdd->query('SHOW COLUMNS FROM paiements');
+							if ($stCols) {
+								while ($c = $stCols->fetch(PDO::FETCH_ASSOC)) {
+									if (($c['Field'] ?? '') === 'montant_paye') {
+										$paiementsAmountCol = 'montant_paye';
+										break;
+									}
+								}
+							}
+						} catch (Throwable $e) {
+							$paiementsAmountCol = 'montant';
+						}
+
 						$reponse1 = $bdd->prepare('SELECT * FROM comptes WHERE id_compte=?');
 						$reponse1 -> execute([$_GET['compte']]);
 						while ($donnees1 = $reponse1->fetch())
@@ -121,7 +137,7 @@ include('../PUBLIC/header.php');
 
 						$solde = $entree - $entreePreuve;
 						$remboursementTotal = 0;
-						$rembStmt = $bdd->prepare('SELECT COALESCE(SUM(montant), 0) AS remboursement_total FROM paiements WHERE compte = :compte AND (remboursement <> 0 AND remboursement IS NOT NULL) AND datepaiement BETWEEN :debut AND :fin');
+						$rembStmt = $bdd->prepare('SELECT COALESCE(SUM(`' . $paiementsAmountCol . '`), 0) AS remboursement_total FROM paiements WHERE compte = :compte AND remboursement = 1 AND datepaiement BETWEEN :debut AND :fin');
 						$rembStmt->execute([
 							':compte' => $_GET['compte'],
 							':debut' => $_GET['debut'],
@@ -178,13 +194,29 @@ include('../PUBLIC/header.php');
 						';}
 						} else {
 
+						// Détecter la colonne montant_paye si elle existe (sinon fallback sur montant)
+						$paiementsAmountCol = 'montant';
+						try {
+							$stCols = $bdd->query('SHOW COLUMNS FROM paiements');
+							if ($stCols) {
+								while ($c = $stCols->fetch(PDO::FETCH_ASSOC)) {
+									if (($c['Field'] ?? '') === 'montant_paye') {
+										$paiementsAmountCol = 'montant_paye';
+										break;
+									}
+								}
+							}
+						} catch (Throwable $e) {
+							$paiementsAmountCol = 'montant';
+						}
+
 						$montant = $bdd->prepare('SELECT compte, SUM(montant) AS entree FROM paiements WHERE (remboursement = 0 OR remboursement IS NULL) AND datepaiement BETWEEN :debut AND :fin GROUP BY compte');
 						$montant -> execute(array(':debut' => $_GET['debut'],':fin' => $_GET['fin']));
 						$data_montants = $montant->fetchAll(PDO::FETCH_ASSOC);
 
 						$remboursementsByCompte = [];
 						$remboursementTotal = 0;
-						$remb = $bdd->prepare('SELECT compte, COALESCE(SUM(montant), 0) AS remboursement_total FROM paiements WHERE (remboursement <> 0 AND remboursement IS NOT NULL) AND datepaiement BETWEEN :debut AND :fin GROUP BY compte');
+						$remb = $bdd->prepare('SELECT compte, COALESCE(SUM(`' . $paiementsAmountCol . '`), 0) AS remboursement_total FROM paiements WHERE remboursement = 1 AND datepaiement BETWEEN :debut AND :fin GROUP BY compte');
 						$remb->execute([':debut' => $_GET['debut'], ':fin' => $_GET['fin']]);
 						foreach ($remb->fetchAll(PDO::FETCH_ASSOC) as $rowRemb) {
 							$compteKey = $rowRemb['compte'];
