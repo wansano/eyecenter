@@ -164,7 +164,7 @@ $pdf->WriteHTML($html);
     $differenceGlobal = $totalGlobal - (float)$rapportCaissierParam;
     addSection($pdf, 'Entrée total :', number_format($totalGlobal < 0 ? 0 : $totalGlobal, 0, '', ' '));
     addSection($pdf, 'Remboursement :', number_format($remboursementTotal < 0 ? 0 : $remboursementTotal, 0, '', ' '));
-    addSection($pdf, 'Solde sans frais :', number_format($entreeTotal < 0 ? 0 : $entreeTotal, 0, '', ' '));
+    addSection($pdf, 'Solde hors frais :', number_format($entreeTotal < 0 ? 0 : $entreeTotal, 0, '', ' '));
     addSection($pdf, 'Rapport caissier :', number_format($rapportCaissierParam, 0, '', ' '));
     addSection($pdf, 'Différence :', number_format($differenceGlobal, 0, '', ' '));
     addSection($pdf, 'Réalisations :', '');
