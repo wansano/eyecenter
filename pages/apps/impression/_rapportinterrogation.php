@@ -92,7 +92,48 @@ $pdf->WriteHTML($html);
     $periode = 'du ' . safeDateFr($_GET['debut']) . ' au ' . safeDateFr($_GET['fin']);
     addSection($pdf, 'Période :', $periode);
     addSection($pdf, 'Compte :', $nom_compte);
+
+    // Calcul du remboursement sur la période: SUM(montant_paye) si dispo, sinon SUM(montant)
+    $paiementsAmountCol = 'montant';
+    try {
+        $stCols = $bdd->query('SHOW COLUMNS FROM paiements');
+        if ($stCols) {
+            while ($c = $stCols->fetch(PDO::FETCH_ASSOC)) {
+                if (($c['Field'] ?? '') === 'montant_paye') {
+                    $paiementsAmountCol = 'montant_paye';
+                    break;
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        $paiementsAmountCol = 'montant';
+    }
+
+    $remboursementTotal = 0;
+    try {
+        if (isset($_GET['compte']) && (int)$_GET['compte'] !== 0) {
+            $rembStmt = $bdd->prepare('SELECT COALESCE(SUM(`' . $paiementsAmountCol . '`), 0) AS remboursement_total FROM paiements WHERE compte = :compte AND remboursement = 1 AND datepaiement BETWEEN :debut AND :fin');
+            $rembStmt->execute([
+                ':compte' => (int)$_GET['compte'],
+                ':debut' => $_GET['debut'],
+                ':fin' => $_GET['fin'],
+            ]);
+        } else {
+            $rembStmt = $bdd->prepare('SELECT COALESCE(SUM(`' . $paiementsAmountCol . '`), 0) AS remboursement_total FROM paiements WHERE remboursement = 1 AND datepaiement BETWEEN :debut AND :fin');
+            $rembStmt->execute([
+                ':debut' => $_GET['debut'],
+                ':fin' => $_GET['fin'],
+            ]);
+        }
+        if ($rowRemb = $rembStmt->fetch(PDO::FETCH_ASSOC)) {
+            $remboursementTotal = ($rowRemb['remboursement_total'] !== null) ? (float)$rowRemb['remboursement_total'] : 0;
+        }
+    } catch (Throwable $e) {
+        $remboursementTotal = 0;
+    }
+
     addSection($pdf, 'Montant total :', (number_format($_GET['montant'] < 0 ? 0 : $_GET['montant']) .' '.$devise));
+    addSection($pdf, 'Remboursement :', (number_format($remboursementTotal < 0 ? 0 : $remboursementTotal) .' '.$devise));
     addSection($pdf, 'Rapport caissier :', (number_format($_GET['rapportcaisse'] < 0 ? 0 : $_GET['rapportcaisse']) .' '.$devise));
     addSection($pdf, 'Différence :', (number_format($_GET['solde'] < 0 ? 0 : $_GET['solde']) .' '.$devise));
     addSection($pdf, 'Réalisations :', '');

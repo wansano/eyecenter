@@ -176,7 +176,12 @@ include('../PUBLIC/header.php');
 														echo '<td>' . htmlspecialchars($donnees1['nom_compte']) . '</td>';
 														echo '<td>' . htmlspecialchars($donnees1['types']) . '</td>';
 														echo '<td>' . number_format($entree, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
-														echo '<td>' . number_format($remboursementTotal, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
+																$rembUrl = 'ajax_remboursements.php?compte='.(int)$_GET['compte'].'&debut='.urlencode($_GET['debut']).'&fin='.urlencode($_GET['fin']);
+																$rembHtml = number_format($remboursementTotal, 0, '', ' ') . ' ' . htmlspecialchars($devise);
+																if ((float)$remboursementTotal > 0) {
+																	$rembHtml = '<a href="#" class="js-open-remb" data-url="'.htmlspecialchars($rembUrl).'">'.$rembHtml.'</a>';
+																}
+																echo '<td>' . $rembHtml . ' </td>';
 														echo '<td>' . number_format($entreePreuve, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
 														echo '<td>' . number_format($solde, 0, '', ' ') . ' ' . htmlspecialchars($devise) . ' </td>';
 														echo '<td>' . ($entreePreuve > 0 ? '<a href="imprimer_interrogation.php?compte='.$_GET['compte'].'&debut='.$_GET['debut'].'&fin='.$_GET['fin'].'&montant='.$entree.'&rapportcaisse='.$entreePreuve.'&solde='.$solde.'" class="btn btn-sm btn-success js-open-rapport"><i class="fa fa-file-pdf"></i> Rapport</a> ' : '').'
@@ -266,7 +271,12 @@ include('../PUBLIC/header.php');
 														echo '<td>' . htmlspecialchars(compte($data_montant['compte'])) . '</td>';
 														echo '<td>' . htmlspecialchars(type_paiement($data_montant['compte'])) . '</td>';
 														echo '<td>' . number_format($entree, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
-														echo '<td>' . number_format($remboursement, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
+																	$rembUrl = 'ajax_remboursements.php?compte='.(int)$data_montant['compte'].'&debut='.urlencode($_GET['debut']).'&fin='.urlencode($_GET['fin']);
+																	$rembHtml = number_format($remboursement, 0, '', ' ') . ' ' . htmlspecialchars($devise);
+																	if ((float)$remboursement > 0) {
+																		$rembHtml = '<a href="#" class="js-open-remb" data-url="'.htmlspecialchars($rembUrl).'">'.$rembHtml.'</a>';
+																	}
+																	echo '<td>' . $rembHtml . '</td>';
 														echo '<td>' . number_format($entreePreuve, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
 														echo '<td>' . number_format($solde, 0, '', ' ') . ' ' . htmlspecialchars($devise) . '</td>';
 														if ($rowIndex === 0) {
@@ -313,11 +323,31 @@ include('../PUBLIC/header.php');
 		</div>
 	</div>
 
+	<!-- Modal Liste des remboursements -->
+	<div class="modal fade" id="rembModal" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-xl modal-dialog-scrollable">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Liste des remboursements</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body" id="rembModalBody">
+					<div class="text-muted">Chargement...</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
 	<script>
 	document.addEventListener('DOMContentLoaded', function () {
 		const rapportModalEl = document.getElementById('rapportModal');
 		const rapportFrameEl = document.getElementById('rapportFrame');
 		const rapportPrintBtnEl = document.getElementById('rapportPrintBtn');
+		const rembModalEl = document.getElementById('rembModal');
+		const rembModalBodyEl = document.getElementById('rembModalBody');
 
 		function withAutoPrintDisabled(url) {
 			if (!url) return url;
@@ -346,6 +376,30 @@ include('../PUBLIC/header.php');
 			openRapportModal(href);
 		});
 
+		function openRembModal(url) {
+			if (!url) return;
+			if (!window.bootstrap || !rembModalEl || !rembModalBodyEl) {
+				window.open(url, '_blank');
+				return;
+			}
+			rembModalBodyEl.innerHTML = '<div class="text-muted">Chargement...</div>';
+			const instance = window.bootstrap.Modal.getInstance(rembModalEl) || new window.bootstrap.Modal(rembModalEl);
+			instance.show();
+			fetch(url, { credentials: 'same-origin' })
+				.then(r => r.text())
+				.then(html => { rembModalBodyEl.innerHTML = html; })
+				.catch(() => { rembModalBodyEl.innerHTML = '<div class="alert alert-danger">Impossible de charger la liste.</div>'; });
+		}
+
+		document.addEventListener('click', function (e) {
+			const btn = e.target.closest('.js-open-remb');
+			if (!btn) return;
+			const url = btn.getAttribute('data-url');
+			if (!url) return;
+			e.preventDefault();
+			openRembModal(url);
+		});
+
 		if (rapportPrintBtnEl) {
 			rapportPrintBtnEl.addEventListener('click', function () {
 				try {
@@ -366,6 +420,12 @@ include('../PUBLIC/header.php');
 		if (rapportModalEl) {
 			rapportModalEl.addEventListener('hidden.bs.modal', function () {
 				if (rapportFrameEl) rapportFrameEl.src = 'about:blank';
+			});
+		}
+
+		if (rembModalEl) {
+			rembModalEl.addEventListener('hidden.bs.modal', function () {
+				if (rembModalBodyEl) rembModalBodyEl.innerHTML = '<div class="text-muted">Chargement...</div>';
 			});
 		}
 	});
