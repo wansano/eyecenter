@@ -44,12 +44,28 @@ function getEmployesColumnMap(PDO $bdd): array
         'name' => $nameCol,
         'poste' => $posteCol,
         'date_embauche' => $dateEmbaucheCol,
+        'status' => isset($fields['status']) ? 'status' : null,
     ];
+}
+
+function employeIsActive(PDO $bdd, int $idEmploye, ?string $statusCol): bool
+{
+    if ($idEmploye <= 0) return false;
+    if (!$statusCol) return true;
+    try {
+        $st = $bdd->prepare('SELECT `' . $statusCol . '` AS st FROM employes WHERE id_employe = ? LIMIT 1');
+        $st->execute([$idEmploye]);
+        $v = $st->fetchColumn();
+        return ((int) $v) === 1;
+    } catch (Throwable $e) {
+        return true;
+    }
 }
 
 function getAttestationColumnMap(PDO $bdd): array
 {
     $fields = [];
+    $dateFinNullable = null;
     try {
         $stmt = $bdd->query('SHOW COLUMNS FROM attestations_travail');
         $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
@@ -58,6 +74,10 @@ function getAttestationColumnMap(PDO $bdd): array
             if ($f !== '') {
                 $fields[$f] = true;
             }
+
+            if ($f === 'date_fin') {
+                $dateFinNullable = (($r['Null'] ?? '') === 'YES');
+            }
         }
     } catch (Throwable $e) {
         $fields = [];
@@ -65,6 +85,7 @@ function getAttestationColumnMap(PDO $bdd): array
 
     return [
         'type_attestation' => isset($fields['type_attestation']),
+        'date_fin_nullable' => (bool) $dateFinNullable,
     ];
 }
 
@@ -165,12 +186,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
         $signataireNom = trim((string) ($_POST['signataire_nom'] ?? ''));
         $signataireFonction = trim((string) ($_POST['signataire_fonction'] ?? ''));
 
+        $empCols = getEmployesColumnMap($bdd);
+        $statusCol = $empCols['status'] ?? null;
+
+        $attCols = getAttestationColumnMap($bdd);
+        $dateFinNullable = (bool) ($attCols['date_fin_nullable'] ?? false);
+
         if ($idEmploye <= 0) {
             $error = 'Veuillez sélectionner un employé.';
+        } elseif (!employeIsActive($bdd, $idEmploye, $statusCol)) {
+            $error = 'Employé inactif : impossible de délivrer une attestation.';
         } elseif ($dateDebut === '') {
             $error = 'La date de début est introuvable dans la fiche employé (date embauche).';
-        } elseif ($dateFin === '') {
-            $error = 'Veuillez saisir la date de fin.';
+        } elseif ($typeAttestation === 'stage' && $dateFin === '') {
+            $error = 'Veuillez saisir la date de fin (stage).';
+        } elseif ($typeAttestation === 'travail' && $dateFin === '' && !$dateFinNullable) {
+            $error = 'Votre base ne permet pas une attestation sans date de fin. Exécutez l\'ALTER dans db/attestations_travail.sql (date_fin NULL).';
         } else {
             try {
                 if ($reference === '') {
@@ -188,7 +219,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
                     }
                 }
 
-                $attCols = getAttestationColumnMap($bdd);
                 $hasType = (bool) ($attCols['type_attestation'] ?? false);
 
                 if ($idAttestation > 0) {
@@ -204,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
                             $reference,
                             ($poste !== '' ? $poste : null),
                             $dateDebut,
-                            $dateFin,
+                            ($dateFin !== '' ? $dateFin : null),
                             ($dateDelivrance !== '' ? $dateDelivrance : null),
                             ($lieu !== '' ? $lieu : null),
                             ($signataireNom !== '' ? $signataireNom : null),
@@ -222,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
                             $reference,
                             ($poste !== '' ? $poste : null),
                             $dateDebut,
-                            $dateFin,
+                            ($dateFin !== '' ? $dateFin : null),
                             ($dateDelivrance !== '' ? $dateDelivrance : null),
                             ($lieu !== '' ? $lieu : null),
                             ($signataireNom !== '' ? $signataireNom : null),
@@ -245,7 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
                             $reference,
                             ($poste !== '' ? $poste : null),
                             $dateDebut,
-                            $dateFin,
+                            ($dateFin !== '' ? $dateFin : null),
                             ($dateDelivrance !== '' ? $dateDelivrance : null),
                             ($lieu !== '' ? $lieu : null),
                             ($signataireNom !== '' ? $signataireNom : null),
@@ -261,7 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
                             $reference,
                             ($poste !== '' ? $poste : null),
                             $dateDebut,
-                            $dateFin,
+                            ($dateFin !== '' ? $dateFin : null),
                             ($dateDelivrance !== '' ? $dateDelivrance : null),
                             ($lieu !== '' ? $lieu : null),
                             ($signataireNom !== '' ? $signataireNom : null),
@@ -291,6 +321,7 @@ $cols = getEmployesColumnMap($bdd);
 $nameCol = $cols['name'];
 $posteCol = $cols['poste'];
 $dateEmbaucheCol = $cols['date_embauche'];
+$statusCol = $cols['status'] ?? null;
 $attCols = getAttestationColumnMap($bdd);
 $hasTypeAttestation = (bool) ($attCols['type_attestation'] ?? false);
 
@@ -309,7 +340,11 @@ if (!$error) {
         } else {
             $select .= ', NULL AS employe_date_embauche';
         }
-        $select .= ' FROM employes ORDER BY `' . $nameCol . '` ASC';
+        $select .= ' FROM employes';
+        if ($statusCol) {
+            $select .= ' WHERE `' . $statusCol . '` = 1';
+        }
+        $select .= ' ORDER BY `' . $nameCol . '` ASC';
         $st = $bdd->query($select);
         $employes = $st ? $st->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (PDOException $e) {
@@ -394,7 +429,12 @@ include('../PUBLIC/header.php');
                                                         <?php
                                                             $t = (string)($a['type_attestation'] ?? 'travail');
                                                             if ($t !== 'stage') $t = 'travail';
-                                                            echo h($t === 'stage' ? 'Stage' : 'Travail');
+                                                            if ($t === 'stage') {
+                                                                echo h('Stage');
+                                                            } else {
+                                                                $fin = trim((string)($a['date_fin'] ?? ''));
+                                                                echo h($fin === '' ? 'Attestation de Travail' : 'Certificat de travail');
+                                                            }
                                                         ?>
                                                     </td>
                                                     <td><?php echo h($a['reference'] ?? ''); ?></td>
@@ -497,7 +537,8 @@ include('../PUBLIC/header.php');
 
                                         <div class="col-md-3">
                                             <label class="form-label">Fin</label>
-                                            <input type="date" class="form-control" name="date_fin" id="date_fin" required>
+                                            <input type="date" class="form-control" name="date_fin" id="date_fin">
+                                            <small class="text-muted" id="dateFinHelp">(Laissez vide si l'employé travaille toujours)</small>
                                         </div>
 
                                         <div class="col-md-4">
@@ -538,6 +579,22 @@ include('../PUBLIC/header.php');
     <?php include('../PUBLIC/footer.php'); ?>
 
     <script>
+        function updateDateFinRequirement() {
+            var typeEl = document.getElementById('type_attestation');
+            var finEl = document.getElementById('date_fin');
+            var helpEl = document.getElementById('dateFinHelp');
+            if (!typeEl || !finEl) return;
+
+            var t = (typeEl.value === 'stage') ? 'stage' : 'travail';
+            if (t === 'stage') {
+                finEl.required = true;
+                if (helpEl) helpEl.textContent = '(Obligatoire pour une attestation de stage)';
+            } else {
+                finEl.required = false;
+                if (helpEl) helpEl.textContent = "(Laissez vide si l'employé travaille toujours ; renseignez pour un certificat de travail)";
+            }
+        }
+
         function fillPosteFromEmploye(){
             var sel = document.getElementById('id_employe');
             var poste = document.getElementById('poste');
@@ -577,6 +634,8 @@ include('../PUBLIC/header.php');
             document.getElementById('date_delivrance').value = <?php echo json_encode(date('Y-m-d')); ?>;
             document.getElementById('signataire_nom').value = '';
             document.getElementById('signataire_fonction').value = '';
+
+            updateDateFinRequirement();
         }
 
         function openEditAttestation(btn){
@@ -601,6 +660,8 @@ include('../PUBLIC/header.php');
 
             // Re-synchroniser à partir de l'employé (poste + date embauche) si possible
             fillPosteFromEmploye();
+
+            updateDateFinRequirement();
         }
 
         function openPrintAttestation(idAttestation){
@@ -611,6 +672,12 @@ include('../PUBLIC/header.php');
         }
 
         document.addEventListener('DOMContentLoaded', function(){
+            var typeEl = document.getElementById('type_attestation');
+            if (typeEl) {
+                typeEl.addEventListener('change', updateDateFinRequirement);
+            }
+            updateDateFinRequirement();
+
             const modalEl = document.getElementById('modalPrintAttestation');
             if (modalEl) {
                 modalEl.addEventListener('hidden.bs.modal', function(){

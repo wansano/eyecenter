@@ -131,22 +131,27 @@ try {
 
     $nameCol = getEmployeNomCol($bdd);
 
-    // Vérifier si la colonne sexe existe
+    // Vérifier si les colonnes sexe / status existent
     $colSexe = null;
+    $colStatus = null;
     try {
         $stCols = $bdd->query('SHOW COLUMNS FROM employes');
         if ($stCols) {
             while ($r = $stCols->fetch(PDO::FETCH_ASSOC)) {
                 if (($r['Field'] ?? '') === 'sexe') {
                     $colSexe = 'sexe';
-                    break;
                 }
+                if (($r['Field'] ?? '') === 'status') {
+                    $colStatus = 'status';
+                }
+                if ($colSexe && $colStatus) break;
             }
         }
     } catch (Throwable $e) {}
 
     $sql = 'SELECT a.*, e.`' . $nameCol . '` AS employe_nom'
         . ($colSexe ? ', e.`sexe` AS employe_sexe' : '')
+        . ($colStatus ? ', e.`status` AS employe_status' : '')
         . ' FROM attestations_travail a
             JOIN employes e ON e.id_employe = a.id_employe
             WHERE a.id_attestation = ?
@@ -156,6 +161,10 @@ try {
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
         throw new Exception('Attestation introuvable.');
+    }
+
+    if (isset($row['employe_status']) && (int) $row['employe_status'] !== 1) {
+        throw new Exception('Employé inactif : document non délivrable.');
     }
 
     $reference = trim((string) ($row['reference'] ?? ''));
@@ -179,7 +188,10 @@ try {
     $signFonction = trim((string) ($row['signataire_fonction'] ?? ''));
 
     $dtDebut = DateTimeImmutable::createFromFormat('Y-m-d', $dateDebut) ?: new DateTimeImmutable('first day of this month');
-    $dtFin = DateTimeImmutable::createFromFormat('Y-m-d', $dateFin) ?: new DateTimeImmutable('last day of this month');
+    $isOngoingWork = ($type === 'travail' && trim($dateFin) === '');
+    $dtFin = $isOngoingWork
+        ? new DateTimeImmutable()
+        : (DateTimeImmutable::createFromFormat('Y-m-d', $dateFin) ?: new DateTimeImmutable('last day of this month'));
 
     if (trim($dateDelivrance) === '') {
         $dateDelivrance = date('Y-m-d');
@@ -206,7 +218,10 @@ try {
 
     // Titre
     $pdf->SetFont('CenturyGothic', 'B', 20);
-    $pdf->Cell(0, 10, pdf_text_compat($type === 'stage' ? 'ATTESTATION DE STAGE' : 'ATTESTATION DE TRAVAIL'), 0, 1, 'C');
+    $title = ($type === 'stage')
+        ? 'ATTESTATION DE STAGE'
+        : ($isOngoingWork ? 'ATTESTATION DE TRAVAIL' : 'CERTIFICAT DE TRAVAIL');
+    $pdf->Cell(0, 10, pdf_text_compat($title), 0, 1, 'C');
     $pdf->Ln(10);
 
     // Corps
@@ -245,18 +260,30 @@ try {
         }
         $texte1 .= '.';
     } else {
-        $texte1 .= ' a travaillé au sein de notre établissement ' . $dureeText;
-        $texte1 .= ', du ' . fmtDateFr($dtDebut) . ' au ' . fmtDateFr($dtFin);
-        if ($poste !== '') {
-            $texte1 .= ', en qualité de ' . $poste;
+        if ($isOngoingWork) {
+            $texte1 .= ' travaille au sein de notre établissement depuis le ' . fmtDateFr($dtDebut) . ' à ce jour';
+            if ($poste !== '') {
+                $texte1 .= ', en qualité de ' . $poste;
+            }
+            $texte1 .= '.';
+        } else {
+            $texte1 .= ' a travaillé au sein de notre établissement ' . $dureeText;
+            $texte1 .= ', du ' . fmtDateFr($dtDebut) . ' au ' . fmtDateFr($dtFin);
+            if ($poste !== '') {
+                $texte1 .= ', en qualité de ' . $poste;
+            }
+            $texte1 .= '.';
         }
-        $texte1 .= '.';
     }
 
     $pdf->MultiCell(0, 7, pdf_text_compat($texte1), 0, 'J');
     $pdf->Ln(6);
 
-    $texte2 = 'La présente attestation lui est délivrée pour servir et faire valoir ce que de droit.';
+    $texte2 = $isOngoingWork
+        ? 'La présente attestation lui est délivrée pour servir et faire valoir ce que de droit.'
+        : (($type === 'stage')
+            ? 'La présente attestation lui est délivrée pour servir et faire valoir ce que de droit.'
+            : 'Le présent certificat de travail lui est délivré pour servir et faire valoir ce que de droit.');
     $pdf->MultiCell(0, 7, pdf_text_compat($texte2), 0, 'J');
 
     // Signature
@@ -284,7 +311,10 @@ try {
     $pdf->SetFont('CenturyGothic', '', 10);
     $pdf->Codabar(10, $yFooter, $barcodeValue, '0', 'Z', 0.15, 8, false);
 
-$pdf->Output('I', 'ATTESTATION_TRAVAIL_' . $id . '.pdf');
+$outName = ($type === 'stage')
+    ? ('ATTESTATION_STAGE_' . $id . '.pdf')
+    : ($isOngoingWork ? ('ATTESTATION_TRAVAIL_' . $id . '.pdf') : ('CERTIFICAT_TRAVAIL_' . $id . '.pdf'));
+$pdf->Output('I', $outName);
 } catch (Throwable $e) {
     error_log('[attestation_travail] pdf: ' . $e->getMessage());
     http_response_code(500);

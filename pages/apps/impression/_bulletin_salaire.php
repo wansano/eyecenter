@@ -99,13 +99,28 @@ try {
 
     $nameCol = getEmployeNomCol($bdd);
 
+    // Vérifier si la colonne status existe (1 = actif, 0 = inactif)
+    $colStatus = null;
+    try {
+        $stCols = $bdd->query('SHOW COLUMNS FROM employes');
+        if ($stCols) {
+            while ($r = $stCols->fetch(PDO::FETCH_ASSOC)) {
+                if (($r['Field'] ?? '') === 'status') {
+                    $colStatus = 'status';
+                    break;
+                }
+            }
+        }
+    } catch (Throwable $e) {}
+
     $sql = 'SELECT b.id_bulletin, b.periode, b.numero, b.mode_reglement, b.date_paiement, b.devise,
                    b.salaire_base, b.prime_transport, b.prime_logement, b.prime_vie, b.heures_sup, b.autres_primes,
                    b.rts, b.total_brut,
                    e.`' . $nameCol . '` AS employe_nom,
                    e.adresse AS employe_adresse,
-                   e.poste AS employe_poste
-            FROM bulletins_salaire b
+                   e.poste AS employe_poste'
+            . ($colStatus ? ', e.`status` AS employe_status' : '')
+            . ' FROM bulletins_salaire b
             JOIN employes e ON e.id_employe = b.id_employe
             WHERE b.id_bulletin = ?
             LIMIT 1';
@@ -114,6 +129,10 @@ try {
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
         throw new Exception('Bulletin introuvable.');
+    }
+
+    if (isset($row['employe_status']) && (int) $row['employe_status'] !== 1) {
+        throw new Exception('Employé inactif : document non délivrable.');
     }
 
     $devise = trim((string) ($row['devise'] ?? ''));

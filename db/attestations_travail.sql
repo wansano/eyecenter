@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `attestations_travail` (
   `poste` VARCHAR(120) NULL,
 
   `date_debut` DATE NOT NULL,
-  `date_fin` DATE NOT NULL,
+  `date_fin` DATE NULL,
   `date_delivrance` DATE NULL,
   `lieu` VARCHAR(80) NULL,
 
@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS `attestations_travail` (
 -- Mise à jour si la table existe déjà (exécuter manuellement si besoin)
 -- ALTER TABLE `attestations_travail`
 --   ADD COLUMN `type_attestation` VARCHAR(20) NOT NULL DEFAULT 'travail' AFTER `id_employe`;
+
+-- Permettre l'attestation de travail "en cours" (sans date de fin)
+-- ALTER TABLE `attestations_travail`
+--   MODIFY COLUMN `date_fin` DATE NULL;
 
 -- (Optionnel) FK si votre table employes est en InnoDB et compatible.
 -- ALTER TABLE `attestations_travail`

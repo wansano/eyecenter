@@ -658,6 +658,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
 $rows = [];
 $error = null;
 
+// Filtres (GET)
+$filterYear = isset($_GET['annee_emploi']) ? (int) $_GET['annee_emploi'] : 0;
+$filterStatus = isset($_GET['statut']) ? trim((string) $_GET['statut']) : '';
+$filterService = isset($_GET['service']) ? trim((string) $_GET['service']) : '';
+
+// Options filtres (années + services)
+$filterYears = [];
+$filterServices = [];
+try {
+    $stY = $bdd->query('SELECT DISTINCT YEAR(date_embauche) AS y FROM employes WHERE date_embauche IS NOT NULL ORDER BY y DESC');
+    $filterYears = $stY ? $stY->fetchAll(PDO::FETCH_COLUMN, 0) : [];
+} catch (Throwable $e) {
+    $filterYears = [];
+}
+try {
+    $stS = $bdd->query("SELECT DISTINCT service FROM employes WHERE service IS NOT NULL AND TRIM(service) <> '' ORDER BY service ASC");
+    $filterServices = $stS ? $stS->fetchAll(PDO::FETCH_COLUMN, 0) : [];
+} catch (Throwable $e) {
+    $filterServices = [];
+}
+
 try {
     $nameCol = $empCols['name'];
     $salaryCol = $empCols['salary'];
@@ -666,8 +687,23 @@ try {
     $primeLogementExpr = $empCols['prime_logement'] !== null ? ('e.`' . $empCols['prime_logement'] . '`') : 'NULL';
     $primeVieExpr = $empCols['prime_vie'] !== null ? ('e.`' . $empCols['prime_vie'] . '`') : 'NULL';
 
-    $stmt = $bdd->prepare(
-        'SELECT e.id_employe, e.`' . $nameCol . '` AS nom_employe, e.date_naissance, e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
+    $where = [];
+    $params = [];
+
+    if ($filterYear > 0) {
+        $where[] = 'YEAR(e.date_embauche) = ?';
+        $params[] = $filterYear;
+    }
+    if ($filterStatus !== '' && ($filterStatus === '1' || $filterStatus === '0')) {
+        $where[] = 'e.status = ?';
+        $params[] = (int) $filterStatus;
+    }
+    if ($filterService !== '') {
+        $where[] = 'e.service = ?';
+        $params[] = $filterService;
+    }
+
+    $sql = 'SELECT e.id_employe, e.`' . $nameCol . '` AS nom_employe, e.date_naissance, e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
                 e.service, e.`' . $salaryCol . '` AS salaire, ' . $primeTransportExpr . ' AS prime_transport, ' . $primeLogementExpr . ' AS prime_logement, ' . $primeVieExpr . ' AS prime_vie,
                 e.status, e.superieur_hierarchique, e.notes, e.photo,
                 ' . $sNameExpr . ' AS superieur_nom,
@@ -678,10 +714,14 @@ try {
             SELECT celulle, MIN(id_organigramme) AS id_org
             FROM organigramme
             GROUP BY celulle
-         ) o ON o.celulle = e.service
-         ORDER BY e.id_employe DESC'
-    );
-    $stmt->execute();
+         ) o ON o.celulle = e.service';
+    if (!empty($where)) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    $sql .= ' ORDER BY e.id_employe DESC';
+
+    $stmt = $bdd->prepare($sql);
+    $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('listeemployes.php select: ' . $e->getMessage());
@@ -713,8 +753,47 @@ include('../PUBLIC/header.php');
 
                     <section class="card">
                         <div class="card-body">
-                            <div class="mb-3 text-end">
-                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddEmploye">Ajouter un employé</button>
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <form method="get" class="row g-2 align-items-end" style="margin:0;">
+                                    <div class="col-sm-3">
+                                        <label class="form-label">Année d'embauche</label>
+                                        <select name="annee_emploi" class="form-control">
+                                            <option value="">Toutes</option>
+                                            <?php foreach ($filterYears as $y): $yy = (int)$y; ?>
+                                                <option value="<?php echo (int)$yy; ?>" <?php echo ((int)$filterYear === (int)$yy) ? 'selected' : ''; ?>>
+                                                    <?php echo (int)$yy; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <label class="form-label">Statut</label>
+                                        <select name="statut" class="form-control">
+                                            <option value="" <?php echo ($filterStatus === '') ? 'selected' : ''; ?>>Tous</option>
+                                            <option value="1" <?php echo ($filterStatus === '1') ? 'selected' : ''; ?>>Actif</option>
+                                            <option value="0" <?php echo ($filterStatus === '0') ? 'selected' : ''; ?>>Inactif</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <label class="form-label">Service</label>
+                                        <select name="service" class="form-control">
+                                            <option value="">Tous</option>
+                                            <?php foreach ($filterServices as $s): $sv = (string)$s; ?>
+                                                <option value="<?php echo h($sv); ?>" <?php echo ($filterService !== '' && $filterService === $sv) ? 'selected' : ''; ?>>
+                                                    <?php echo h($sv); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-2 d-flex gap-2">
+                                        <button type="submit" class="btn btn-default">Filtrer</button>
+                                        <a href="listeemployes.php" class="btn btn-light">Reset</a>
+                                    </div>
+                                </form>
+
+                                <div>
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddEmploye">Ajouter un employé</button>
+                                </div>
                             </div>
 
                             <table class="table table-bordered table-striped mb-0" id="datatable-default">

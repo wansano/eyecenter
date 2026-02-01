@@ -42,7 +42,22 @@ function getEmployesColumnMap(PDO $bdd): array
     return [
         'name' => $nameCol,
         'poste' => $posteCol,
+        'status' => isset($fields['status']) ? 'status' : null,
     ];
+}
+
+function employeIsActive(PDO $bdd, int $idEmploye, ?string $statusCol): bool
+{
+    if ($idEmploye <= 0) return false;
+    if (!$statusCol) return true;
+    try {
+        $st = $bdd->prepare('SELECT `' . $statusCol . '` AS st FROM employes WHERE id_employe = ? LIMIT 1');
+        $st->execute([$idEmploye]);
+        $v = $st->fetchColumn();
+        return ((int) $v) === 1;
+    } catch (Throwable $e) {
+        return true;
+    }
 }
 
 function normalizeDateOrEmpty(string $raw): string
@@ -72,6 +87,7 @@ if (isset($_GET['ok'])) {
 $cols = getEmployesColumnMap($bdd);
 $nameCol = $cols['name'];
 $posteCol = $cols['poste'];
+$statusCol = $cols['status'] ?? null;
 
 // Traitement POST (création / modification)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
@@ -91,6 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
 
         if ($idEmploye <= 0) {
             $error = 'Veuillez sélectionner un employé.';
+        } elseif (!employeIsActive($bdd, $idEmploye, $statusCol)) {
+            $error = 'Employé inactif : impossible de délivrer une note de service.';
         } elseif ($ancienPoste === '') {
             $error = 'Ancien poste manquant.';
         } elseif ($nouveauPoste === '') {
@@ -172,7 +190,11 @@ if (!$error) {
         } else {
             $select .= ', NULL AS employe_poste';
         }
-        $select .= ' FROM employes ORDER BY `' . $nameCol . '` ASC';
+        $select .= ' FROM employes';
+        if ($statusCol) {
+            $select .= ' WHERE `' . $statusCol . '` = 1';
+        }
+        $select .= ' ORDER BY `' . $nameCol . '` ASC';
         $st = $bdd->query($select);
         $employes = $st ? $st->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (PDOException $e) {

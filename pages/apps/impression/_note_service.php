@@ -66,20 +66,25 @@ try {
 
     // Vérifier si la colonne sexe existe
     $colSexe = null;
+    $colStatus = null;
     try {
         $stCols = $bdd->query('SHOW COLUMNS FROM employes');
         if ($stCols) {
             while ($r = $stCols->fetch(PDO::FETCH_ASSOC)) {
                 if (($r['Field'] ?? '') === 'sexe') {
                     $colSexe = 'sexe';
-                    break;
                 }
+                if (($r['Field'] ?? '') === 'status') {
+                    $colStatus = 'status';
+                }
+                if ($colSexe && $colStatus) break;
             }
         }
     } catch (Throwable $e) {}
 
     $sql = 'SELECT n.*, e.`' . $nameCol . '` AS employe_nom'
         . ($colSexe ? ', e.`sexe` AS employe_sexe' : '')
+        . ($colStatus ? ', e.`status` AS employe_status' : '')
         . ' FROM notes_service n
             JOIN employes e ON e.id_employe = n.id_employe
             WHERE n.id_note = ?
@@ -89,6 +94,10 @@ try {
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
         throw new Exception('Note introuvable.');
+    }
+
+    if (isset($row['employe_status']) && (int) $row['employe_status'] !== 1) {
+        throw new Exception('Employé inactif : document non délivrable.');
     }
 
     // Référence (la table n'a pas de colonne "reference")
