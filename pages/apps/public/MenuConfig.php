@@ -350,7 +350,7 @@ class MenuConfig {
     private static function getComptabiliteStructureMenu() {
         return '
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Structure</a>
+            <a href="#" class="nav-link dropdown-toggle">ETATS</a>
             <ul class="dropdown-menu">
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Comptabilité</a>

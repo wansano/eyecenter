@@ -80,6 +80,10 @@ function contenuRemboursement($patientNom, $patientAdresse, $patientPhone, $pres
 
 // 1er exemplaire
 genererEntete($pdf,$data);
+$pdf->Ln(2);
+$pdf->SetFont('CenturyGothic','B',12);
+$pdf->Cell(0,6,pdf_text_compat('RECU DE REMBOURSEMENT'),0,1,'C');
+$pdf->Ln(2);
 $pdf->SetFont('CenturyGothic','',11);
 $pdf->Cell(0,5,pdf_text_compat('PAT-'.$patientId.str_repeat(' ',128).'Date : '.$remb['date_ajout']),0,1);
 $pdf->WriteHTML(contenuRemboursement($patientNom,$patientAdresse,$patientPhone,$prestation,$motif,$montantRembourse,$montantRestant,$compteTxt,$remb,$devise));
@@ -92,12 +96,16 @@ $pdf->SetFont('CenturyGothic','',11);
 $pdf->Cell(0,5,pdf_text_compat('NB : Conservez ce reçu pour toute réclamation.'),0,0,'L');
 
 // Séparateur
-$pdf->Ln(25);
+$pdf->Ln(18);
 $pdf->Cell(5,0,str_repeat('-',146),0,0,'L');
-$pdf->Ln(25);
+$pdf->Ln(18);
 
 // 2e exemplaire
 genererEntete($pdf,$data,163);
+$pdf->Ln(2);
+$pdf->SetFont('CenturyGothic','B',12);
+$pdf->Cell(0,6,pdf_text_compat('RECU DE REMBOURSEMENT'),0,1,'C');
+$pdf->Ln(2);
 $pdf->SetFont('CenturyGothic','',11);
 $pdf->Cell(0,5,pdf_text_compat('PAT-'.$patientId.str_repeat(' ',128).'Date : '.$remb['date_ajout']),0,1);
 $pdf->WriteHTML(contenuRemboursement($patientNom,$patientAdresse,$patientPhone,$prestation,$motif,$montantRembourse,$montantRestant,$compteTxt,$remb,$devise));
