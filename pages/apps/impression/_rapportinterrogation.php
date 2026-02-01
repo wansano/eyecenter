@@ -161,11 +161,11 @@ $pdf->WriteHTML($html);
 
     $totalGlobal = (float)$entreeTotal + (float)$remboursementTotal;
     $differenceGlobal = $totalGlobal - (float)$rapportCaissierParam;
-    addSection($pdf, 'Entrée total :', (number_format($totalGlobal < 0 ? 0 : $totalGlobal) .' '.$devise));
-    addSection($pdf, 'Remboursement :', (number_format($remboursementTotal < 0 ? 0 : $remboursementTotal) .' '.$devise));
-    addSection($pdf, 'Solde :', (number_format($entreeTotal < 0 ? 0 : $entreeTotal) .' '.$devise));
-    addSection($pdf, 'Rapport caissier :', (number_format($rapportCaissierParam) .' '.$devise));
-    addSection($pdf, 'Différence :', (number_format($differenceGlobal) .' '.$devise));
+    addSection($pdf, 'Entrée total :', (number_format($totalGlobal < 0 ? 0 : $totalGlobal, 0, '', ' ') .' '.$devise));
+    addSection($pdf, 'Remboursement :', (number_format($remboursementTotal < 0 ? 0 : $remboursementTotal, 0, '', ' ') .' '.$devise));
+    addSection($pdf, 'Solde :', (number_format($entreeTotal < 0 ? 0 : $entreeTotal, 0, '', ' ') .' '.$devise));
+    addSection($pdf, 'Rapport caissier :', (number_format($rapportCaissierParam, 0, '', ' ') .' '.$devise));
+    addSection($pdf, 'Différence :', (number_format($differenceGlobal, 0, '', ' ') .' '.$devise));
     addSection($pdf, 'Réalisations :', '');
 
     // Construction du tableau directement avec FPDF pour contrôler largeur et taille des cellules
@@ -208,9 +208,9 @@ $pdf->WriteHTML($html);
             $totalNb += $nb;
             $totalMontant += $montantPrestation;
             $pdf->Cell($wType,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', model($nom)), 1, 0, 'L');
-            $pdf->Cell($wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($prixUnitaire) . ' ' . $devise), 1, 0, 'R');
+            $pdf->Cell($wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($prixUnitaire, 0, '', ' ') . ' ' . $devise), 1, 0, 'R');
             $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$nb), 1, 0, 'C');
-            $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($montantPrestation) . ' ' . $devise), 1, 1, 'R');
+            $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($montantPrestation, 0, '', ' ') . ' ' . $devise), 1, 1, 'R');
         }
     }
 
@@ -219,31 +219,31 @@ $pdf->WriteHTML($html);
     // Montant total (ENTREE) - Fusion Prestation + Prix Unitaire
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant total'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeTotal) . ' ' . $devise), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeTotal, 0, '', ' ') . ' ' . $devise), 1, 1, 'R');
 
     // Remboursement
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Remboursement'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($remboursementTotal) . ' ' . $devise), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($remboursementTotal, 0, '', ' ') . ' ' . $devise), 1, 1, 'R');
 
     // Total = Entrée + Remboursement
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal) . ' ' . $devise), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal, 0, '', ' ') . ' ' . $devise), 1, 1, 'R');
     
     // Frais de retrait = Entrée - Total général (planché à 0)
     // (ne pas inclure les remboursements, car calculé sur les paiements électroniques uniquement)
     $fraisRetrait = max(0, (float)$entreeTotal - (float)$totalMontant);
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Frais de retrait'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($fraisRetrait) . ' ' . $devise), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($fraisRetrait, 0, '', ' ') . ' ' . $devise), 1, 1, 'R');
 
     // Ligne Total Général
     $pdf->SetFont('CenturyGothic','B',11);
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total Général'), 1, 0, 'R');
     $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$totalNb), 1, 0, 'C', true);
     $pdf->SetFillColor(255,255,255); // Retour à blanc
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalMontant) . ' ' . $devise), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalMontant, 0, '', ' ') . ' ' . $devise), 1, 1, 'R');
 
     // Signature
     $pdf->Ln(4);
