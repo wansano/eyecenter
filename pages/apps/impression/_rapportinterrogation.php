@@ -57,9 +57,9 @@ $pdf->WriteHTML($html);
     }
 
     $devise = 'GNF';
-    // Montant transmis par la page appelante (sécurisé >= 0)
-    $montantParam = isset($_GET['montant']) ? (int)$_GET['montant'] : 0;
-    if ($montantParam < 0) { $montantParam = 0; }
+    // Paramètres transmis par la page appelante (sécurisés >= 0)
+    $rapportCaissierParam = isset($_GET['rapportcaisse']) ? (int)$_GET['rapportcaisse'] : 0;
+    if ($rapportCaissierParam < 0) { $rapportCaissierParam = 0; }
 
 
     $total = $bdd->prepare('SELECT * FROM traitements ORDER BY id_type');
@@ -132,10 +132,41 @@ $pdf->WriteHTML($html);
         $remboursementTotal = 0;
     }
 
-    addSection($pdf, 'Total :', (number_format($_GET['montant'] < 0 ? 0 : $_GET['montant']) .' '.$devise));
+    // Calcul de l'entrée (hors remboursements) sur la période
+    $entreeTotal = 0;
+    try {
+        if (function_exists('getEntreePaiements') && isset($_GET['compte']) && (int)$_GET['compte'] !== 0) {
+            $entreeTotal = (float)getEntreePaiements((int)$_GET['compte'], $_GET['debut'], $_GET['fin'], $bdd);
+        } else {
+            if (isset($_GET['compte']) && (int)$_GET['compte'] !== 0) {
+                $stEntree = $bdd->prepare('SELECT COALESCE(SUM(montant),0) AS entree FROM paiements WHERE compte = :compte AND (remboursement = 0 OR remboursement IS NULL) AND datepaiement BETWEEN :debut AND :fin');
+                $stEntree->execute([
+                    ':compte' => (int)$_GET['compte'],
+                    ':debut' => $_GET['debut'],
+                    ':fin' => $_GET['fin'],
+                ]);
+            } else {
+                $stEntree = $bdd->prepare('SELECT COALESCE(SUM(montant),0) AS entree FROM paiements WHERE (remboursement = 0 OR remboursement IS NULL) AND datepaiement BETWEEN :debut AND :fin');
+                $stEntree->execute([
+                    ':debut' => $_GET['debut'],
+                    ':fin' => $_GET['fin'],
+                ]);
+            }
+            $rowEntree = $stEntree->fetch(PDO::FETCH_ASSOC);
+            $entreeTotal = $rowEntree && $rowEntree['entree'] !== null ? (float)$rowEntree['entree'] : 0;
+        }
+    } catch (Throwable $e) {
+        $entreeTotal = 0;
+    }
+
+    $totalGlobal = (float)$entreeTotal + (float)$remboursementTotal;
+    $differenceGlobal = $totalGlobal - (float)$rapportCaissierParam;
+
+    addSection($pdf, 'Entrée :', (number_format($entreeTotal < 0 ? 0 : $entreeTotal) .' '.$devise));
     addSection($pdf, 'Remboursement :', (number_format($remboursementTotal < 0 ? 0 : $remboursementTotal) .' '.$devise));
-    addSection($pdf, 'Rapport caissier :', (number_format($_GET['rapportcaisse'] < 0 ? 0 : $_GET['rapportcaisse']) .' '.$devise));
-    addSection($pdf, 'Différence :', (number_format($_GET['solde'] < 0 ? 0 : $_GET['solde']) .' '.$devise));
+    addSection($pdf, 'Total :', (number_format($totalGlobal < 0 ? 0 : $totalGlobal) .' '.$devise));
+    addSection($pdf, 'Rapport caissier :', (number_format($rapportCaissierParam) .' '.$devise));
+    addSection($pdf, 'Différence :', (number_format($differenceGlobal) .' '.$devise));
     addSection($pdf, 'Réalisations :', '');
 
     // Construction du tableau directement avec FPDF pour contrôler largeur et taille des cellules
@@ -186,13 +217,24 @@ $pdf->WriteHTML($html);
 
     // Lignes additionnelles demandées
     $pdf->SetFont('CenturyGothic','B',11);
-    // Montant total (paramètre fourni) - Fusion Prestation + Prix Unitaire
+    // Montant total (ENTREE) - Fusion Prestation + Prix Unitaire
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant total'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($montantParam) . ' ' . $devise), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeTotal) . ' ' . $devise), 1, 1, 'R');
+
+    // Remboursement
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Remboursement'), 1, 0, 'R');
+    $pdf->Cell($wNb,8, '', 0, 0, 'C');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($remboursementTotal) . ' ' . $devise), 1, 1, 'R');
+
+    // Total = Entrée + Remboursement
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total'), 1, 0, 'R');
+    $pdf->Cell($wNb,8, '', 0, 0, 'C');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal) . ' ' . $devise), 1, 1, 'R');
     
-    // Frais de retrait = Montant total - Total général (planché à 0)
-    $fraisRetrait = max(0, $montantParam - (int)$totalMontant);
+    // Frais de retrait = Entrée - Total général (planché à 0)
+    // (ne pas inclure les remboursements, car calculé sur les paiements électroniques uniquement)
+    $fraisRetrait = max(0, (float)$entreeTotal - (float)$totalMontant);
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Frais de retrait'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($fraisRetrait) . ' ' . $devise), 1, 1, 'R');
