@@ -218,19 +218,19 @@ $pdf->WriteHTML($html);
     // Lignes additionnelles demandées
     $pdf->SetFont('CenturyGothic','B',11);
     // Montant total (ENTREE) - Fusion Prestation + Prix Unitaire
-    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant total'), 1, 0, 'R');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total des entrées'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeTotal, 0, '', ' ')), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal, 0, '', ' ')), 1, 1, 'R');
 
     // Remboursement
-    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Remboursement'), 1, 0, 'R');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant Remboursement'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($remboursementTotal, 0, '', ' ')), 1, 1, 'R');
 
     // Total = Entrée + Remboursement
-    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total'), 1, 0, 'R');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total après remboursement'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal, 0, '', ' ')), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeTotal, 0, '', ' ')), 1, 1, 'R');
     
     // Frais de retrait = Entrée - Total général (planché à 0)
     // (ne pas inclure les remboursements, car calculé sur les paiements électroniques uniquement)
@@ -241,7 +241,7 @@ $pdf->WriteHTML($html);
 
     // Ligne Total Général
     $pdf->SetFont('CenturyGothic','B',11);
-    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total Général'), 1, 0, 'R');
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Solde'), 1, 0, 'R');
     $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$totalNb), 1, 0, 'C', true);
     $pdf->SetFillColor(255,255,255); // Retour à blanc
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalMontant, 0, '', ' ')), 1, 1, 'R');
