@@ -144,12 +144,18 @@ try {
     // Accords selon sexe (1 = Monsieur, 0 = Madame)
     $motDesigne = 'désigné(e)';
     $motInteresse = 'intéressé(e)';
+    $motNomme = 'nommé(e)';
+    $motInvite = 'invité(e)';
     if ($empSexe === '1') {
         $motDesigne = 'désigné';
         $motInteresse = 'intéressé';
+        $motNomme = 'nommé';
+        $motInvite = 'invité';
     } elseif ($empSexe === '0') {
         $motDesigne = 'désignée';
         $motInteresse = 'intéressée';
+        $motNomme = 'nommée';
+        $motInvite = 'invitée';
     }
 
     $pdf = new PDF('P', 'mm', 'A4');
@@ -186,7 +192,7 @@ try {
         if ($ancien !== '') {
             $texte1 .= ', précédemment ' . $ancien;
         }
-        $texte1 .= " est nommé(e) à compter du " . fmtDateFr($dtDebut) . " au poste de " . $nouveau . ", à titre définitif.";
+        $texte1 .= " est " . $motNomme . " à compter du " . fmtDateFr($dtDebut) . " au poste de " . $nouveau . ", à titre définitif.";
         $pdf->MultiCell(0, 7, pdf_text_compat($texte1), 0, 'J');
         $pdf->Ln(6);
 
@@ -194,7 +200,7 @@ try {
         $pdf->MultiCell(0, 7, pdf_text_compat($texte2), 0, 'J');
         $pdf->Ln(6);
 
-        $texte3 = "L'" . $motInteresse . " est invité(e) à prendre fonction et à collaborer pleinement avec les services concernés.";
+        $texte3 = "L'" . $motInteresse . " est " . $motInvite . " à prendre fonction et à collaborer pleinement avec les services concernés.";
         $pdf->MultiCell(0, 7, pdf_text_compat($texte3), 0, 'J');
     } else {
         $texte1 = "Il est porté à la connaissance de l'ensemble du personnel que " . $identite;
