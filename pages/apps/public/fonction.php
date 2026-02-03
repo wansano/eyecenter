@@ -1,5 +1,5 @@
 <?php
-require_once('connect.php');
+require_once(__DIR__ . '/connect.php');
 
 
 /**
@@ -66,7 +66,10 @@ function pdf_text($str) {
  * @param int $yPosition Position verticale du logo (défaut : 33)
  */
 function genererEntete($pdf, $data, $yPosition = 12) {
-    $pdf->Image(realpath('../img/logo.jpg'), 152, $yPosition, 50, 25);
+    $logoPath = realpath(__DIR__ . '/../img/logo.jpg');
+    if ($logoPath !== false) {
+        $pdf->Image($logoPath, 152, $yPosition, 50, 25);
+    }
     $pdf->SetFont('CenturyGothic','B',11);
     $pdf->Cell(0, 5, pdf_text(strtoupper($data['denomination'])), 0, 1, 'L');
     $pdf->SetFont('CenturyGothic','',11);
@@ -79,7 +82,10 @@ function genererEntete($pdf, $data, $yPosition = 12) {
 }
 
 function genererEnteteDossier($pdf, $data, $yPosition = 6) {
-    $pdf->Image(realpath('../img/logo.jpg'), 100, $yPosition, 50, 25);
+    $logoPath = realpath(__DIR__ . '/../img/logo.jpg');
+    if ($logoPath !== false) {
+        $pdf->Image($logoPath, 100, $yPosition, 50, 25);
+    }
     $pdf->SetFont('CenturyGothic','B',8);
     $pdf->Cell(0, 4, pdf_text(strtoupper($data['denomination'])), 0, 1, 'L');
     $pdf->SetFont('CenturyGothic','',8);

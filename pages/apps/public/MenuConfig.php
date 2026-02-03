@@ -305,43 +305,22 @@ class MenuConfig {
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Paiements</a>
                     <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="demandetopay.php">Depense validé</a></li>
+                        <li><a class="nav-link" href="demandes.php?view=to_pay&type=depense">Demandes et Dépenses à payer</a></li>
                         <li><a class="nav-link" href="remboursement.php">Rembourssement</a></li>
                         <li><a class="nav-link" href="listepaiementannuler.php">Paiements annulés</a></li>
                     </ul>
                 </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Remise</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addremiseaccountout.php?newinaccount">Faire une remise externe</a></li>
-                        <li><a class="nav-link" href="addremiseaccountin.php?newinaccount">Faire une remise interne</a></li>
-                        <li class="dropdown-submenu">
-                            <a class="nav-link" href="#">Listes des remises</a>
-                            <ul class="dropdown-menu">
-                                <li><a class="nav-link" href="listeremisecompteinterne.php">Remise interne</a></li>
-                                <li><a class="nav-link" href="listeremisecompteexterne.php">Remise externe</a></li>
-                            </ul>
-                        </li>
-                    </ul>
+                <li>
+                     <a class="nav-link" href="listeremisecompteinterne.php">Liste des remises</a></li>
                 </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Rapprochement</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="interocompte.php">Intéroger compte</a></li>
-                        <li><a class="nav-link" href="#">Faire un rapprochement</a></li>
-                    </ul>
+                <li>
+                    <li><a class="nav-link" href="interocompte.php">Intérogation compte</a></li>
                 </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Commande</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="addcommandproduct.php">Initier une commande</a></li>
-                    </ul>
+                <li>
+                    <li><a class="nav-link" href="addcommandproduct.php">Faire une commande</a></li>
                 </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Livraison</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="findingcommand.php">Enregistré une livraison</a></li>
-                    </ul>
+                <li>
+                    <li><a class="nav-link" href="findingcommand.php">Ajouter une livraison</a></li>
                 </li>
             </ul>
         </li>';
@@ -479,14 +458,6 @@ class MenuConfig {
     private static function getLogistiqueMenu($user_data) {
         return '
         <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Gestion Rendez-vous</a>
-            <ul class="dropdown-menu">
-                <li><a class="nav-link" href="ajoutrdv.php">Ajouter un rendez-vous</a></li>
-                <li><a class="nav-link" href="convocation.php">Liste des rendez-vous</a></li>
-                <li><a class="nav-link" href="rechercheinformation.php">Recherche patient</a></li>
-            </ul>
-        </li>
-        <li class="dropdown">
             <a href="#" class="nav-link dropdown-toggle">Inventaire</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="inventaire.php">Articles & stock</a></li>
@@ -515,9 +486,8 @@ class MenuConfig {
             <a href="#" class="nav-link dropdown-toggle">Validation</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="interocompte.php">Intérogation de compte</a></li>
-                <li><a class="nav-link" href="demandevalidation.php?u=' . $user_data['user'] . '">Depense en attente</a></li>
-                <li><a class="nav-link" href="demandevalidate.php?u=' . $user_data['id_user'] . '">Depense validées</a></li>
-                <li><a class="nav-link" href="demandeordered.php?u=' . $user_data['id_user'] . '">Depense payées</a></li>
+                <li><a class="nav-link" href="demandes.php?u=' . $user_data['id_user'] . '&view=to_validate&type=depense">Dépenses à valider</a></li>
+                <li><a class="nav-link" href="demandes.php?u=' . $user_data['id_user'] . '&view=to_validate&type=logistique">Demandes logistiques à valider</a></li>
                 <li><a class="nav-link" href="#">Situation partenaires</a></li>
                 <li><a class="nav-link" href="interrogation_realisations.php">Réalisations médecin</a></li>
             </ul>
@@ -580,18 +550,25 @@ class MenuConfig {
             </ul>
         </li>';
 
-        /*
+        // Demandes : disponible dans les profils (sauf comptabilité)
+        if (($user_data['type'] ?? '') !== 'comptabilite') {
+            $menu_items .= '
+            <li class="dropdown">
+                <a class="nav-link dropdown-toggle" href="#">Demandes</a>
+                <ul class="dropdown-menu">
+                    <li><a class="nav-link" href="demandes.php?u=' . $user_data['id_user'] . '">Demandes</a></li>
+                </ul>
+            </li>';
+        } else {
+            $menu_items .= '
+            <li class="dropdown">
+                <a class="nav-link dropdown-toggle" href="#">Demandes</a>
+                <ul class="dropdown-menu">
+                    <li><a class="nav-link" href="demandes.php?view=to_pay&type=depense">Dépenses à payer</a></li>
+                </ul>
+            </li>';
+        }
         
-        $menu_items .= '
-        <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Demandes</a>
-            <ul class="dropdown-menu">
-                <li><a class="nav-link" href="demande.php?u=' . $user_data['id_user'] . '">Demande de depense</a></li>
-                <li><a class="nav-link" href="listedemesdemandes.php?usr=' . $user_data['user'] . '">Mes demandes</a></li>
-            </ul>
-        </li>';
-        
-        */
 
         return $menu_items;
     }
