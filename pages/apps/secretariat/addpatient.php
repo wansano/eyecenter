@@ -642,7 +642,7 @@ require('../PUBLIC/header.php');
             <script>
                 document.addEventListener('DOMContentLoaded', function () {
                     if (typeof window.openDossierPrintModal !== 'function') return;
-                    window.openDossierPrintModal('imprimer_carte.php?id_patient=<?= (int)$id_patient ?>', <?= (int)$id_patient ?>, "Impression carte d'adhesion");
+                    window.openDossierPrintModal('imprimer_dossier.php?id_patient=<?= (int)$id_patient ?>', <?= (int)$id_patient ?>, "Impression carte d'adhesion");
                 });
             </script>
         <?php endif; ?>
