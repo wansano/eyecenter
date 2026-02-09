@@ -131,7 +131,7 @@ genererEntete($pdf, $entreprise);
 
 // Titre
 $pdf->SetFont('CenturyGothic', 'B', 16);
-$pdf->Cell(0, 10, pdf_text('RAPPORT DE CAISSE'), 0, 1, 'C');
+$pdf->Cell(0, 10, pdf_text('BROUILLARD DE CAISSE'), 0, 1, 'C');
 $pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', '', 11);
