@@ -41,6 +41,7 @@ function getEmployesColumnMap(PDO $bdd): array
 		'name' => $nameCol,
 		'salary' => $salaryCol,
 		'sexe' => isset($fields['sexe']) ? 'sexe' : null,
+		'nationalite' => isset($fields['nationalite']) ? 'nationalite' : null,
 		'lieu_naissance' => isset($fields['lieuNaissance']) ? 'lieuNaissance' : (isset($fields['lieu_naissance']) ? 'lieu_naissance' : null),
 		'nin' => isset($fields['nin']) ? 'nin' : (isset($fields['nni']) ? 'nni' : (isset($fields['NNI']) ? 'NNI' : null)),
 		'expiration_nin' => isset($fields['expirationNin']) ? 'expirationNin' : (isset($fields['expiration_nin']) ? 'expiration_nin' : null),
@@ -257,6 +258,7 @@ try {
 		"e.`$salaryCol` AS salaire_base",
 	];
 	if ($empCols['sexe'] !== null) $select[] = 'e.`' . $empCols['sexe'] . '` AS sexe';
+	if ($empCols['nationalite'] !== null) $select[] = 'e.`' . $empCols['nationalite'] . '` AS nationalite';
 	if ($empCols['lieu_naissance'] !== null) $select[] = 'e.`' . $empCols['lieu_naissance'] . '` AS lieu_naissance';
 	if ($empCols['nin'] !== null) $select[] = 'e.`' . $empCols['nin'] . '` AS nin';
 	if ($empCols['expiration_nin'] !== null) $select[] = 'e.`' . $empCols['expiration_nin'] . '` AS expiration_nin';
@@ -296,7 +298,7 @@ $adresseEmp = trim((string)($emp['adresse'] ?? ''));
 $sexeRaw = trim((string)($emp['sexe'] ?? ''));
 $sexeLower = strtolower($sexeRaw);
 $civilite = 'Madame/Monsieur';
-$employeLabel = "L’employée";
+$employeLabel = "l’employée";
 $neeLabel = 'Né';
 if ($sexeRaw !== '') {
 	// Mapping demandé: 1 => Monsieur / employé ; 0 => Madame / employée
@@ -304,20 +306,20 @@ if ($sexeRaw !== '') {
 		$sexeInt = (int)$sexeRaw;
 		if ($sexeInt === 1) {
 			$civilite = 'Monsieur';
-			$employeLabel = "L’employé";
+			$employeLabel = "l’employé";
 			$neeLabel = 'Né';
 		} elseif ($sexeInt === 0) {
 			$civilite = 'Madame';
-			$employeLabel = "L’employée";
+			$employeLabel = "l’employée";
 			$neeLabel = 'Née';
 		}
 	} elseif (in_array($sexeLower, ['f', 'feminin', 'féminin', 'femme', 'female'], true)) {
 		$civilite = 'Madame';
-		$employeLabel = "L’employée";
+		$employeLabel = "l’employée";
 		$neeLabel = 'Née';
 	} elseif (in_array($sexeLower, ['m', 'masculin', 'homme', 'male'], true)) {
 		$civilite = 'Monsieur';
-		$employeLabel = "L’employé";
+		$employeLabel = "l’employé";
 		$neeLabel = 'Né';
 	}
 }
@@ -626,7 +628,11 @@ $lieuNaissance = trim((string)($emp['lieu_naissance'] ?? ''));
 if ($lieuNaissance === '') $lieuNaissance = '________________';
 
 writePara($pdf, $neeLabel . ' le ' . $birthDateTxt . ' à ' . $lieuNaissance . ',');
-writePara($pdf, 'Nationalité : Guinéenne,');
+$nationalite = trim((string)($emp['nationalite'] ?? ''));
+if ($nationalite === '') {
+	$nationalite = 'Guinéenne';
+}
+writePara($pdf, 'Nationalité : ' . $nationalite . ',');
 
 $nin = trim((string)($emp['nin'] ?? ''));
 if ($nin === '') $nin = '______________________________';
@@ -715,7 +721,7 @@ $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 6 : Congés payés', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
-writePara($pdf, $employeLabel . ' aura droit à deux jours et demi ouvrables de congés payés par mois de service. L’ordre des départs en congé est établi par l’Employeur en fonction des nécessités de services et autant que possible, en tenant compte des préférences des salariés.');
+writePara($pdf, $employeLabel . ' aura droit à deux jours et demi ouvrables de congés payés par mois de service. L’ordre des départs en congé est établi par l’employeur en fonction des nécessités de services et autant que possible, en tenant compte des préférences des salariés.');
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 7 : Sécurité Sociale', 6, 'L');
@@ -727,7 +733,7 @@ $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 8 : Rupture du contrat', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
-writePara($pdf, 'La rupture du contrat résulte soit de la démission de ' . $employeLabel . ', soit du licenciement par l’Employeur dans les conditions prévues par le Code du travail et par la Convention Collective Générale.');
+writePara($pdf, 'La rupture du contrat résulte soit de la démission de ' . $employeLabel . ', soit du licenciement par l’employeur dans les conditions prévues par le Code du travail et par la Convention Collective Générale.');
 writePara($pdf, 'Le contrat peut-être, notamment, rompu pour faute lourde.');
 writePara($pdf, 'En référence aux usages et à la jurisprudence, seront notamment considérés comme faute lourde de ' . $employeLabel . ' :');
 
@@ -759,7 +765,7 @@ $pdf->Ln(6);
 
 $colW = ($pdf->GetPageWidth() - 20) / 2;
 $pdf->SetFont('CenturyGothic', 'B', 11);
-$pdf->Cell($colW, 6, pdf_text_compat('Pour l’Employeur'), 0, 0, 'L');
+$pdf->Cell($colW, 6, pdf_text_compat('Pour l’employeur'), 0, 0, 'L');
 $pdf->Cell($colW, 6, pdf_text_compat('Pour ' . $employeLabel), 0, 1, 'R');
 
 $pdf->SetFont('CenturyGothic', '', 11);

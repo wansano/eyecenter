@@ -56,6 +56,7 @@ function getEmployesColumnMap(PDO $bdd): array {
         'lieu_naissance' => isset($fields['lieuNaissance']) ? 'lieuNaissance' : (isset($fields['lieu_naissance']) ? 'lieu_naissance' : null),
         'nin' => isset($fields['nin']) ? 'nin' : (isset($fields['nni']) ? 'nni' : (isset($fields['NNI']) ? 'NNI' : null)),
         'expiration_nin' => isset($fields['expirationNin']) ? 'expirationNin' : (isset($fields['expiration_nin']) ? 'expiration_nin' : null),
+        'nationalite' => isset($fields['nationalite']) ? 'nationalite' : (isset($fields['nationalite_employe']) ? 'nationalite_employe' : null),
         'engagement' => isset($fields['engagement']) ? 'engagement' : null,
         'type_contrat' => isset($fields['typeContrat']) ? 'typeContrat' : (isset($fields['type_contrat']) ? 'type_contrat' : null),
         'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
@@ -147,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
     $lieuNaissance = trim((string)($_POST['lieu_naissance'] ?? ''));
     $nin = trim((string)($_POST['nin'] ?? ''));
     $expirationNin = trim((string)($_POST['expiration_nin'] ?? ''));
+    $nationalite = trim((string)($_POST['nationalite'] ?? ''));
     $engagement = trim((string)($_POST['engagement'] ?? ''));
     $typeContratRaw = trim((string)($_POST['type_contrat'] ?? ''));
     $adresse = trim((string)($_POST['adresse'] ?? ''));
@@ -240,6 +242,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
     // Champs contrat (optionnels selon schéma)
     $lieuNaissanceDb = ($lieuNaissance !== '' ? $lieuNaissance : null);
     $ninDb = ($nin !== '' ? $nin : null);
+
+    $nationaliteDb = null;
+    if ($nationalite !== '') {
+        $nationaliteDb = function_exists('mb_substr') ? mb_substr($nationalite, 0, 100, 'UTF-8') : substr($nationalite, 0, 100);
+    }
 
     $expirationNinDb = null;
     if ($expirationNin !== '') {
@@ -400,6 +407,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             $sql .= ', `' . $empCols['expiration_nin'] . '` = ?';
             $params[] = $expirationNinDb;
         }
+        if ($empCols['nationalite'] !== null) {
+            $sql .= ', `' . $empCols['nationalite'] . '` = ?';
+            $params[] = $nationaliteDb;
+        }
         if ($empCols['engagement'] !== null) {
             $sql .= ', `' . $empCols['engagement'] . '` = ?';
             $params[] = $engagementDb;
@@ -469,6 +480,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     $lieuNaissance = trim((string)($_POST['lieu_naissance'] ?? ''));
     $nin = trim((string)($_POST['nin'] ?? ''));
     $expirationNin = trim((string)($_POST['expiration_nin'] ?? ''));
+    $nationalite = trim((string)($_POST['nationalite'] ?? ''));
     $engagement = trim((string)($_POST['engagement'] ?? ''));
     $typeContratRaw = trim((string)($_POST['type_contrat'] ?? ''));
     $adresse = trim((string)($_POST['adresse'] ?? ''));
@@ -486,6 +498,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     $superieur = isset($_POST['superieur_hierarchique']) ? (int)$_POST['superieur_hierarchique'] : 0;
     $notes = trim((string)($_POST['notes'] ?? ''));
 
+    // Utilisé dans les blocs catch (nettoyage), même si une exception survient tôt.
+    $photoPath = null;
+
     if ($nom === '') {
         redirectWith(['err' => 1, 'add' => 1]);
     }
@@ -501,6 +516,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     // Champs contrat
     $lieuNaissanceDb = ($lieuNaissance !== '' ? $lieuNaissance : null);
     $ninDb = ($nin !== '' ? $nin : null);
+
+    $nationaliteDb = null;
+    if ($nationalite !== '') {
+        $nationaliteDb = function_exists('mb_substr') ? mb_substr($nationalite, 0, 100, 'UTF-8') : substr($nationalite, 0, 100);
+    }
 
     $expirationNinDb = null;
     if ($expirationNin !== '') {
@@ -598,7 +618,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
         }
 
         // Upload photo
-        $photoPath = null;
         if (isset($_FILES['photo']) && is_array($_FILES['photo']) && ($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             $errUp = (int)($_FILES['photo']['error'] ?? UPLOAD_ERR_OK);
             if ($errUp !== UPLOAD_ERR_OK) {
@@ -715,6 +734,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $placeholders[] = ':expiration_nin';
             $paramsEmp[':expiration_nin'] = $expirationNinDb;
         }
+        if ($empCols['nationalite'] !== null) {
+            $columns[] = '`' . $empCols['nationalite'] . '`';
+            $placeholders[] = ':nationalite';
+            $paramsEmp[':nationalite'] = $nationaliteDb;
+        }
         if ($empCols['engagement'] !== null) {
             $columns[] = '`' . $empCols['engagement'] . '`';
             $placeholders[] = ':engagement';
@@ -828,6 +852,7 @@ try {
     $lieuNaissanceExpr = $empCols['lieu_naissance'] !== null ? ('e.`' . $empCols['lieu_naissance'] . '`') : 'NULL';
     $ninExpr = $empCols['nin'] !== null ? ('e.`' . $empCols['nin'] . '`') : 'NULL';
     $expirationNinExpr = $empCols['expiration_nin'] !== null ? ('e.`' . $empCols['expiration_nin'] . '`') : 'NULL';
+    $nationaliteExpr = $empCols['nationalite'] !== null ? ('e.`' . $empCols['nationalite'] . '`') : 'NULL';
     $engagementExpr = $empCols['engagement'] !== null ? ('e.`' . $empCols['engagement'] . '`') : 'NULL';
     $typeContratExpr = $empCols['type_contrat'] !== null ? ('e.`' . $empCols['type_contrat'] . '`') : 'NULL';
 
@@ -855,6 +880,7 @@ try {
                  ' . $lieuNaissanceExpr . ' AS lieu_naissance,
                  ' . $ninExpr . ' AS nin,
                  ' . $expirationNinExpr . ' AS expiration_nin,
+                 ' . $nationaliteExpr . ' AS nationalite,
                  ' . $engagementExpr . ' AS engagement,
                  ' . $typeContratExpr . ' AS type_contrat,
                  e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
@@ -943,8 +969,8 @@ include('../PUBLIC/header.php');
                                         </select>
                                     </div>
                                     <div class="col-sm-2 d-flex gap-2">
-                                        <button type="submit" class="btn btn-default">Filtrer</button>
-                                        <a href="listeemployes.php" class="btn btn-light">Reset</a>
+                                        <button type="submit" class="btn btn-primary">Filtrer</button>
+                                        <a href="listeemployes.php" class="btn btn-warning">Effacer</a>
                                     </div>
                                 </form>
 
@@ -1013,6 +1039,7 @@ include('../PUBLIC/header.php');
                                                         data-lieu_naissance="<?php echo h($r['lieu_naissance'] ?? ''); ?>"
                                                         data-nin="<?php echo h($r['nin'] ?? ''); ?>"
                                                         data-expiration_nin="<?php echo h($r['expiration_nin'] ?? ''); ?>"
+                                                        data-nationalite="<?php echo h($r['nationalite'] ?? ''); ?>"
                                                         data-engagement="<?php echo h($r['engagement'] ?? ''); ?>"
                                                         data-type_contrat="<?php echo h($r['type_contrat'] ?? ''); ?>"
                                                         data-adresse="<?php echo h($r['adresse'] ?? ''); ?>"
@@ -1115,6 +1142,10 @@ include('../PUBLIC/header.php');
                                         <td><span id="detail_expiration_nin"></span></td>
                                     </tr>
                                     <tr>
+                                        <th>Nationalité</th>
+                                        <td><span id="detail_nationalite"></span></td>
+                                    </tr>
+                                    <tr>
                                         <th>Engagement (jours)</th>
                                         <td><span id="detail_engagement"></span></td>
                                     </tr>
@@ -1155,10 +1186,10 @@ include('../PUBLIC/header.php');
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
-                        <button type="button" class="btn btn-default" id="btn_open_badge_from_details">Badge</button>
-                        <button type="button" class="btn btn-default" id="btn_open_contrat_from_details">Engagement</button>
                         <button type="button" class="btn btn-primary" id="btn_open_edit_from_details">Modifier</button>
+                        <button type="button" class="btn btn-default" id="btn_open_badge_from_details" style="display:none;">Badge</button>
+                        <button type="button" class="btn btn-dark" id="btn_open_contrat_from_details" style="display:none;">Engagement</button>
+                        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Fermer</button>
                     </div>
                 </div>
             </div>
@@ -1286,6 +1317,10 @@ include('../PUBLIC/header.php');
                                     <input type="date" class="form-control" name="expiration_nin" id="edit_expiration_nin">
                                 </div>
                                 <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Nationalité</label>
+                                    <input type="text" class="form-control" name="nationalite" id="edit_nationalite" placeholder="ex: Guinéenne">
+                                </div>
+                                <div class="col-md-6 mb-3">
                                     <label class="col-form-label">Engagement (jours)</label>
                                     <input type="number" min="0" step="1" class="form-control" name="engagement" id="edit_engagement" placeholder="ex: 90">
                                 </div>
@@ -1319,11 +1354,11 @@ include('../PUBLIC/header.php');
                                     <input type="text" class="form-control" name="prime_vie" id="edit_prime_vie" placeholder="ex: 5000">
                                 </div>
 
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Téléphone</label>
                                     <input type="text" class="form-control" name="telephone" id="edit_telephone">
                                 </div>
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Email *</label>
                                     <input type="email" class="form-control" name="email" id="edit_email" required>
                                 </div>
@@ -1521,6 +1556,7 @@ include('../PUBLIC/header.php');
                     setValue('edit_lieu_naissance', ds.lieu_naissance);
                     setValue('edit_nin', ds.nin);
                     setValue('edit_expiration_nin', ds.expiration_nin);
+                    setValue('edit_nationalite', ds.nationalite);
                     setValue('edit_engagement', ds.engagement);
                     setValue('edit_type_contrat', ds.type_contrat);
                     setValue('edit_adresse', ds.adresse);
@@ -1550,6 +1586,7 @@ include('../PUBLIC/header.php');
                     setText('detail_lieu_naissance', ds.lieu_naissance);
                     setText('detail_nin', ds.nin);
                     setText('detail_expiration_nin', ds.expiration_nin);
+                    setText('detail_nationalite', ds.nationalite);
                     setText('detail_engagement', ds.engagement);
 
                     var tc = ds.type_contrat;
@@ -1613,6 +1650,7 @@ include('../PUBLIC/header.php');
                                 lieu_naissance: btn.getAttribute('data-lieu_naissance'),
                                 nin: btn.getAttribute('data-nin'),
                                 expiration_nin: btn.getAttribute('data-expiration_nin'),
+                                nationalite: btn.getAttribute('data-nationalite'),
                                 engagement: btn.getAttribute('data-engagement'),
                                 type_contrat: btn.getAttribute('data-type_contrat'),
                                 adresse: btn.getAttribute('data-adresse'),
@@ -1728,6 +1766,7 @@ include('../PUBLIC/header.php');
                                 lieu_naissance: trigger.getAttribute('data-lieu_naissance'),
                                 nin: trigger.getAttribute('data-nin'),
                                 expiration_nin: trigger.getAttribute('data-expiration_nin'),
+                                nationalite: trigger.getAttribute('data-nationalite'),
                                 engagement: trigger.getAttribute('data-engagement'),
                                 type_contrat: trigger.getAttribute('data-type_contrat'),
                                 adresse: trigger.getAttribute('data-adresse'),
@@ -1817,6 +1856,10 @@ include('../PUBLIC/header.php');
                                     <input type="date" class="form-control" name="expiration_nin">
                                 </div>
                                 <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Nationalité</label>
+                                    <input type="text" class="form-control" name="nationalite" placeholder="ex: Guinéenne">
+                                </div>
+                                <div class="col-md-6 mb-3">
                                     <label class="col-form-label">Engagement (jours)</label>
                                     <input type="number" min="0" step="1" class="form-control" name="engagement" placeholder="ex: 90">
                                 </div>
@@ -1850,12 +1893,12 @@ include('../PUBLIC/header.php');
                                     <input type="text" class="form-control" name="prime_vie" placeholder="ex: 5000">
                                 </div>
 
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Téléphone</label>
                                     <input type="text" class="form-control" name="telephone">
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="col-form-label">Email</label>
+                                <div class="col-md-4 mb-3">
+                                    <label class="col-form-label">Email *</label>
                                     <input type="email" class="form-control" name="email" required>
                                 </div>
 

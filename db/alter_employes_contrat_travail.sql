@@ -5,5 +5,6 @@ ALTER TABLE `employes`
   ADD COLUMN `lieuNaissance` VARCHAR(255) NULL AFTER `date_naissance`,
   ADD COLUMN `nin` VARCHAR(100) NULL AFTER `lieuNaissance`,
   ADD COLUMN `expirationNin` DATE NULL AFTER `nin`,
-  ADD COLUMN `engagement` INT NULL AFTER `expirationNin`,
+  ADD COLUMN `nationalite` VARCHAR(100) NULL AFTER `expirationNin`,
+  ADD COLUMN `engagement` INT NULL AFTER `nationalite`,
   ADD COLUMN `typeContrat` INT NULL AFTER `engagement`;
