@@ -16,7 +16,7 @@ html {
 
 body {
 	color: #777;
-	font-family: "Century Gothic", Poppins, Arial, sans-serif;
+	font-family: "Poppins", Arial, sans-serif;
 	line-height: 22px;
 	margin: 0;
 	font-size: 13px;
@@ -11750,7 +11750,7 @@ html.dark .radio-dark input[type="radio"]:checked + label:after,
 }
 
 .validation-message ul label.error:before {
-	font-family: 'Font Awesome 5 Free';
+	font-family: 'Poppins';
 	font-weight: 900;
 	content: '\f00d';
 	position: absolute;
@@ -15881,7 +15881,7 @@ html.dark .ui-slider.ui-widget-content {
 	background: #FFF;
 	border: none;
 	border-radius: 0 0 4px 4px;
-	font-family: Arial, Helvetica, Sans-serif;
+	font-family: "Poppins", Arial, Helvetica, Sans-serif;
 }
 
 .note-editor .note-statusbar {
@@ -17359,7 +17359,7 @@ p.drop-caps:first-letter {
 	padding: 4px;
 	margin-right: 5px;
 	margin-top: 5px;
-	font-family: Georgia;
+	font-family: Poppins, Arial, sans-serif;
 }
 
 p.drop-caps.drop-caps-style-2:first-letter {
@@ -17378,7 +17378,7 @@ p.drop-caps.drop-caps-style-2:first-letter {
 /* Alternative Font Style */
 .alternative-font {
 	color: #CCC;
-	font-family: "Shadows Into Light", cursive;
+	font-family: "Poppins", cursive;
 	font-size: 1.6em;
 }
 
@@ -18549,7 +18549,7 @@ ul.widget-todo-list li:last-child {
 	line-height: 1.6;
 	padding: 15px 0;
 	margin: 0 0 10px;
-	font-family: Georgia, serif;
+	font-family: "Poppins", Georgia, serif;
 	color: #FFF;
 }
 
@@ -18560,7 +18560,7 @@ ul.widget-todo-list li:last-child {
 	content: '\201C';
 	line-height: 1;
 	font-size: 80px;
-	font-family: Georgia, serif;
+	font-family: "Poppins", Georgia, serif;
 	font-style: normal;
 }
 
@@ -19164,7 +19164,7 @@ html.dark .section-full-width-bg-light:before {
 .testimonial blockquote {
 	position: relative;
 	border-left: none;
-	font-family: Georgia, serif;
+	font-family: "Poppins", Georgia, serif;
 	padding: 10px 60px;
 	margin-bottom: 0;
 }
@@ -19176,7 +19176,7 @@ html.dark .section-full-width-bg-light:before {
 	content: "\201C";
 	font-size: 80px;
 	font-style: normal;
-	font-family: Georgia, serif;
+	font-family: "Poppins", Georgia, serif;
 	line-height: 1;
 	position: absolute;
 }
@@ -19186,7 +19186,7 @@ html.dark .section-full-width-bg-light:before {
 	content: "\201D";
 	font-size: 80px;
 	font-style: normal;
-	font-family: Georgia, serif;
+	font-family: "Poppins", Georgia, serif;
 	line-height: 1;
 	position: absolute;
 	bottom: -0.5em;
@@ -19194,7 +19194,7 @@ html.dark .section-full-width-bg-light:before {
 }
 
 .testimonial blockquote p {
-	font-family: Georgia, serif;
+	font-family: "Poppins", Georgia, serif;
 	font-size: 18px;
 	line-height: 1.8;
 }

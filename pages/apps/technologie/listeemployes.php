@@ -53,6 +53,11 @@ function getEmployesColumnMap(PDO $bdd): array {
         'name' => $nameCol,
         'salary' => $salaryCol,
         'sexe' => isset($fields['sexe']) ? 'sexe' : null,
+        'lieu_naissance' => isset($fields['lieuNaissance']) ? 'lieuNaissance' : (isset($fields['lieu_naissance']) ? 'lieu_naissance' : null),
+        'nin' => isset($fields['nin']) ? 'nin' : (isset($fields['nni']) ? 'nni' : (isset($fields['NNI']) ? 'NNI' : null)),
+        'expiration_nin' => isset($fields['expirationNin']) ? 'expirationNin' : (isset($fields['expiration_nin']) ? 'expiration_nin' : null),
+        'engagement' => isset($fields['engagement']) ? 'engagement' : null,
+        'type_contrat' => isset($fields['typeContrat']) ? 'typeContrat' : (isset($fields['type_contrat']) ? 'type_contrat' : null),
         'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
         'prime_logement' => isset($fields['PrimeLogement']) ? 'PrimeLogement' : null,
         'prime_vie' => isset($fields['PrimeVie']) ? 'PrimeVie' : null,
@@ -89,6 +94,9 @@ if (isset($_GET['ok']) && (int)$_GET['ok'] === 1) {
     if ($err === 13) $alert = ['type' => 'danger', 'message' => "Employé introuvable."];
     if ($err === 14) $alert = ['type' => 'danger', 'message' => "Cet email est déjà utilisé par un autre employé."];
     // 15 réservé à l'ancienne création de compte utilisateur (désactivée)
+    if ($err === 16) $alert = ['type' => 'danger', 'message' => "La durée d'engagement doit être un nombre entier (en jours)."];
+    if ($err === 17) $alert = ['type' => 'danger', 'message' => "La date d'expiration du NIN est invalide."];
+    if ($err === 18) $alert = ['type' => 'danger', 'message' => "Le type de contrat est invalide."];
 }
 
 // Liste des supérieurs (pour le modal)
@@ -134,7 +142,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
     $idEmploye = isset($_POST['id_employe']) ? (int)$_POST['id_employe'] : 0;
 
     $nom = trim((string)($_POST['nom_employe'] ?? ''));
+    $sexe = isset($_POST['sexe']) ? (int)$_POST['sexe'] : null;
     $dateNaissance = trim((string)($_POST['date_naissance'] ?? ''));
+    $lieuNaissance = trim((string)($_POST['lieu_naissance'] ?? ''));
+    $nin = trim((string)($_POST['nin'] ?? ''));
+    $expirationNin = trim((string)($_POST['expiration_nin'] ?? ''));
+    $engagement = trim((string)($_POST['engagement'] ?? ''));
+    $typeContratRaw = trim((string)($_POST['type_contrat'] ?? ''));
     $adresse = trim((string)($_POST['adresse'] ?? ''));
     $telephone = trim((string)($_POST['telephone'] ?? ''));
     $email = trim((string)($_POST['email'] ?? ''));
@@ -161,7 +175,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
         redirectWith(['err' => 2, 'edit' => $idEmploye]);
     }
 
-    // Service depuis organigramme (on stocke la cellule)
+    // Sexe (1 = Homme/Monsieur, 0 = Femme/Madame)
+    if ($sexe !== null && $sexe !== 0 && $sexe !== 1) {
+        $sexe = null;
+    }
+
+    // Service depuis organigramme (on stocke l'ID)
     try {
         if ($serviceId > 0) {
             $stmt = $bdd->prepare('SELECT celulle FROM organigramme WHERE id_organigramme = ? LIMIT 1');
@@ -170,7 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             if (!$rowSvc || trim((string)($rowSvc['celulle'] ?? '')) === '') {
                 redirectWith(['err' => 9, 'edit' => $idEmploye]);
             }
-            $service = trim((string)$rowSvc['celulle']);
+
+            // On enregistre l'ID, pas le libellé
+            $service = (string)$serviceId;
         } else {
             $service = '';
         }
@@ -214,6 +235,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             redirectWith(['err' => 5, 'edit' => $idEmploye]);
         }
         $primeVieDb = $parsed;
+    }
+
+    // Champs contrat (optionnels selon schéma)
+    $lieuNaissanceDb = ($lieuNaissance !== '' ? $lieuNaissance : null);
+    $ninDb = ($nin !== '' ? $nin : null);
+
+    $expirationNinDb = null;
+    if ($expirationNin !== '') {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expirationNin)) {
+            redirectWith(['err' => 17, 'edit' => $idEmploye]);
+        }
+        $expirationNinDb = $expirationNin;
+    }
+
+    $engagementDb = null;
+    if ($engagement !== '') {
+        if (!preg_match('/^\d+$/', $engagement)) {
+            redirectWith(['err' => 16, 'edit' => $idEmploye]);
+        }
+        $engagementDb = (int)$engagement;
+    }
+
+    $typeContratDb = null;
+    if ($typeContratRaw !== '') {
+        if ($typeContratRaw !== '0' && $typeContratRaw !== '1') {
+            redirectWith(['err' => 18, 'edit' => $idEmploye]);
+        }
+        $typeContratDb = (int)$typeContratRaw;
     }
 
     // Upload photo (optionnel)
@@ -334,6 +383,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             $params[] = $primeVieDb;
         }
 
+        if ($empCols['sexe'] !== null) {
+            $sql .= ', `' . $empCols['sexe'] . '` = ?';
+            $params[] = $sexe;
+        }
+
+        if ($empCols['lieu_naissance'] !== null) {
+            $sql .= ', `' . $empCols['lieu_naissance'] . '` = ?';
+            $params[] = $lieuNaissanceDb;
+        }
+        if ($empCols['nin'] !== null) {
+            $sql .= ', `' . $empCols['nin'] . '` = ?';
+            $params[] = $ninDb;
+        }
+        if ($empCols['expiration_nin'] !== null) {
+            $sql .= ', `' . $empCols['expiration_nin'] . '` = ?';
+            $params[] = $expirationNinDb;
+        }
+        if ($empCols['engagement'] !== null) {
+            $sql .= ', `' . $empCols['engagement'] . '` = ?';
+            $params[] = $engagementDb;
+        }
+
+        if ($empCols['type_contrat'] !== null) {
+            $sql .= ', `' . $empCols['type_contrat'] . '` = ?';
+            $params[] = $typeContratDb;
+        }
+
         $sql .= ', status = ?, superieur_hierarchique = ?, notes = ?';
         $params[] = $status;
         $params[] = $superieurDb;
@@ -390,6 +466,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
     $nom = trim((string)($_POST['nom_employe'] ?? ''));
     $sexe = isset($_POST['sexe']) ? (int)$_POST['sexe'] : null;
     $dateNaissance = trim((string)($_POST['date_naissance'] ?? ''));
+    $lieuNaissance = trim((string)($_POST['lieu_naissance'] ?? ''));
+    $nin = trim((string)($_POST['nin'] ?? ''));
+    $expirationNin = trim((string)($_POST['expiration_nin'] ?? ''));
+    $engagement = trim((string)($_POST['engagement'] ?? ''));
+    $typeContratRaw = trim((string)($_POST['type_contrat'] ?? ''));
     $adresse = trim((string)($_POST['adresse'] ?? ''));
     $telephone = trim((string)($_POST['telephone'] ?? ''));
     $email = trim((string)($_POST['email'] ?? ''));
@@ -417,8 +498,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
         $sexe = null;
     }
 
+    // Champs contrat
+    $lieuNaissanceDb = ($lieuNaissance !== '' ? $lieuNaissance : null);
+    $ninDb = ($nin !== '' ? $nin : null);
+
+    $expirationNinDb = null;
+    if ($expirationNin !== '') {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expirationNin)) {
+            redirectWith(['err' => 17, 'add' => 1]);
+        }
+        $expirationNinDb = $expirationNin;
+    }
+
+    $engagementDb = null;
+    if ($engagement !== '') {
+        if (!preg_match('/^\d+$/', $engagement)) {
+            redirectWith(['err' => 16, 'add' => 1]);
+        }
+        $engagementDb = (int)$engagement;
+    }
+
+    $typeContratDb = null;
+    if ($typeContratRaw !== '') {
+        if ($typeContratRaw !== '0' && $typeContratRaw !== '1') {
+            redirectWith(['err' => 18, 'add' => 1]);
+        }
+        $typeContratDb = (int)$typeContratRaw;
+    }
+
     try {
-        // Service depuis organigramme (on stocke la cellule dans employes.service)
+        // Service depuis organigramme (on stocke l'ID dans employes.service)
         if ($serviceId > 0) {
             $stmt = $bdd->prepare('SELECT celulle FROM organigramme WHERE id_organigramme = ? LIMIT 1');
             $stmt->execute([$serviceId]);
@@ -426,7 +535,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             if (!$rowSvc || trim((string)($rowSvc['celulle'] ?? '')) === '') {
                 redirectWith(['err' => 9, 'add' => 1]);
             }
-            $service = trim((string)$rowSvc['celulle']);
+
+            // On enregistre l'ID, pas le libellé
+            $service = (string)$serviceId;
         } else {
             $service = '';
         }
@@ -589,6 +700,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $paramsEmp[':sexe'] = $sexe;
         }
 
+        if ($empCols['lieu_naissance'] !== null) {
+            $columns[] = '`' . $empCols['lieu_naissance'] . '`';
+            $placeholders[] = ':lieu_naissance';
+            $paramsEmp[':lieu_naissance'] = $lieuNaissanceDb;
+        }
+        if ($empCols['nin'] !== null) {
+            $columns[] = '`' . $empCols['nin'] . '`';
+            $placeholders[] = ':nin';
+            $paramsEmp[':nin'] = $ninDb;
+        }
+        if ($empCols['expiration_nin'] !== null) {
+            $columns[] = '`' . $empCols['expiration_nin'] . '`';
+            $placeholders[] = ':expiration_nin';
+            $paramsEmp[':expiration_nin'] = $expirationNinDb;
+        }
+        if ($empCols['engagement'] !== null) {
+            $columns[] = '`' . $empCols['engagement'] . '`';
+            $placeholders[] = ':engagement';
+            $paramsEmp[':engagement'] = $engagementDb;
+        }
+
+        if ($empCols['type_contrat'] !== null) {
+            $columns[] = '`' . $empCols['type_contrat'] . '`';
+            $placeholders[] = ':type_contrat';
+            $paramsEmp[':type_contrat'] = $typeContratDb;
+        }
+
         if ($empCols['prime_transport'] !== null) {
             $columns[] = '`' . $empCols['prime_transport'] . '`';
             $placeholders[] = ':prime_transport';
@@ -661,7 +799,7 @@ $error = null;
 // Filtres (GET)
 $filterYear = isset($_GET['annee_emploi']) ? (int) $_GET['annee_emploi'] : 0;
 $filterStatus = isset($_GET['statut']) ? trim((string) $_GET['statut']) : '';
-$filterService = isset($_GET['service']) ? trim((string) $_GET['service']) : '';
+$filterService = isset($_GET['service']) ? (int) $_GET['service'] : 0;
 
 // Options filtres (années + services)
 $filterYears = [];
@@ -672,11 +810,11 @@ try {
 } catch (Throwable $e) {
     $filterYears = [];
 }
-try {
-    $stS = $bdd->query("SELECT DISTINCT service FROM employes WHERE service IS NOT NULL AND TRIM(service) <> '' ORDER BY service ASC");
-    $filterServices = $stS ? $stS->fetchAll(PDO::FETCH_COLUMN, 0) : [];
-} catch (Throwable $e) {
-    $filterServices = [];
+foreach ($servicesOrg as $row) {
+    $idOrg = (int)($row['id_organigramme'] ?? 0);
+    $label = trim((string)($row['celulle'] ?? ''));
+    if ($idOrg <= 0 || $label === '') { continue; }
+    $filterServices[] = ['id' => $idOrg, 'label' => $label];
 }
 
 try {
@@ -686,6 +824,12 @@ try {
     $primeTransportExpr = $empCols['prime_transport'] !== null ? ('e.`' . $empCols['prime_transport'] . '`') : 'NULL';
     $primeLogementExpr = $empCols['prime_logement'] !== null ? ('e.`' . $empCols['prime_logement'] . '`') : 'NULL';
     $primeVieExpr = $empCols['prime_vie'] !== null ? ('e.`' . $empCols['prime_vie'] . '`') : 'NULL';
+    $sexeExpr = $empCols['sexe'] !== null ? ('e.`' . $empCols['sexe'] . '`') : 'NULL';
+    $lieuNaissanceExpr = $empCols['lieu_naissance'] !== null ? ('e.`' . $empCols['lieu_naissance'] . '`') : 'NULL';
+    $ninExpr = $empCols['nin'] !== null ? ('e.`' . $empCols['nin'] . '`') : 'NULL';
+    $expirationNinExpr = $empCols['expiration_nin'] !== null ? ('e.`' . $empCols['expiration_nin'] . '`') : 'NULL';
+    $engagementExpr = $empCols['engagement'] !== null ? ('e.`' . $empCols['engagement'] . '`') : 'NULL';
+    $typeContratExpr = $empCols['type_contrat'] !== null ? ('e.`' . $empCols['type_contrat'] . '`') : 'NULL';
 
     $where = [];
     $params = [];
@@ -698,23 +842,35 @@ try {
         $where[] = 'e.status = ?';
         $params[] = (int) $filterStatus;
     }
-    if ($filterService !== '') {
-        $where[] = 'e.service = ?';
-        $params[] = $filterService;
+    if ($filterService > 0) {
+        // Compat: ancien stockage (libellé) + nouveau (ID)
+        $where[] = '(e.service = ? OR oName.id_org = ?)';
+        $params[] = (string)$filterService;
+        $params[] = (int)$filterService;
     }
 
-    $sql = 'SELECT e.id_employe, e.`' . $nameCol . '` AS nom_employe, e.date_naissance, e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
-                e.service, e.`' . $salaryCol . '` AS salaire, ' . $primeTransportExpr . ' AS prime_transport, ' . $primeLogementExpr . ' AS prime_logement, ' . $primeVieExpr . ' AS prime_vie,
-                e.status, e.superieur_hierarchique, e.notes, e.photo,
-                ' . $sNameExpr . ' AS superieur_nom,
-                     o.id_org AS service_id
-         FROM employes e
-         LEFT JOIN employes s ON s.id_employe = e.superieur_hierarchique
-         LEFT JOIN (
-            SELECT celulle, MIN(id_organigramme) AS id_org
-            FROM organigramme
-            GROUP BY celulle
-         ) o ON o.celulle = e.service';
+    $sql = 'SELECT e.id_employe, e.`' . $nameCol . '` AS nom_employe,
+                 ' . $sexeExpr . ' AS sexe,
+                 e.date_naissance,
+                 ' . $lieuNaissanceExpr . ' AS lieu_naissance,
+                 ' . $ninExpr . ' AS nin,
+                 ' . $expirationNinExpr . ' AS expiration_nin,
+                 ' . $engagementExpr . ' AS engagement,
+                 ' . $typeContratExpr . ' AS type_contrat,
+                 e.adresse, e.telephone, e.email, e.date_embauche, e.poste,
+                     COALESCE(oId.celulle, oName.celulle, e.service) AS service,
+                     COALESCE(oId.id_organigramme, oName.id_org, 0) AS service_id,
+                     e.`' . $salaryCol . '` AS salaire, ' . $primeTransportExpr . ' AS prime_transport, ' . $primeLogementExpr . ' AS prime_logement, ' . $primeVieExpr . ' AS prime_vie,
+                     e.status, e.superieur_hierarchique, e.notes, e.photo,
+                     ' . $sNameExpr . ' AS superieur_nom
+            FROM employes e
+            LEFT JOIN employes s ON s.id_employe = e.superieur_hierarchique
+            LEFT JOIN organigramme oId ON oId.id_organigramme = e.service
+            LEFT JOIN (
+                SELECT celulle, MIN(id_organigramme) AS id_org
+                FROM organigramme
+                GROUP BY celulle
+            ) oName ON oName.celulle = e.service';
     if (!empty($where)) {
         $sql .= ' WHERE ' . implode(' AND ', $where);
     }
@@ -778,9 +934,10 @@ include('../PUBLIC/header.php');
                                         <label class="form-label">Service</label>
                                         <select name="service" class="form-control">
                                             <option value="">Tous</option>
-                                            <?php foreach ($filterServices as $s): $sv = (string)$s; ?>
-                                                <option value="<?php echo h($sv); ?>" <?php echo ($filterService !== '' && $filterService === $sv) ? 'selected' : ''; ?>>
-                                                    <?php echo h($sv); ?>
+                                            <?php foreach ($filterServices as $s): $sid = (int)($s['id'] ?? 0); $sl = (string)($s['label'] ?? ''); ?>
+                                                <?php if ($sid <= 0 || trim($sl) === '') continue; ?>
+                                                <option value="<?php echo (int)$sid; ?>" <?php echo ((int)$filterService === (int)$sid) ? 'selected' : ''; ?>>
+                                                    <?php echo h($sl); ?>
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
@@ -792,6 +949,7 @@ include('../PUBLIC/header.php');
                                 </form>
 
                                 <div>
+                                    <button type="button" class="btn btn-default" data-bs-toggle="modal" data-bs-target="#modalPrintEmployes" onclick="openPrintEmployes()"><i class="fa fa-print"></i> Imprimer la liste</button>
                                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddEmploye">Ajouter un employé</button>
                                 </div>
                             </div>
@@ -822,6 +980,15 @@ include('../PUBLIC/header.php');
                                                 $status = isset($r['status']) ? (int)$r['status'] : 0;
                                                 $statusLabel = ($status === 1) ? 'Actif' : 'Inactif';
                                                 $badge = ($status === 1) ? 'success' : 'secondary';
+
+                                                $serviceIdRow = (int)($r['service_id'] ?? 0);
+                                                $serviceLabel = '';
+                                                if ($serviceIdRow > 0) {
+                                                    $serviceLabel = (string)service($serviceIdRow);
+                                                }
+                                                if (trim($serviceLabel) === '') {
+                                                    $serviceLabel = (string)($r['service'] ?? '—');
+                                                }
                                             ?>
                                             <tr>
                                                 <td><?php echo h($r['id_employe'] ?? ''); ?></td>
@@ -829,7 +996,7 @@ include('../PUBLIC/header.php');
                                                 <td><?php echo h($r['telephone'] ?? '—'); ?></td>
                                                 <td><?php echo h($r['email'] ?? '—'); ?></td>
                                                 <td><?php echo h($r['poste'] ?? '—'); ?></td>
-                                                <td><?php echo h($r['service'] ?? '—'); ?></td>
+                                                <td><?php echo h($serviceLabel); ?></td>
                                                 <td><?php echo h($r['date_embauche'] ?? '—'); ?></td>
                                                 <td><?php echo h($r['superieur_nom'] ?? '—'); ?></td>
                                                 <td><span class="badge bg-<?php echo h($badge); ?>"><?php echo h($statusLabel); ?></span></td>
@@ -841,14 +1008,20 @@ include('../PUBLIC/header.php');
                                                         data-bs-target="#modalDetailEmploye"
                                                         data-id_employe="<?php echo h($r['id_employe'] ?? ''); ?>"
                                                         data-nom_employe="<?php echo h($r['nom_employe'] ?? ''); ?>"
+                                                        data-sexe="<?php echo h($r['sexe'] ?? ''); ?>"
                                                         data-date_naissance="<?php echo h($r['date_naissance'] ?? ''); ?>"
+                                                        data-lieu_naissance="<?php echo h($r['lieu_naissance'] ?? ''); ?>"
+                                                        data-nin="<?php echo h($r['nin'] ?? ''); ?>"
+                                                        data-expiration_nin="<?php echo h($r['expiration_nin'] ?? ''); ?>"
+                                                        data-engagement="<?php echo h($r['engagement'] ?? ''); ?>"
+                                                        data-type_contrat="<?php echo h($r['type_contrat'] ?? ''); ?>"
                                                         data-adresse="<?php echo h($r['adresse'] ?? ''); ?>"
                                                         data-telephone="<?php echo h($r['telephone'] ?? ''); ?>"
                                                         data-email="<?php echo h($r['email'] ?? ''); ?>"
                                                         data-date_embauche="<?php echo h($r['date_embauche'] ?? ''); ?>"
                                                         data-poste="<?php echo h($r['poste'] ?? ''); ?>"
                                                         data-service_id="<?php echo h($r['service_id'] ?? '0'); ?>"
-                                                        data-service="<?php echo h($r['service'] ?? ''); ?>"
+                                                        data-service="<?php echo h($serviceLabel); ?>"
                                                         data-salaire="<?php echo h($r['salaire'] ?? ''); ?>"
                                                         data-prime_transport="<?php echo h($r['prime_transport'] ?? ''); ?>"
                                                         data-prime_logement="<?php echo h($r['prime_logement'] ?? ''); ?>"
@@ -890,7 +1063,7 @@ include('../PUBLIC/header.php');
                             <table class="table table-bordered table-sm mb-0">
                                 <tbody>
                                     <tr>
-                                        <th>ID</th>
+                                        <th>Matricule</th>
                                         <td><span id="detail_id_employe"></span></td>
                                     </tr>
                                     <tr>
@@ -900,6 +1073,10 @@ include('../PUBLIC/header.php');
                                     <tr>
                                         <th>Nom</th>
                                         <td><span id="detail_nom_employe"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Sexe</th>
+                                        <td><span id="detail_sexe"></span></td>
                                     </tr>
                                     <tr>
                                         <th>Téléphone</th>
@@ -924,6 +1101,26 @@ include('../PUBLIC/header.php');
                                     <tr>
                                         <th>Date naissance</th>
                                         <td><span id="detail_date_naissance"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Lieu de naissance</th>
+                                        <td><span id="detail_lieu_naissance"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>NIN</th>
+                                        <td><span id="detail_nin"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Expiration NIN</th>
+                                        <td><span id="detail_expiration_nin"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Engagement (jours)</th>
+                                        <td><span id="detail_engagement"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Type de contrat</th>
+                                        <td><span id="detail_type_contrat"></span></td>
                                     </tr>
                                     <tr>
                                         <th>Supérieur</th>
@@ -959,7 +1156,70 @@ include('../PUBLIC/header.php');
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                        <button type="button" class="btn btn-default" id="btn_open_badge_from_details">Badge</button>
+                        <button type="button" class="btn btn-default" id="btn_open_contrat_from_details">Engagement</button>
                         <button type="button" class="btn btn-primary" id="btn_open_edit_from_details">Modifier</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Impression liste employés -->
+        <div class="modal fade" id="modalPrintEmployes" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Impression de la liste des employés</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="min-height:70vh;">
+                        <iframe id="printEmployesFrame" title="Liste employés" style="width:100%; height:65vh; border:1px solid #e5e5e5;"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                        <button type="button" class="btn btn-primary" id="btnPrintEmployes"><i class="fa fa-print"></i> Imprimer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Contrat de travail (Engagement) -->
+        <div class="modal fade" id="modalContratTravail" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Contrat de travail</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="min-height:70vh;">
+                        <iframe id="contratTravailFrame" title="Contrat de travail" style="width:100%; height:65vh; border:1px solid #e5e5e5;"></iframe>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                        <button type="button" class="btn btn-primary" id="btnPrintContratTravail"><i class="fa fa-print"></i> Imprimer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Badge employé (image) -->
+        <div class="modal fade" id="modalBadgeEmploye" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Badge employé</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="d-flex justify-content-center">
+                            <img id="badgeEmployeImg" alt="Badge employé" style="width: 520px; max-width: 100%; border:1px solid #ddd; background:#fff;" />
+                        </div>
+                        <div class="text-muted small mt-2 text-center">Format 85,60 × 53,98 mm.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <a class="btn btn-default" id="badgeEmployeOpen" target="_blank" rel="noopener">Aperçu</a>
+                        <button type="button" class="btn btn-primary" id="btnPrintBadge"><i class="fa fa-print"></i> Imprimer</button>
+                        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Fermer</button>
                     </div>
                 </div>
             </div>
@@ -996,10 +1256,51 @@ include('../PUBLIC/header.php');
                                     <label class="col-form-label">Date de naissance</label>
                                     <input type="date" class="form-control" name="date_naissance" id="edit_date_naissance">
                                 </div>
+                                <?php if ($empCols['sexe'] !== null): ?>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="col-form-label">Sexe</label>
+                                        <select name="sexe" class="form-control" id="edit_sexe">
+                                            <option value="">—</option>
+                                            <option value="1">Monsieur</option>
+                                            <option value="0">Madame</option>
+                                        </select>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="col-md-4 mb-3"></div>
+                                <?php endif; ?>
                                 <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Date d'embauche</label>
                                     <input type="date" class="form-control" name="date_embauche" id="edit_date_embauche">
                                 </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Lieu de naissance</label>
+                                    <input type="text" class="form-control" name="lieu_naissance" id="edit_lieu_naissance" placeholder="ex: Conakry">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">NIN</label>
+                                    <input type="text" class="form-control" name="nin" id="edit_nin" placeholder="Numéro d'identité">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Expiration NIN</label>
+                                    <input type="date" class="form-control" name="expiration_nin" id="edit_expiration_nin">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Engagement (jours)</label>
+                                    <input type="number" min="0" step="1" class="form-control" name="engagement" id="edit_engagement" placeholder="ex: 90">
+                                </div>
+                                <?php if ($empCols['type_contrat'] !== null): ?>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="col-form-label">Type de contrat</label>
+                                        <select name="type_contrat" class="form-control" id="edit_type_contrat">
+                                            <option value="">—</option>
+                                            <option value="1">CDD (Durée déterminée)</option>
+                                            <option value="0">CDI (Durée indéterminée)</option>
+                                        </select>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="col-md-6 mb-3"></div>
+                                <?php endif; ?>
                                 <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Salaire de base</label>
                                     <input type="text" class="form-control" name="salaire" id="edit_salaire" placeholder="ex: 150000">
@@ -1096,6 +1397,52 @@ include('../PUBLIC/header.php');
                 var lastDetailsDataset = null;
                 var companyCurrency = '<?php echo h($devise ?? ''); ?>';
 
+            function openContratTravailById(idEmploye) {
+                var frame = document.getElementById('contratTravailFrame');
+                if (!frame) return;
+                frame.src = '../impression/_contrat_travail.php?id_employe=' + encodeURIComponent(idEmploye) + '&t=' + Date.now();
+                var el = document.getElementById('modalContratTravail');
+                if (el && typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getOrCreateInstance(el).show();
+                }
+            }
+
+            function openBadgeById(idEmploye) {
+                var img = document.getElementById('badgeEmployeImg');
+                var link = document.getElementById('badgeEmployeOpen');
+                if (!img || !link) return;
+                var url = '../impression/_badge_employe_image.php?id_employe=' + encodeURIComponent(idEmploye) + '&t=' + Date.now();
+                img.src = url;
+                link.href = url;
+                var el = document.getElementById('modalBadgeEmploye');
+                if (el && typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getOrCreateInstance(el).show();
+                }
+            }
+
+            function printBadgeImage(url) {
+                var w = window.open('', '_blank');
+                if (!w) {
+                    window.open(url, '_blank');
+                    return;
+                }
+                w.document.open();
+                w.document.write('<!doctype html><html><head><title>Badge</title>'
+                    + '<style>@page{size:85.60mm 53.98mm; margin:0;} body{margin:0; display:flex; align-items:center; justify-content:center;} img{width:85.60mm; height:53.98mm; object-fit:contain;}</style>'
+                    + '</head><body>'
+                    + '<img src="' + url.replace(/"/g, '') + '" />'
+                    + '<script>window.onload=function(){window.focus();window.print();};<\/script>'
+                    + '</body></html>');
+                w.document.close();
+            }
+
+            window.openPrintEmployes = function () {
+                var frame = document.getElementById('printEmployesFrame');
+                if (!frame) return;
+                var qs = window.location.search || '';
+                frame.src = '../impression/_liste_employes.php' + qs;
+            }
+
                 function setValue(id, value) {
                     var el = document.getElementById(id);
                     if (!el) return;
@@ -1106,6 +1453,30 @@ include('../PUBLIC/header.php');
                     var el = document.getElementById(id);
                     if (!el) return;
                     el.textContent = value == null || value === '' ? '—' : String(value);
+                }
+
+                function buildMatricule(idEmploye, dateEmbauche) {
+                    var id = (idEmploye == null) ? '' : String(idEmploye).trim();
+                    if (!id) return '';
+                    var d = (dateEmbauche == null) ? '' : String(dateEmbauche).trim();
+                    var year = '';
+                    // Attendu: YYYY-MM-DD (ou YYYY/MM/DD). Fallback si invalide.
+                    var m = d.match(/^(\d{4})[-\/]/);
+                    if (m && m[1]) {
+                        year = m[1];
+                    } else {
+                        // Tenter via Date (si navigateur arrive à parser)
+                        try {
+                            var dt = new Date(d);
+                            if (!isNaN(dt.getTime())) {
+                                year = String(dt.getFullYear());
+                            }
+                        } catch (e) {}
+                    }
+                    if (!year) {
+                        year = String((new Date()).getFullYear());
+                    }
+                    return 'E' + year + 'C' + id;
                 }
 
                 function formatAmount(value) {
@@ -1145,7 +1516,13 @@ include('../PUBLIC/header.php');
                     if (!ds) return;
                     setValue('edit_id_employe', ds.id_employe);
                     setValue('edit_nom_employe', ds.nom_employe);
+                    setValue('edit_sexe', ds.sexe);
                     setValue('edit_date_naissance', ds.date_naissance);
+                    setValue('edit_lieu_naissance', ds.lieu_naissance);
+                    setValue('edit_nin', ds.nin);
+                    setValue('edit_expiration_nin', ds.expiration_nin);
+                    setValue('edit_engagement', ds.engagement);
+                    setValue('edit_type_contrat', ds.type_contrat);
                     setValue('edit_adresse', ds.adresse);
                     setValue('edit_telephone', ds.telephone);
                     setValue('edit_email', ds.email);
@@ -1165,9 +1542,21 @@ include('../PUBLIC/header.php');
                 function fillDetailsFromDataset(ds) {
                     if (!ds) return;
 
-                    setText('detail_id_employe', ds.id_employe);
+                    setText('detail_id_employe', buildMatricule(ds.id_employe, ds.date_embauche));
                     setText('detail_nom_employe', ds.nom_employe);
+                    var sx = (ds.sexe === '1' || ds.sexe === 1) ? 'Monsieur' : ((ds.sexe === '0' || ds.sexe === 0) ? 'Madame' : '—');
+                    setText('detail_sexe', sx === '—' ? (ds.sexe || '') : sx);
                     setText('detail_date_naissance', ds.date_naissance);
+                    setText('detail_lieu_naissance', ds.lieu_naissance);
+                    setText('detail_nin', ds.nin);
+                    setText('detail_expiration_nin', ds.expiration_nin);
+                    setText('detail_engagement', ds.engagement);
+
+                    var tc = ds.type_contrat;
+                    var tcLabel = '';
+                    if (tc === '1' || tc === 1) tcLabel = 'CDD (Durée déterminée)';
+                    else if (tc === '0' || tc === 0) tcLabel = 'CDI (Durée indéterminée)';
+                    setText('detail_type_contrat', tcLabel || (tc == null ? '' : tc));
                     setText('detail_adresse', ds.adresse);
                     setText('detail_telephone', ds.telephone);
                     setText('detail_email', ds.email);
@@ -1183,6 +1572,19 @@ include('../PUBLIC/header.php');
 
                     var st = (ds.status === '1' || ds.status === 1) ? 'Actif' : 'Inactif';
                     setText('detail_status', st);
+
+                    // Si employé inactif: pas de badge
+                    var btnBadge = document.getElementById('btn_open_badge_from_details');
+                    if (btnBadge) {
+                        var actif = (ds.status === '1' || ds.status === 1);
+                        btnBadge.style.display = actif ? '' : 'none';
+                    }
+
+                    var btnContrat = document.getElementById('btn_open_contrat_from_details');
+                    if (btnContrat) {
+                        var actif2 = (ds.status === '1' || ds.status === 1);
+                        btnContrat.style.display = actif2 ? '' : 'none';
+                    }
 
                     var img = document.getElementById('detail_photo');
                     var ph = document.getElementById('detail_photo_placeholder');
@@ -1206,7 +1608,13 @@ include('../PUBLIC/header.php');
                             lastDetailsDataset = {
                                 id_employe: btn.getAttribute('data-id_employe'),
                                 nom_employe: btn.getAttribute('data-nom_employe'),
+                                sexe: btn.getAttribute('data-sexe'),
                                 date_naissance: btn.getAttribute('data-date_naissance'),
+                                lieu_naissance: btn.getAttribute('data-lieu_naissance'),
+                                nin: btn.getAttribute('data-nin'),
+                                expiration_nin: btn.getAttribute('data-expiration_nin'),
+                                engagement: btn.getAttribute('data-engagement'),
+                                type_contrat: btn.getAttribute('data-type_contrat'),
                                 adresse: btn.getAttribute('data-adresse'),
                                 telephone: btn.getAttribute('data-telephone'),
                                 email: btn.getAttribute('data-email'),
@@ -1244,6 +1652,67 @@ include('../PUBLIC/header.php');
                         });
                     }
 
+                var btnBadge = document.getElementById('btn_open_badge_from_details');
+                if (btnBadge) {
+                    btnBadge.addEventListener('click', function () {
+                        if (!lastDetailsDataset) return;
+                        openBadgeById(lastDetailsDataset.id_employe);
+                    });
+                }
+
+                var btnContrat = document.getElementById('btn_open_contrat_from_details');
+                if (btnContrat) {
+                    btnContrat.addEventListener('click', function () {
+                        if (!lastDetailsDataset || typeof bootstrap === 'undefined') return;
+                        var detailsEl = document.getElementById('modalDetailEmploye');
+                        if (detailsEl) {
+                            bootstrap.Modal.getOrCreateInstance(detailsEl).hide();
+                        }
+                        openContratTravailById(lastDetailsDataset.id_employe);
+                    });
+                }
+
+                var btnPrintBadge = document.getElementById('btnPrintBadge');
+                if (btnPrintBadge) {
+                    btnPrintBadge.addEventListener('click', function () {
+                        var img = document.getElementById('badgeEmployeImg');
+                        if (!img || !img.src) return;
+                        printBadgeImage(img.src);
+                    });
+                }
+
+                var btnPrintEmployes = document.getElementById('btnPrintEmployes');
+                if (btnPrintEmployes) {
+                    btnPrintEmployes.addEventListener('click', function () {
+                        var frame = document.getElementById('printEmployesFrame');
+                        if (!frame || !frame.src) return;
+                        try {
+                            if (frame.contentWindow) {
+                                frame.contentWindow.focus();
+                                frame.contentWindow.print();
+                                return;
+                            }
+                        } catch (e) {}
+                        window.open(frame.src, '_blank');
+                    });
+                }
+
+                var btnPrintContrat = document.getElementById('btnPrintContratTravail');
+                if (btnPrintContrat) {
+                    btnPrintContrat.addEventListener('click', function () {
+                        var frame = document.getElementById('contratTravailFrame');
+                        if (!frame || !frame.src) return;
+                        try {
+                            if (frame.contentWindow) {
+                                frame.contentWindow.focus();
+                                frame.contentWindow.print();
+                                return;
+                            }
+                        } catch (e) {}
+                        window.open(frame.src, '_blank');
+                    });
+                }
+
                     // Ouvrir automatiquement le modal d'édition si ?edit=<id>
                     var url = new URL(window.location.href);
                     var editId = url.searchParams.get('edit');
@@ -1254,7 +1723,13 @@ include('../PUBLIC/header.php');
                             lastDetailsDataset = {
                                 id_employe: trigger.getAttribute('data-id_employe'),
                                 nom_employe: trigger.getAttribute('data-nom_employe'),
+                                sexe: trigger.getAttribute('data-sexe'),
                                 date_naissance: trigger.getAttribute('data-date_naissance'),
+                                lieu_naissance: trigger.getAttribute('data-lieu_naissance'),
+                                nin: trigger.getAttribute('data-nin'),
+                                expiration_nin: trigger.getAttribute('data-expiration_nin'),
+                                engagement: trigger.getAttribute('data-engagement'),
+                                type_contrat: trigger.getAttribute('data-type_contrat'),
                                 adresse: trigger.getAttribute('data-adresse'),
                                 telephone: trigger.getAttribute('data-telephone'),
                                 email: trigger.getAttribute('data-email'),
@@ -1312,10 +1787,51 @@ include('../PUBLIC/header.php');
                                     <label class="col-form-label">Date de naissance</label>
                                     <input type="date" class="form-control" name="date_naissance">
                                 </div>
+                                <?php if ($empCols['sexe'] !== null): ?>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="col-form-label">Sexe</label>
+                                        <select name="sexe" class="form-control">
+                                            <option value="" selected>—</option>
+                                            <option value="1">Monsieur</option>
+                                            <option value="0">Madame</option>
+                                        </select>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="col-md-4 mb-3"></div>
+                                <?php endif; ?>
                                 <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Date d'embauche</label>
                                     <input type="date" class="form-control" name="date_embauche">
                                 </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Lieu de naissance</label>
+                                    <input type="text" class="form-control" name="lieu_naissance" placeholder="ex: Conakry">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">NIN</label>
+                                    <input type="text" class="form-control" name="nin" placeholder="Numéro d'identité">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Expiration NIN</label>
+                                    <input type="date" class="form-control" name="expiration_nin">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Engagement (jours)</label>
+                                    <input type="number" min="0" step="1" class="form-control" name="engagement" placeholder="ex: 90">
+                                </div>
+                                <?php if ($empCols['type_contrat'] !== null): ?>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="col-form-label">Type de contrat</label>
+                                        <select name="type_contrat" class="form-control">
+                                            <option value="" selected>—</option>
+                                            <option value="1">CDD (Durée déterminée)</option>
+                                            <option value="0">CDI (Durée indéterminée)</option>
+                                        </select>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="col-md-6 mb-3"></div>
+                                <?php endif; ?>
                                 <div class="col-md-4 mb-3">
                                     <label class="col-form-label">Salaire de base</label>
                                     <input type="text" class="form-control" name="salaire" placeholder="ex: 150000">

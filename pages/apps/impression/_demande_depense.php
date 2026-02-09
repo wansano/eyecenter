@@ -145,7 +145,7 @@ if ($etatClin === 1) {
 	$who = $cliniqueValidePseudo !== '' ? $cliniqueValidePseudo : ($cliniquePseudo !== '' ? $cliniquePseudo : ($cliniqueId > 0 ? ('#' . $cliniqueId) : '-'));
 	$sig = trim((string)($d['signature_clinique'] ?? ''));
 	$dt = appec_fmt_dt((string)($d['date_validation_clinique'] ?? ''));
-	$pdf->Cell(0, 6, pdf_text_compat('Validé le ' . ($dt !== '' ? $dt : '-') . ' par ' . $who . ($sig !== '' ? (' | Signature : ' . $sig) : '')), 0, 1);
+	$pdf->Cell(0, 6, pdf_text_compat('Validé le ' . ($dt !== '' ? $dt : '-') . ' par ' . $who ), 0, 1);
 }
 if ($status === 4 || $etatCompta === 1) {
 	$who = $comptaPseudo !== '' ? $comptaPseudo : ($comptaPayePar > 0 ? ('#' . $comptaPayePar) : '-');

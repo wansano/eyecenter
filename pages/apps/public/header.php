@@ -36,6 +36,7 @@ if (!defined('APP_HEADER_INCLUDED')) {
 		<link rel="stylesheet" href="../vendor/select2/css/select2.css" />
 		<link rel="stylesheet" href="../vendor/select2-bootstrap-theme/select2-bootstrap.min.css" />
 		<link rel="stylesheet" href="../vendor/datatables/media/css/dataTables.bootstrap5.css" />
+		<link rel="stylesheet" href="../vendor/summernote/summernote-lite.min.css" />
 		<link rel="stylesheet" href="../css/fonts.css?v=<?php echo (int)@filemtime(__DIR__ . '/../css/fonts.css'); ?>" />
 		<!-- Theme CSS -->
 		<link rel="stylesheet" href="../css/theme.css" />

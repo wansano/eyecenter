@@ -11,6 +11,7 @@
 		<script src="../vendor/jquery-browser-mobile/jquery.browser.mobile.js"></script>
 		<script src="../vendor/popper/umd/popper.min.js"></script>
 		<script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+		<script src="../vendor/summernote/summernote-lite.min.js"></script>
 		<script src="../vendor/bootstrap-datepicker/js/bootstrap-datepicker.js"></script>
 		<script src="../vendor/common/common.js"></script>
 		<script src="../vendor/nanoscroller/nanoscroller.js"></script>

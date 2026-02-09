@@ -190,6 +190,30 @@ include('../PUBLIC/header.php');
 $serviceOptionsHtml = '';
 $responsableOptionsHtml = '';
 
+// Profils autorisés pour la plage de connexion (stockés dans users.plage_connexion)
+$plageProfiles = [
+    'aucun' => 'Aucun',
+    'caisse' => 'Caisse',
+    'secretariat' => 'Secrétariat',
+    'optalmologue' => 'Ophtalmologue',
+    'optometriste' => 'Optométriste',
+    'medecin' => 'Chirurgie',
+    'logistique' => 'Logistique',
+    'boutique' => 'Boutique',
+    'comptabilite' => 'Comptabilité',
+    'technologie' => 'Administrateur',
+];
+
+$joursConnexion = [
+    'lundi' => 'Lundi',
+    'mardi' => 'Mardi',
+    'mercredi' => 'Mercredi',
+    'jeudi' => 'Jeudi',
+    'vendredi' => 'Vendredi',
+    'samedi' => 'Samedi',
+    'dimanche' => 'Dimanche',
+];
+
 try {
     // Services depuis organigramme (comme addcustumuser.php)
     $hasDepartement = false;
@@ -464,8 +488,34 @@ try {
                                                                 <div class="col-md-12">
                                                                     <div class="form-group pb-3">
                                                                         <label class="col-form-label" for="add_plage_connexion">Plage de connexion</label>
-                                                                        <input type="text" class="form-control" name="plage_connexion" id="add_plage_connexion" placeholder="ex: lundi:caisse;mardi:secretariat">
-                                                                        <small class="text-muted">Format: jour:type séparés par ';' (ex: lundi:caisse;mardi:acceuil)</small>
+                                            <input type="hidden" class="form-control" name="plage_connexion" id="add_plage_connexion" value="">
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-bordered mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="width:120px;">Jour</th>
+                                                            <th>Profil autorisé</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <?php foreach ($joursConnexion as $jourKey => $jourLabel): ?>
+                                                            <tr>
+                                                                <td><strong><?php echo h($jourLabel); ?></strong></td>
+                                                                <td>
+                                                                    <div class="d-flex flex-wrap gap-2">
+                                                                        <?php foreach ($plageProfiles as $pValue => $pLabel): ?>
+                                                                            <label class="me-2" style="white-space:nowrap;">
+                                                                                <input type="radio" name="add_plage_<?php echo h($jourKey); ?>" value="<?php echo h($pValue); ?>" <?php echo $pValue === 'aucun' ? 'checked' : ''; ?> onchange="syncPlageConnexion('add')">&nbsp;<?php echo h($pLabel); ?>
+                                                                        </label>
+                                                                        <?php endforeach; ?>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <small class="text-muted">Enregistré en base sous la forme : lundi:caisse;mardi:secretariat;... (ou aucun).</small>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -539,8 +589,34 @@ try {
                                                                 <div class="col-md-12">
                                                                     <div class="form-group pb-3">
                                                                         <label class="col-form-label" for="edit_plage_connexion">Plage de connexion</label>
-                                                                        <input type="text" class="form-control" name="plage_connexion" id="edit_plage_connexion" placeholder="ex: lundi:caisse;mardi:secretariat">
-                                                                        <small class="text-muted">Format: jour:type séparés par ';' (ex: lundi:caisse;mardi:acceuil)</small>
+                                            <input type="hidden" class="form-control" name="plage_connexion" id="edit_plage_connexion" value="">
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-bordered mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="width:120px;">Jour</th>
+                                                            <th>Profil autorisé</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <?php foreach ($joursConnexion as $jourKey => $jourLabel): ?>
+                                                            <tr>
+                                                                <td><strong><?php echo h($jourLabel); ?></strong></td>
+                                                                <td>
+                                                                    <div class="d-flex flex-wrap gap-2">
+                                                                        <?php foreach ($plageProfiles as $pValue => $pLabel): ?>
+                                                                            <label class="me-2" style="white-space:nowrap;">
+                                                                                <input type="radio" name="edit_plage_<?php echo h($jourKey); ?>" value="<?php echo h($pValue); ?>" <?php echo $pValue === 'aucun' ? 'checked' : ''; ?> onchange="syncPlageConnexion('edit')">&nbsp;<?php echo h($pLabel); ?>
+                                                                        </label>
+                                                                        <?php endforeach; ?>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <small class="text-muted">Choisissez un profil par jour (ou aucun).</small>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -562,6 +638,61 @@ try {
 
                     <script>
                     (function () {
+                        function parsePlage(str) {
+                            var out = {};
+                            if (!str) return out;
+                            String(str).split(';').forEach(function (part) {
+                                part = String(part || '').trim();
+                                if (!part) return;
+                                var idx = part.indexOf(':');
+                                if (idx <= 0) return;
+                                var day = part.slice(0, idx).trim().toLowerCase();
+                                var val = part.slice(idx + 1).trim();
+                                if (!day) return;
+                                out[day] = val;
+                            });
+                            return out;
+                        }
+
+                        function setRadio(prefix, day, value) {
+                            var name = prefix + '_plage_' + day;
+                            var radios = document.querySelectorAll('input[type="radio"][name="' + name + '"]');
+                            var found = false;
+                            radios.forEach(function (r) {
+                                if (r.value === value) {
+                                    r.checked = true;
+                                    found = true;
+                                }
+                            });
+                            if (!found) {
+                                radios.forEach(function (r) {
+                                    if (r.value === 'aucun') r.checked = true;
+                                });
+                            }
+                        }
+
+                        window.syncPlageConnexion = function (prefix) {
+                            var days = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+                            var parts = [];
+                            days.forEach(function (day) {
+                                var name = prefix + '_plage_' + day;
+                                var checked = document.querySelector('input[type="radio"][name="' + name + '"]:checked');
+                                var val = checked ? checked.value : 'aucun';
+                                if (!val) val = 'aucun';
+                                parts.push(day + ':' + val);
+                            });
+                            var hidden = document.getElementById(prefix + '_plage_connexion');
+                            if (hidden) hidden.value = parts.join(';');
+                        };
+
+                        function applyPlage(prefix, str) {
+                            var map = parsePlage(str);
+                            ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'].forEach(function (day) {
+                                setRadio(prefix, day, map[day] || 'aucun');
+                            });
+                            window.syncPlageConnexion(prefix);
+                        }
+
                         function setValue(id, value) {
                             var el = document.getElementById(id);
                             if (!el) return;
@@ -576,7 +707,7 @@ try {
                             setValue('add_responsable', '0');
                             setValue('add_type', '');
                             setValue('add_mdp', '');
-                            setValue('add_plage_connexion', '');
+							applyPlage('add', 'lundi:aucun;mardi:aucun;mercredi:aucun;jeudi:aucun;vendredi:aucun;samedi:aucun;dimanche:aucun');
                         }
 
                         document.addEventListener('click', function (e) {
@@ -588,7 +719,7 @@ try {
                             setValue('edit_date_engagement', btn.getAttribute('data-date_engagement'));
                             setValue('edit_id_service', btn.getAttribute('data-service'));
                             setValue('edit_responsable', btn.getAttribute('data-responsable'));
-                            setValue('edit_plage_connexion', btn.getAttribute('data-plage_connexion'));
+							applyPlage('edit', btn.getAttribute('data-plage_connexion') || '');
                             setValue('edit_mdp', '');
                         });
 
@@ -596,6 +727,11 @@ try {
                         if (addModal) {
                             addModal.addEventListener('show.bs.modal', clearAddModal);
                         }
+
+						// Init valeurs par défaut au chargement
+						try {
+							applyPlage('add', 'lundi:aucun;mardi:aucun;mercredi:aucun;jeudi:aucun;vendredi:aucun;samedi:aucun;dimanche:aucun');
+						} catch (e) {}
                     })();
                     </script>
             <?php include('../PUBLIC/footer.php');?>

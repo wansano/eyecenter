@@ -413,7 +413,7 @@ include('../PUBLIC/header.php');
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div class="col-sm-3">
+                                <div class="col-sm-8">
                                     <button type="submit" class="btn btn-primary">Afficher</button>
                                     <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalBulletin" onclick="openCreateBulletin()">Nouveau bulletin</button>
                                     <button type="button" class="btn btn-default" data-bs-toggle="modal" data-bs-target="#modalEtatSalaires" onclick="openEtatSalairesFromPageFilter()">Etat des salaires</button>
@@ -603,10 +603,10 @@ include('../PUBLIC/header.php');
                                             <label class="form-label">Mode de règlement</label>
                                             <select class="form-select" name="mode_reglement" id="mode_reglement">
                                                 <option value="">—</option>
-                                                <option value="Espèces">Espèces</option>
+                                                <option value="Espèce">Espèce</option>
                                                 <option value="Chèque">Chèque</option>
                                                 <option value="Virement">Virement</option>
-                                                <option value="Mobile Money">Mobile Money</option>
+                                                <option value="Orange Money">Orange Money</option>
                                             </select>
                                         </div>
 

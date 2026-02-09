@@ -131,6 +131,8 @@ if ($currentUserId > 0 && $userId !== $currentUserId) {
 				$flashSuccess = 'Action effectuée.';
 			} elseif ($_GET['ok'] === 'annulee') {
 				$flashSuccess = 'Demande annulée.';
+			} elseif ($_GET['ok'] === 'supprimee') {
+				$flashSuccess = 'Demande supprimée.';
 			}
 		}
 
@@ -432,6 +434,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			$st = $bdd->prepare($sql);
 			$st->execute([$idDepense, $userId]);
 			redirectWith(['ok' => 'annulee']);
+		}
+
+		if ($action === 'supprimer_depense') {
+			$idDepense = (int)($_POST['id_depense'] ?? 0);
+			if ($idDepense <= 0 || $userId <= 0) {
+				redirectWith(['err' => 'input']);
+			}
+
+			$hasStatus = function_exists('dbTableHasColumn') ? dbTableHasColumn($bdd, 'depenses', 'status') : true;
+			$hasEtatClin = function_exists('dbTableHasColumn') ? dbTableHasColumn($bdd, 'depenses', 'etat_clinique') : false;
+			if (!$hasStatus) {
+				redirectWith(['err' => 'forbidden']);
+			}
+
+			try {
+				$bdd->beginTransaction();
+				$cols = ['status'];
+				if ($hasEtatClin) {
+					$cols[] = 'etat_clinique';
+				}
+				$st = $bdd->prepare('SELECT ' . implode(', ', $cols) . ' FROM depenses WHERE id_depense=? AND id=? FOR UPDATE');
+				$st->execute([$idDepense, $userId]);
+				$row = $st->fetch(PDO::FETCH_ASSOC);
+				if (!$row) {
+					$bdd->rollBack();
+					redirectWith(['err' => 'forbidden']);
+				}
+				$status = (int)($row['status'] ?? 0);
+				$etatClin = $hasEtatClin ? (int)($row['etat_clinique'] ?? 0) : 0;
+				$canDelete = in_array($status, [2, 3], true) || ($hasEtatClin && $etatClin === 2);
+				if (!$canDelete) {
+					$bdd->rollBack();
+					redirectWith(['err' => 'forbidden']);
+				}
+
+				$bdd->prepare('DELETE FROM depenses_lignes WHERE id_depense=?')->execute([$idDepense]);
+				$bdd->prepare('DELETE FROM depenses WHERE id_depense=? AND id=?')->execute([$idDepense, $userId]);
+				$bdd->commit();
+				redirectWith(['ok' => 'supprimee']);
+			} catch (Throwable $e) {
+				if ($bdd->inTransaction()) {
+					$bdd->rollBack();
+				}
+				error_log('[demandes] supprimer_depense => ' . $e->getMessage());
+				redirectWith(['err' => 'forbidden']);
+			}
 		}
 
 		// Validation unique: responsable de la clinique
@@ -749,6 +797,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			$st->execute($args);
 
 			redirectWith(['ok' => 'valide']);
+		}
+
+		if ($action === 'supprimer_logistique') {
+			$idDemande = (int)($_POST['id_demande'] ?? 0);
+			if ($idDemande <= 0 || $userId <= 0) {
+				redirectWith(['err' => 'input']);
+			}
+
+			$hasEtatClin = function_exists('dbTableHasColumn') ? dbTableHasColumn($bdd, 'log_demandes', 'etat_clinique') : false;
+			try {
+				$bdd->beginTransaction();
+				$cols = ['statut'];
+				if ($hasEtatClin) {
+					$cols[] = 'etat_clinique';
+				}
+				$st = $bdd->prepare('SELECT ' . implode(', ', $cols) . ' FROM log_demandes WHERE id_demande=? AND id_user=? FOR UPDATE');
+				$st->execute([$idDemande, $userId]);
+				$row = $st->fetch(PDO::FETCH_ASSOC);
+				if (!$row) {
+					$bdd->rollBack();
+					redirectWith(['err' => 'forbidden']);
+				}
+				$statut = (string)($row['statut'] ?? '');
+				$etatClin = $hasEtatClin ? (int)($row['etat_clinique'] ?? 0) : 0;
+				$canDelete = in_array($statut, ['refusee', 'annulee'], true) || ($hasEtatClin && $etatClin === 2);
+				if (!$canDelete) {
+					$bdd->rollBack();
+					redirectWith(['err' => 'forbidden']);
+				}
+
+				$bdd->prepare('DELETE FROM log_demandes_lignes WHERE id_demande=?')->execute([$idDemande]);
+				$bdd->prepare('DELETE FROM log_demandes WHERE id_demande=? AND id_user=?')->execute([$idDemande, $userId]);
+				$bdd->commit();
+				redirectWith(['ok' => 'supprimee']);
+			} catch (Throwable $e) {
+				if ($bdd->inTransaction()) {
+					$bdd->rollBack();
+				}
+				error_log('[demandes] supprimer_logistique => ' . $e->getMessage());
+				redirectWith(['err' => 'forbidden']);
+			}
 		}
 
 		// Traitement par la logistique (sortie stock)
@@ -1176,8 +1265,8 @@ function libelleStatusDepenseRow(array $d): string {
 	if ($status === 3) return 'Annulée';
 	if ($status === 2) return 'Refusée';
 	if ($etatReception === 1) return 'Réception confirmée';
-	if ($status === 4 || $etatCompta === 1) return 'Payée (en attente réception)';
-	if ($status === 1 || $etatClin === 1) return 'Validée clinique (en attente paiement)';
+	if ($status === 4 || $etatCompta === 1) return 'Payée en attente réception';
+	if ($status === 1 || $etatClin === 1) return 'Validée en attente paiement';
 	return 'En attente validation clinique';
 }
 
@@ -1190,9 +1279,9 @@ function libelleStatusLogistiqueRow(array $l): string {
 	if ($statut === 'annulee') return 'Annulée';
 	if ($statut === 'refusee' || $etatClin === 2) return 'Refusée';
 	if ($etatReception === 1) return 'Réception confirmée';
-	if ($statut === 'traitee' || $etatTrait === 1) return 'Traitée (en attente réception)';
-	if ($etatClin === 1) return 'Validée clinique (en attente traitement)';
-	if ($statut === 'validee') return 'Validée clinique (en attente traitement)';
+	if ($statut === 'traitee' || $etatTrait === 1) return 'Traitée en attente réception';
+	if ($etatClin === 1) return 'Validée clinique en attente de traitement';
+	if ($statut === 'validee') return 'Validée en attente de traitement';
 	return 'En attente validation clinique';
 }
 
@@ -1353,25 +1442,29 @@ include(__DIR__ . '/header.php');
 															'pu' => (float)($ln['prix_unitaire'] ?? 0),
 														];
 													}
-													$canEdit = ($view === 'mine' && $hasDepensesStatus && (int)($d['status'] ?? 0) === 0 && (!$hasDepensesEtatClin || (int)($d['etat_clinique'] ?? 0) === 0));
+														$canEdit = ($view === 'mine' && $hasDepensesStatus && (int)($d['status'] ?? 0) === 0 && (!$hasDepensesEtatClin || (int)($d['etat_clinique'] ?? 0) === 0));
 													$canCancel = $canEdit;
+														$canDelete = ($view === 'mine' && $hasDepensesStatus && (in_array((int)($d['status'] ?? 0), [2, 3], true) || ($hasDepensesEtatClin && (int)($d['etat_clinique'] ?? 0) === 2)));
+														$canPrint = !($hasDepensesStatus && (in_array((int)($d['status'] ?? 0), [2, 3], true) || ($hasDepensesEtatClin && (int)($d['etat_clinique'] ?? 0) === 2)));
 													$canConfirmReception = ($view === 'mine' && $hasDepensesStatus && (int)($d['status'] ?? 0) === 4 && $hasDepensesEtatReception && (int)($d['etat_reception'] ?? 0) === 0);
 													$canValidateClin = ($view === 'to_validate' && $hasDepensesStatus && (int)($d['status'] ?? 0) === 0);
 													$canPay = ($view === 'to_pay' && $hasDepensesStatus && (int)($d['status'] ?? 0) === 1);
 													?>
 
-														<button type="button" class="btn btn-sm btn-default js-open-print"
-															data-title="Impression demande de dépense"
-															data-url="../public/imprimer_demande_depense.php?id_depense=<?= $depId ?>">
-															Imprimer
-														</button>
-														<?php if ((int)($d['status'] ?? 0) === 4 || (int)($d['etat_compta'] ?? 0) === 1): ?>
-															<button type="button" class="btn btn-sm btn-default js-open-print"
-																data-title="Bon de paiement"
-																data-url="../public/imprimer_bon_paiement_depense.php?id_depense=<?= $depId ?>">
-																Bon paiement
-															</button>
-														<?php endif; ?>
+															<?php if ($canPrint): ?>
+																<button type="button" class="btn btn-sm btn-default js-open-print"
+																	data-title="Impression demande de dépense"
+																	data-url="../public/imprimer_demande_depense.php?id_depense=<?= $depId ?>">
+																	Imprimer
+																</button>
+																<?php if ((int)($d['status'] ?? 0) === 4 || (int)($d['etat_compta'] ?? 0) === 1): ?>
+																	<button type="button" class="btn btn-sm btn-default js-open-print"
+																		data-title="Bon de paiement"
+																		data-url="../public/imprimer_bon_paiement_depense.php?id_depense=<?= $depId ?>">
+																		Bon paiement
+																	</button>
+																<?php endif; ?>
+															<?php endif; ?>
 
 													<?php if ($canEdit): ?>
 														<button type="button" class="btn btn-sm btn-warning btn-edit-depense" data-bs-toggle="modal" data-bs-target="#modalEditDepense"
@@ -1388,6 +1481,14 @@ include(__DIR__ . '/header.php');
 															<button type="submit" class="btn btn-sm btn-default">Annuler</button>
 														</form>
 													<?php endif; ?>
+
+														<?php if ($canDelete): ?>
+															<form method="post" action="demandes.php?u=<?= (int)$userId ?>" style="display:inline" onsubmit="return confirm('Supprimer cette demande ?');">
+																<input type="hidden" name="action" value="supprimer_depense">
+																<input type="hidden" name="id_depense" value="<?= $depId ?>">
+																<button type="submit" class="btn btn-sm btn-danger">Supprimer</button>
+															</form>
+														<?php endif; ?>
 
 													<?php if ($canValidateClin): ?>
 														<form method="post" action="demandes.php?u=<?= (int)$userId ?>&view=to_validate" class="d-inline js-comment-form">
@@ -1493,16 +1594,20 @@ include(__DIR__ . '/header.php');
 													}
 													$canEdit = ($view === 'mine' && $statut === 'en_attente');
 													$canCancel = $canEdit;
+														$canDelete = ($view === 'mine' && (in_array($statut, ['refusee', 'annulee'], true) || (int)($l['etat_clinique'] ?? 0) === 2));
+														$canPrint = !(in_array($statut, ['refusee', 'annulee'], true) || (int)($l['etat_clinique'] ?? 0) === 2);
 													$canValidateClin = ($view === 'to_validate' && $statut === 'en_attente');
 													$canTreat = ($view === 'to_treat' && $statut === 'validee');
 													$canConfirmReception = ($view === 'mine' && $statut === 'traitee' && (!isset($l['etat_reception']) || (int)$l['etat_reception'] === 0));
 													?>
 
-														<button type="button" class="btn btn-sm btn-default js-open-print"
-															data-title="Impression demande logistique"
-															data-url="../public/imprimer_demande_logistique.php?id_demande=<?= $demId ?>">
-															Imprimer
-														</button>
+															<?php if ($canPrint): ?>
+																<button type="button" class="btn btn-sm btn-default js-open-print"
+																	data-title="Impression demande logistique"
+																	data-url="../public/imprimer_demande_logistique.php?id_demande=<?= $demId ?>">
+																	Imprimer
+																</button>
+															<?php endif; ?>
 
 														<?php if ($statut === 'traitee' || (int)($l['etat_traitement'] ?? 0) === 1): ?>
 															<button type="button" class="btn btn-sm btn-default js-open-print"
@@ -1527,6 +1632,14 @@ include(__DIR__ . '/header.php');
 															<button type="submit" class="btn btn-sm btn-default">Annuler</button>
 														</form>
 													<?php endif; ?>
+
+														<?php if ($canDelete): ?>
+															<form method="post" action="demandes.php?u=<?= (int)$userId ?>" style="display:inline" onsubmit="return confirm('Supprimer cette demande ?');">
+																<input type="hidden" name="action" value="supprimer_logistique">
+																<input type="hidden" name="id_demande" value="<?= $demId ?>">
+																<button type="submit" class="btn btn-sm btn-danger">Supprimer</button>
+															</form>
+														<?php endif; ?>
 
 													<?php if ($canValidateClin): ?>
 														<form method="post" action="demandes.php?u=<?= (int)$userId ?>&view=to_validate" class="d-inline js-comment-form">

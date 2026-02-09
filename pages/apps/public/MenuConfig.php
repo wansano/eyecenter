@@ -59,6 +59,7 @@ class MenuConfig {
                 <li><a class="nav-link" href="realisationindividuelle.php">Réalisation individuelle</a></li>
                 <li><a class="nav-link" href="attestationtravail.php">Attestation de travail</a></li>
                 <li><a class="nav-link" href="notedeservice.php">Note de service</a></li>
+                <li><a class="nav-link" href="avisinformation.php">Avis d\'information</a></li>
             </ul>
         </li>
         <li class="dropdown">
@@ -291,7 +292,7 @@ class MenuConfig {
             self::getComptabiliteConfigurationMenu(),
             self::getComptabiliteStocksMenu(),
             self::getComptabiliteReportingMenu(),
-            self::getComptabiliteEditionMenu()
+            //self::getComptabiliteEditionMenu()
         ];
         
         return implode("\n", $submenus);
@@ -390,7 +391,7 @@ class MenuConfig {
     }
 
 
-    private static function getComptabiliteEditionMenu() {
+    /* private static function getComptabiliteEditionMenu() {
         return '
         <li class="dropdown">
             <a href="#" class="nav-link dropdown-toggle">Edition</a>
@@ -403,7 +404,7 @@ class MenuConfig {
                 </li>
             </ul>
         </li>';
-    }
+    } */
     
     private static function getComptabiliteStocksMenu() {
         return '
