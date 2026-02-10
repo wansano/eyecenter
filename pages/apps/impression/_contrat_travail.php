@@ -600,12 +600,17 @@ $pdf->SetFont('CenturyGothic', '', 11);
 
 writePara($pdf, 'Entre les soussignés :');
 
+$pdf->Ln(2);
+
 $line1 = 'La ' . $companyName;
 $line2 = 'service spécialisé en ophtalmologie, créé par l’arrêté ' . ($companyArrete !== '' ? $companyArrete : '________________') . ', immatriculée sous le n° RCCM/' . $companyRccm . ' sise à ' . ($companyAddr !== '' ? $companyAddr : '____________________________') . ' représenté par ' . $companyDG . ', agissant en qualité de Directeur Général, dénommé ci-après l’employeur.';
 
 writePara($pdf, $line1 . ' ' . $line2);
 
+$pdf->Ln(2);
+
 writeBoldPara($pdf, 'D’une part,');
+
 $pdf->Ln(2);
 
 writePara($pdf, 'Et :');
@@ -650,33 +655,47 @@ try {
 
 writePara($pdf, 'Pièce d’identité nationale n° ' . $nin . ' qui expire le ' . $ninExpTxt . ',');
 writePara($pdf, 'Domicilié à ' . ($adresseEmp !== '' ? $adresseEmp : '____________________________') . ',');
-writePara($pdf, 'Dénommé ci-après « ' . $employeLabel . ' »,');
+writePara($pdf, 'Dénommé ci-après « ' . $employeLabel . ' ».');
+
+$pdf->Ln(2);
 
 writePara($pdf, 'Qui déclare être libre de tout engagement et donne libre consentement du présent contrat de travail.');
+
+$pdf->Ln(2);
+
 writeBoldPara($pdf, 'D’autre part,');
+
 $pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 $pdf->Cell(0, 8, pdf_text_compat('IL A ETE CONVENU CE QUI SUIT'), 0, 1, 'C');
+
 $pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', '', 11);
 writePara($pdf, 'Le contrat est régi par la législation suivante :');
 writePara($pdf, 'Loi portant sur le Code du travail en République de Guinée institué par l’ordonnance N°003/PRG/SGG/88 du 28 janvier 1988 et de la convention collective nationale interprofessionnelle.');
+
 $pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 1er : Attributions et fonctions', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 $qualif = $poste !== '' ? $poste : '________________';
 $engageVerb = ($neeLabel === 'Née') ? 'est engagée' : 'est engagé';
 writePara($pdf, $civilite . ' ' . $nomEmploye . ' ' . $engageVerb . ' par la ' . $companyName . ', en qualité de ' . $qualif . ', pour effectuer toutes tâches pouvant lui être confiées en rapport avec sa qualification.');
 writePara($pdf, $employeLabel . ' s’engage à s’acquitter en toutes circonstances avec soin et fidélité des travaux qui lui seront confiés par son employeur ou son représentant.');
 
+$pdf->Ln(2);
+
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 2 : Durée du contrat et Période d’essaie', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
+
+$pdf->Ln(2);
 
 if ($typeContrat === 1) {
 	writePara($pdf, 'En application de l’article 122.4 du code du travail, la durée du présent contrat est définie sur une période de ' . $periodeJours . ' jour(s), il prend effet à compter du ' . fmtDateFrLong($dtStart) . ' et prend fin le ' . ($dtEnd ? fmtDateFrLong($dtEnd) : '________________') . '.');
@@ -685,22 +704,34 @@ if ($typeContrat === 1) {
 }
 writePara($pdf, 'Durant cette période, le contrat de travail pourra être résilié par chacune des parties moyennant un préavis de 30 jours.');
 
+$pdf->Ln(2);
+
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 3 : Horaires', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 writePara($pdf, $employeLabel . ' exercera ses fonctions selon les horaires en vigueur dans l’entreprise qui est conclus de 08h30 à 16h30 incluant une heure (1h) de pause qui sera prise entre 12h et 14h.');
+
+$pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 4 : Clause de Mobilité', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 writePara($pdf, $employeLabel . ' exercera ses fonctions au siège principal de l’entreprise basé à Conakry.');
 writePara($pdf, 'Toutefois, compte tenu de la nature de ses activités, la Direction se réserve la possibilité de le muter dans tout autre site de la clinique en République de Guinée.');
+
+$pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 5 : Rémunération', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
+
+$pdf->Ln(2);
 
 $salLine = $salaireBase !== null ? moneyLine($salaireBase, $currency) : '____________________________';
 writePara($pdf, 'En rémunération de ses services, ' . $employeLabel . ' percevra un salaire de base mensuel de :');
@@ -715,44 +746,67 @@ $indent = 8.0;
 writeIndentedLabelAmountBold($pdf, $indent, 'a)  Indemnité de transport : ', $pt);
 writeIndentedLabelAmountBold($pdf, $indent, 'b)  Prime de cherté de vie : ', $pv);
 writeIndentedLabelAmountBold($pdf, $indent, 'c)  Prime de Logement : ', $pl);
-writeIndentedPara($pdf, $indent, 'd)  Prime de rendement et qualité : (fonction du prorata retenu par la direction)');
+writeIndentedPara($pdf, $indent, 'd)  Prime de rendement et qualité : (En fonction du prorata retenu par la direction)');
+
+$pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 6 : Congés payés', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 writePara($pdf, $employeLabel . ' aura droit à deux jours et demi ouvrables de congés payés par mois de service. L’ordre des départs en congé est établi par l’employeur en fonction des nécessités de services et autant que possible, en tenant compte des préférences des salariés.');
+
+$pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 7 : Sécurité Sociale', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 writePara($pdf, $employeLabel . ' sera immatriculée à la Caisse Nationale de la Sécurité Sociale conformément à la loi, il s’engage à respecter les normes d’hygiène et de sécurité sur les lieux de travail.');
+
+$pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 8 : Rupture du contrat', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 writePara($pdf, 'La rupture du contrat résulte soit de la démission de ' . $employeLabel . ', soit du licenciement par l’employeur dans les conditions prévues par le Code du travail et par la Convention Collective Générale.');
 writePara($pdf, 'Le contrat peut-être, notamment, rompu pour faute lourde.');
 writePara($pdf, 'En référence aux usages et à la jurisprudence, seront notamment considérés comme faute lourde de ' . $employeLabel . ' :');
 
-writeIndentedPara($pdf, $indent,'- L’insubordination, l’abandon de poste, les retards au travail, l’inconduite notoire ;');
-writeIndentedPara($pdf, $indent,'- Les irrégularités dans l’établissement des documents prescrits, les faux en écriture, les déficits de gestion injustifiés, les prélèvements personnels excédant le solde créditeur de ' . $employeLabel . ' dans les livres de la clinique, les vols ou détournements de biens de la clinique dans un intérêt autre que celui de la clinique ;');
-writeIndentedPara($pdf, $indent,'- Les abus de biens sociaux ;');
-writeIndentedPara($pdf, $indent,'- Le non-respect d’obligations orales ou écrites dans le règlement de la clinique ;');
-writeIndentedPara($pdf, $indent,'- L’intempérance, les rixes ou brutalité dans le service.');
+$pdf->Ln(2);
+
+writeIndentedPara($pdf, $indent,'-  L’insubordination, l’abandon de poste, les retards au travail, l’inconduite notoire ;');
+writeIndentedPara($pdf, $indent,'-  Les irrégularités dans l’établissement des documents prescrits, les faux en écriture;');
+writeIndentedPara($pdf, $indent,'-  Les déficits de gestion injustifiés;');
+writeIndentedPara($pdf, $indent,'-  Les prélèvements personnels excédant le solde créditeur de ' . $employeLabel . ' dans les livres;');
+writeIndentedPara($pdf, $indent,'-  Les vols ou détournements de biens dans un intérêt autre que celui de la clinique ;');
+writeIndentedPara($pdf, $indent,'-  Les abus de biens sociaux ;');
+writeIndentedPara($pdf, $indent,'-  Le non-respect d’obligations orales ou écrites dans le règlement de la clinique ;');
+writeIndentedPara($pdf, $indent,'-  L’intempérance, les rixes ou brutalité dans le service.');
+
+$pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 9 : Obligation de discrétion', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
+$pdf->Ln(2);
+
 writePara($pdf, 'Dans l’exécution du présent contrat, ' . $employeLabel . ' est tenue, en plus d’une obligation de réserve générale et de secret professionnel, à une discrétion absolue sur tous les faits qu’il peut apprendre en raison de ses fonctions ou de son appartenance à la clinique, et qui concernent tant sa gestion, son fonctionnement que sa situation.');
 writePara($pdf, 'La présente obligation demeure en vigueur même après l’expiration ou la résiliation du contrat.');
-
+$pdf->Ln(2);
 $pdf->SetFont('CenturyGothic', 'B', 11);
 writePara($pdf, 'Article 10 : Cas de litiges', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
+
+$pdf->Ln(2);
 
 writePara($pdf, 'En cas de litige, les parties s’engagent à régler les différents nés de l’exécution ou de l’interprétation du présent contrat à l’amiable.');
 writePara($pdf, 'A défaut, le litige sera porté devant les tribunaux compétents de Conakry.');
