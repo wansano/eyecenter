@@ -1187,6 +1187,7 @@ include('../PUBLIC/header.php');
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-primary" id="btn_open_edit_from_details">Modifier</button>
+                        <a class="btn btn-secondary" id="btn_open_docs_from_details" target="_blank" rel="noopener" href="#">Documents archivés</a>
                         <button type="button" class="btn btn-default" id="btn_open_badge_from_details" style="display:none;">Badge</button>
                         <button type="button" class="btn btn-dark" id="btn_open_contrat_from_details" style="display:none;">Engagement</button>
                         <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Fermer</button>
@@ -1609,6 +1610,12 @@ include('../PUBLIC/header.php');
 
                     var st = (ds.status === '1' || ds.status === 1) ? 'Actif' : 'Inactif';
                     setText('detail_status', st);
+
+                    var btnDocs = document.getElementById('btn_open_docs_from_details');
+                    if (btnDocs) {
+                        var idEmp = ds.id_employe == null ? '' : String(ds.id_employe).trim();
+                        btnDocs.href = idEmp ? ('archivagedocuments.php?id_employe=' + encodeURIComponent(idEmp)) : 'archivagedocuments.php';
+                    }
 
                     // Si employé inactif: pas de badge
                     var btnBadge = document.getElementById('btn_open_badge_from_details');

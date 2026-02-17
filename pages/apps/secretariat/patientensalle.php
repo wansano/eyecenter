@@ -34,6 +34,7 @@ include('../public/header.php');
                                         <tr>
                                             <th>ID</th>
                                             <th>AFFECTATION</th>
+                                            <th>DATE</th>
                                             <th>PATIENT</th>
                                             <th>ADRESSE</th>
                                             <th>CONTACT</th>
@@ -61,6 +62,7 @@ include('../public/header.php');
                                                 echo '<tr>
                                                     <td>PAT-'.htmlspecialchars($donnees1['id_patient']).'</td>
                                                     <td>AFF-'.htmlspecialchars($donnees1['id_affectation']).'</td>
+                                                    <td>'.htmlspecialchars($donnees1['date']).'</td>
                                                     <td>'.htmlspecialchars($patientInfo['nom_patient'] ?: 'Non renseigné').'</td>
                                                     <td>'.htmlspecialchars(adress($patientInfo['adresse']) ?: $patientInfo['adresse']).'</td>
                                                     <td>'.htmlspecialchars($patientInfo['phone'] ?: 'Non renseigné').'</td>

@@ -966,7 +966,7 @@ function getEntreePaiements($compte, $debut, $fin, $bdd) {
         $expr = 'montant';
     }
 
-    $stmt = $bdd->prepare('SELECT SUM(' . $expr . ') AS entree FROM paiements WHERE remboursement=0 AND compte = ? AND datepaiement BETWEEN ? AND ?');
+    $stmt = $bdd->prepare('SELECT SUM(' . $expr . ') AS entree FROM paiements WHERE compte = ? AND datepaiement BETWEEN ? AND ?');
     $stmt->execute([$compte, $debut, $fin]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row && isset($row['entree']) ? $row['entree'] : 0;
