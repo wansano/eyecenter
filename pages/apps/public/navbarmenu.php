@@ -3,6 +3,8 @@ require_once('connect.php');
 require_once('MenuConfig.php');
 require_once('fonction.php');
 
+$isEmbed = isset($_GET['embed']) && (string)$_GET['embed'] === '1';
+
 // Vérifier et démarrer la session si nécessaire
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -38,6 +40,28 @@ header('X-Content-Type-Options: nosniff');
 $clinique = getSingleRow($bdd, 'profil_entreprise');
 $devise = $clinique['devise'];
 
+// Préparation des données utilisateur (utile même si on masque le menu)
+$userData = getUserInfo($bdd, $_SESSION['auth']);
+$user = '';
+$id_user = 0;
+$id_service = 0;
+$email = '';
+$types = '';
+$responsable = 1;
+if (is_array($userData) && !empty($userData)) {
+    $user = (string)($userData['pseudo'] ?? '');
+    $id_user = (int)($userData['id'] ?? 0);
+    $id_service = (int)($userData['id_service'] ?? 0);
+    $email = (string)($userData['email'] ?? '');
+    $types = (string)($userData['type'] ?? '');
+    $responsable = (int)($userData['responsable'] ?? 1);
+}
+
+// En mode embed (iframe/modal), on n'affiche pas le menu (mais les variables restent disponibles)
+if ($isEmbed) {
+    return;
+}
+
 if (!defined('APP_HEADER_INCLUDED')) {
     include('header.php');
 }
@@ -58,16 +82,7 @@ if (!defined('APP_HEADER_INCLUDED')) {
                 <nav>
                     <ul class="nav nav-pills" id="mainNav">
                         <?php
-                        // Préparation des données utilisateur pour MenuConfig
-                        $userData = getUserInfo($bdd, $_SESSION['auth']);
-                        if ($userData) {
-                            $user = $userData['pseudo'];
-                            $id_user = $userData['id'];
-                            $id_service = $userData['id_service'];
-                            $email = $userData['email'];
-                            $types = $userData['type'];
-                            $responsable = $userData['responsable'];
-                        }
+                        // Variables utilisateur déjà initialisées plus haut.
                         $user_data = [
                             'type' => $types,
                             'service' => isset($service) ? $service : '',
@@ -136,6 +151,12 @@ if (!defined('APP_HEADER_INCLUDED')) {
                                 break;
                             case "medecin":
                                 echo "Médecin-Chef";
+                                break;
+                            case "hr":
+                                echo "Ressources Humaines";
+                                break;
+                            case "tresorérie":
+                                echo "Trésorier";
                                 break;
                             default:
                                 echo ucfirst($type_jour);

@@ -253,7 +253,7 @@ try {
 
 
     if ($type === 'stage') {
-        $texte1 .= ' a effectué un stage au sein de notre établissement ' . $dureeText;
+        $texte1 .= ' a effectué un stage au sein de notre établissement pour ' . $dureeText;
         $texte1 .= ', du ' . fmtDateFr($dtDebut) . ' au ' . fmtDateFr($dtFin);
         if ($poste !== '') {
             $texte1 .= ', en qualité de ' . $poste;
@@ -261,7 +261,7 @@ try {
         $texte1 .= '.';
     } else {
         if ($isOngoingWork) {
-            $texte1 .= ' travaille au sein de notre établissement depuis le ' . fmtDateFr($dtDebut) . ' à ce jour';
+            $texte1 .= ' travaille au s                                       ein de notre établissement depuis le ' . fmtDateFr($dtDebut) . ' à ce jour';
             if ($poste !== '') {
                 $texte1 .= ', en qualité de ' . $poste;
             }

@@ -30,6 +30,51 @@ function parseMoneyToFloatOrNull(string $raw): ?float {
     return (float)$v;
 }
 
+function storeEmployeJointeOrNull(array $file, string $suffix, array $allowedExt, int $maxBytes): ?string {
+    $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ($err !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('upload_error');
+    }
+    $size = (int)($file['size'] ?? 0);
+    if ($size <= 0 || $size > $maxBytes) {
+        throw new RuntimeException('upload_size');
+    }
+
+    $tmp = (string)($file['tmp_name'] ?? '');
+    if ($tmp === '' || !is_uploaded_file($tmp)) {
+        throw new RuntimeException('upload_invalid');
+    }
+
+    $originalName = (string)($file['name'] ?? 'document');
+    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if ($ext === '' || !in_array($ext, $allowedExt, true)) {
+        throw new RuntimeException('upload_ext');
+    }
+
+    $uploadDir = realpath(__DIR__ . '/../documents/employe_pieces');
+    if ($uploadDir === false) {
+        $uploadDir = __DIR__ . '/../documents/employe_pieces';
+    }
+    if (!is_dir($uploadDir)) {
+        @mkdir($uploadDir, 0777, true);
+    }
+    @chmod($uploadDir, 0777);
+    if (!is_dir($uploadDir) || !is_writable($uploadDir)) {
+        throw new RuntimeException('upload_dir');
+    }
+
+    $filename = 'emp_' . date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . '_' . $suffix . '.' . $ext;
+    $destAbs = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+    if (!@move_uploaded_file($tmp, $destAbs)) {
+        throw new RuntimeException('upload_move');
+    }
+
+    return 'documents/employe_pieces/' . $filename;
+}
+
 function getEmployesColumnMap(PDO $bdd): array {
     $fields = [];
     try {
@@ -62,6 +107,12 @@ function getEmployesColumnMap(PDO $bdd): array {
         'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
         'prime_logement' => isset($fields['PrimeLogement']) ? 'PrimeLogement' : null,
         'prime_vie' => isset($fields['PrimeVie']) ? 'PrimeVie' : null,
+
+        // Pièces jointes (ajout employé)
+        'piece_identite' => isset($fields['piece_identite']) ? 'piece_identite' : null,
+        'cv' => isset($fields['cv']) ? 'cv' : null,
+        'diplome' => isset($fields['diplome']) ? 'diplome' : null,
+        'extrait_naissance' => isset($fields['extrait_naissance']) ? 'extrait_naissance' : null,
     ];
 }
 
@@ -69,6 +120,71 @@ function redirectWith($params) {
     $base = $_SERVER['PHP_SELF'];
     header('Location: ' . $base . (empty($params) ? '' : ('?' . http_build_query($params))));
     exit;
+}
+
+function tableExists(PDO $bdd, string $table): bool {
+    try {
+        $st = $bdd->prepare('SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
+        $st->execute([$table]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+$DOC_TYPES = [
+    'carte_identite' => "Carte d'identité",
+    'passeport' => 'Passeport',
+    'extrait_naissance' => 'Extrait de naissance',
+    'certificat_residence' => 'Certificat de résidence',
+    'cv' => 'Curriculum vitae',
+    'lettre_motivation' => 'Lettre de motivation',
+    'certificat_nationalite' => 'Certificat de nationalité',
+    'casier_judiciaire' => 'Casier judiciaire',
+    'badge' => 'Badge',
+    'contrat' => 'Contrat de travail',
+    'contrat_travail' => 'Contrat de travail',
+];
+
+// Endpoint AJAX: liste des documents archivés (employe_documents)
+if (isset($_GET['ajax']) && (string)$_GET['ajax'] === 'employe_docs') {
+    if (!isset($_SESSION['auth'])) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'Non autorisé']);
+        exit;
+    }
+
+    $idEmploye = (int)($_GET['id_employe'] ?? 0);
+    header('Content-Type: application/json; charset=utf-8');
+
+    if ($idEmploye <= 0) {
+        echo json_encode(['ok' => false, 'error' => 'Employé invalide', 'items' => []]);
+        exit;
+    }
+    if (!tableExists($bdd, 'employe_documents')) {
+        echo json_encode(['ok' => false, 'error' => 'Table employe_documents introuvable', 'items' => []]);
+        exit;
+    }
+
+    try {
+        $st = $bdd->prepare('SELECT id_document, document_type, original_name, mime_type, file_size, created_at FROM employe_documents WHERE id_employe = ? ORDER BY created_at DESC, id_document DESC');
+        $st->execute([$idEmploye]);
+        $items = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($items as &$it) {
+            $t = (string)($it['document_type'] ?? '');
+            $it['document_label'] = $t !== '' && isset($DOC_TYPES[$t]) ? $DOC_TYPES[$t] : ($t !== '' ? $t : 'Document');
+        }
+        unset($it);
+
+        echo json_encode(['ok' => true, 'items' => $items]);
+        exit;
+    } catch (Throwable $e) {
+        error_log('listeemployes.php ajax employe_docs: ' . $e->getMessage());
+        echo json_encode(['ok' => false, 'error' => 'Erreur base de données', 'items' => []]);
+        exit;
+    }
 }
 
 $alert = null; // ['type' => 'success|danger|warning|info', 'message' => '...']
@@ -98,6 +214,8 @@ if (isset($_GET['ok']) && (int)$_GET['ok'] === 1) {
     if ($err === 16) $alert = ['type' => 'danger', 'message' => "La durée d'engagement doit être un nombre entier (en jours)."];
     if ($err === 17) $alert = ['type' => 'danger', 'message' => "La date d'expiration du NIN est invalide."];
     if ($err === 18) $alert = ['type' => 'danger', 'message' => "Le type de contrat est invalide."];
+    if ($err === 19) $alert = ['type' => 'danger', 'message' => "Pièce jointe invalide. Formats autorisés: PDF/JPG/PNG (CV: PDF/DOC/DOCX). Taille max: 10 MB."];
+    if ($err === 20) $alert = ['type' => 'danger', 'message' => "Impossible d'enregistrer la pièce jointe (vérifier les permissions)."];
 }
 
 // Liste des supérieurs (pour le modal)
@@ -274,6 +392,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
 
     // Upload photo (optionnel)
     $newPhotoPath = null;
+    $newPieceIdentitePath = null;
+    $newCvPath = null;
+    $newDiplomePath = null;
+    $newExtraitNaissancePath = null;
     if (isset($_FILES['photo']) && is_array($_FILES['photo']) && ($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
         $errUp = (int)($_FILES['photo']['error'] ?? UPLOAD_ERR_OK);
         if ($errUp !== UPLOAD_ERR_OK) {
@@ -309,15 +431,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
         $newPhotoPath = 'documents/photoemployes/' . $filename;
     }
 
+    // Upload pièces jointes (optionnelles)
+    $maxBytes = 10 * 1024 * 1024; // 10 MB
+    try {
+        if (isset($_FILES['piece_identite']) && is_array($_FILES['piece_identite'])) {
+            $newPieceIdentitePath = storeEmployeJointeOrNull($_FILES['piece_identite'], 'piece_identite', ['pdf','jpg','jpeg','png'], $maxBytes);
+        }
+        if (isset($_FILES['cv']) && is_array($_FILES['cv'])) {
+            $newCvPath = storeEmployeJointeOrNull($_FILES['cv'], 'cv', ['pdf','doc','docx'], $maxBytes);
+        }
+        if (isset($_FILES['diplome']) && is_array($_FILES['diplome'])) {
+            $newDiplomePath = storeEmployeJointeOrNull($_FILES['diplome'], 'diplome', ['pdf','jpg','jpeg','png'], $maxBytes);
+        }
+        if (isset($_FILES['extrait_naissance']) && is_array($_FILES['extrait_naissance'])) {
+            $newExtraitNaissancePath = storeEmployeJointeOrNull($_FILES['extrait_naissance'], 'extrait_naissance', ['pdf','jpg','jpeg','png'], $maxBytes);
+        }
+    } catch (RuntimeException $e) {
+        $code = $e->getMessage();
+        $err = ($code === 'upload_dir' || $code === 'upload_move') ? 20 : 19;
+        redirectWith(['err' => $err, 'edit' => $idEmploye]);
+    }
+
     try {
         // Vérifier existence employé + récupérer photo actuelle
-        $stmt = $bdd->prepare('SELECT id_employe, email, photo FROM employes WHERE id_employe = ? LIMIT 1');
+        $selectCols = ['id_employe', 'email', 'photo'];
+        if ($empCols['piece_identite'] !== null) { $selectCols[] = '`' . $empCols['piece_identite'] . '` AS piece_identite'; }
+        if ($empCols['cv'] !== null) { $selectCols[] = '`' . $empCols['cv'] . '` AS cv'; }
+        if ($empCols['diplome'] !== null) { $selectCols[] = '`' . $empCols['diplome'] . '` AS diplome'; }
+        if ($empCols['extrait_naissance'] !== null) { $selectCols[] = '`' . $empCols['extrait_naissance'] . '` AS extrait_naissance'; }
+
+        $stmt = $bdd->prepare('SELECT ' . implode(', ', $selectCols) . ' FROM employes WHERE id_employe = ? LIMIT 1');
         $stmt->execute([$idEmploye]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$existing) {
-            if (!empty($newPhotoPath)) {
-                $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-                if ($abs && is_file($abs)) { @unlink($abs); }
+            foreach ([$newPhotoPath, $newPieceIdentitePath, $newCvPath, $newDiplomePath, $newExtraitNaissancePath] as $p) {
+                if (!empty($p)) {
+                    $abs = realpath(__DIR__ . '/../' . $p);
+                    if ($abs && is_file($abs)) { @unlink($abs); }
+                }
             }
             redirectWith(['err' => 13]);
         }
@@ -329,9 +480,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE email = ? AND id_employe <> ? LIMIT 1');
             $stmt->execute([$email, $idEmploye]);
             if ($stmt->fetch(PDO::FETCH_ASSOC)) {
-                if (!empty($newPhotoPath)) {
-                    $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-                    if ($abs && is_file($abs)) { @unlink($abs); }
+                foreach ([$newPhotoPath, $newPieceIdentitePath, $newCvPath, $newDiplomePath, $newExtraitNaissancePath] as $p) {
+                    if (!empty($p)) {
+                        $abs = realpath(__DIR__ . '/../' . $p);
+                        if ($abs && is_file($abs)) { @unlink($abs); }
+                    }
                 }
                 redirectWith(['err' => 14, 'edit' => $idEmploye]);
             }
@@ -341,18 +494,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
         $superieurDb = null;
         if ($superieur > 0) {
             if ($superieur === $idEmploye) {
-                if (!empty($newPhotoPath)) {
-                    $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-                    if ($abs && is_file($abs)) { @unlink($abs); }
+                foreach ([$newPhotoPath, $newPieceIdentitePath, $newCvPath, $newDiplomePath, $newExtraitNaissancePath] as $p) {
+                    if (!empty($p)) {
+                        $abs = realpath(__DIR__ . '/../' . $p);
+                        if ($abs && is_file($abs)) { @unlink($abs); }
+                    }
                 }
                 redirectWith(['err' => 4, 'edit' => $idEmploye]);
             }
             $stmt = $bdd->prepare('SELECT id_employe FROM employes WHERE id_employe = ? LIMIT 1');
             $stmt->execute([$superieur]);
             if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
-                if (!empty($newPhotoPath)) {
-                    $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-                    if ($abs && is_file($abs)) { @unlink($abs); }
+                foreach ([$newPhotoPath, $newPieceIdentitePath, $newCvPath, $newDiplomePath, $newExtraitNaissancePath] as $p) {
+                    if (!empty($p)) {
+                        $abs = realpath(__DIR__ . '/../' . $p);
+                        if ($abs && is_file($abs)) { @unlink($abs); }
+                    }
                 }
                 redirectWith(['err' => 4, 'edit' => $idEmploye]);
             }
@@ -427,9 +584,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
         $params[] = ($notes !== '' ? $notes : null);
 
         $oldPhotoPath = (string)($existing['photo'] ?? '');
+        $oldPieceIdentitePath = (string)($existing['piece_identite'] ?? '');
+        $oldCvPath = (string)($existing['cv'] ?? '');
+        $oldDiplomePath = (string)($existing['diplome'] ?? '');
+        $oldExtraitNaissancePath = (string)($existing['extrait_naissance'] ?? '');
+
         if ($newPhotoPath !== null) {
             $sql .= ', photo = ?';
             $params[] = $newPhotoPath;
+        }
+
+        if ($empCols['piece_identite'] !== null && $newPieceIdentitePath !== null) {
+            $sql .= ', `' . $empCols['piece_identite'] . '` = ?';
+            $params[] = $newPieceIdentitePath;
+        }
+        if ($empCols['cv'] !== null && $newCvPath !== null) {
+            $sql .= ', `' . $empCols['cv'] . '` = ?';
+            $params[] = $newCvPath;
+        }
+        if ($empCols['diplome'] !== null && $newDiplomePath !== null) {
+            $sql .= ', `' . $empCols['diplome'] . '` = ?';
+            $params[] = $newDiplomePath;
+        }
+        if ($empCols['extrait_naissance'] !== null && $newExtraitNaissancePath !== null) {
+            $sql .= ', `' . $empCols['extrait_naissance'] . '` = ?';
+            $params[] = $newExtraitNaissancePath;
         }
 
         $sql .= ' WHERE id_employe = ?';
@@ -448,14 +627,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
             }
         }
 
+        // Supprimer les anciennes pièces jointes si remplacées
+        if ($newPieceIdentitePath !== null && $oldPieceIdentitePath !== '') {
+            $absOld = realpath(__DIR__ . '/../' . $oldPieceIdentitePath);
+            if ($absOld && is_file($absOld)) { @unlink($absOld); }
+        }
+        if ($newCvPath !== null && $oldCvPath !== '') {
+            $absOld = realpath(__DIR__ . '/../' . $oldCvPath);
+            if ($absOld && is_file($absOld)) { @unlink($absOld); }
+        }
+        if ($newDiplomePath !== null && $oldDiplomePath !== '') {
+            $absOld = realpath(__DIR__ . '/../' . $oldDiplomePath);
+            if ($absOld && is_file($absOld)) { @unlink($absOld); }
+        }
+        if ($newExtraitNaissancePath !== null && $oldExtraitNaissancePath !== '') {
+            $absOld = realpath(__DIR__ . '/../' . $oldExtraitNaissancePath);
+            if ($absOld && is_file($absOld)) { @unlink($absOld); }
+        }
+
         redirectWith(['ok' => 2]);
     } catch (PDOException $e) {
         if (isset($bdd) && $bdd->inTransaction()) {
             $bdd->rollBack();
         }
-        if (!empty($newPhotoPath)) {
-            $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-            if ($abs && is_file($abs)) { @unlink($abs); }
+        foreach ([$newPhotoPath, $newPieceIdentitePath, $newCvPath, $newDiplomePath, $newExtraitNaissancePath] as $p) {
+            if (!empty($p)) {
+                $abs = realpath(__DIR__ . '/../' . $p);
+                if ($abs && is_file($abs)) { @unlink($abs); }
+            }
         }
         error_log('listeemployes.php edit PDO: ' . $e->getMessage());
         redirectWith(['err' => 8, 'edit' => $idEmploye]);
@@ -463,9 +662,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employe'])) {
         if (isset($bdd) && $bdd->inTransaction()) {
             $bdd->rollBack();
         }
-        if (!empty($newPhotoPath)) {
-            $abs = realpath(__DIR__ . '/../' . $newPhotoPath);
-            if ($abs && is_file($abs)) { @unlink($abs); }
+        foreach ([$newPhotoPath, $newPieceIdentitePath, $newCvPath, $newDiplomePath, $newExtraitNaissancePath] as $p) {
+            if (!empty($p)) {
+                $abs = realpath(__DIR__ . '/../' . $p);
+                if ($abs && is_file($abs)) { @unlink($abs); }
+            }
         }
         error_log('listeemployes.php edit ex: ' . $e->getMessage());
         redirectWith(['err' => 8, 'edit' => $idEmploye]);
@@ -500,6 +701,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
 
     // Utilisé dans les blocs catch (nettoyage), même si une exception survient tôt.
     $photoPath = null;
+    $pieceIdentitePath = null;
+    $cvPath = null;
+    $diplomePath = null;
+    $extraitNaissancePath = null;
 
     if ($nom === '') {
         redirectWith(['err' => 1, 'add' => 1]);
@@ -661,6 +866,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $photoPath = 'documents/photoemployes/' . $filename;
         }
 
+        // Upload pièces jointes (optionnelles)
+        $maxBytes = 10 * 1024 * 1024; // 10 MB
+        try {
+            if (isset($_FILES['piece_identite']) && is_array($_FILES['piece_identite'])) {
+                $pieceIdentitePath = storeEmployeJointeOrNull($_FILES['piece_identite'], 'piece_identite', ['pdf','jpg','jpeg','png'], $maxBytes);
+            }
+            if (isset($_FILES['cv']) && is_array($_FILES['cv'])) {
+                $cvPath = storeEmployeJointeOrNull($_FILES['cv'], 'cv', ['pdf','doc','docx'], $maxBytes);
+            }
+            if (isset($_FILES['diplome']) && is_array($_FILES['diplome'])) {
+                $diplomePath = storeEmployeJointeOrNull($_FILES['diplome'], 'diplome', ['pdf','jpg','jpeg','png'], $maxBytes);
+            }
+            if (isset($_FILES['extrait_naissance']) && is_array($_FILES['extrait_naissance'])) {
+                $extraitNaissancePath = storeEmployeJointeOrNull($_FILES['extrait_naissance'], 'extrait_naissance', ['pdf','jpg','jpeg','png'], $maxBytes);
+            }
+        } catch (RuntimeException $e) {
+            $code = $e->getMessage();
+            $err = ($code === 'upload_dir' || $code === 'upload_move') ? 20 : 19;
+            redirectWith(['err' => $err, 'add' => 1]);
+        }
+
         // Supérieur valide
         $superieurDb = null;
         if ($superieur > 0) {
@@ -783,6 +1009,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
         $placeholders[] = ':photo';
         $paramsEmp[':photo'] = $photoPath;
 
+        if ($empCols['piece_identite'] !== null) {
+            $columns[] = '`' . $empCols['piece_identite'] . '`';
+            $placeholders[] = ':piece_identite';
+            $paramsEmp[':piece_identite'] = $pieceIdentitePath;
+        }
+        if ($empCols['cv'] !== null) {
+            $columns[] = '`' . $empCols['cv'] . '`';
+            $placeholders[] = ':cv';
+            $paramsEmp[':cv'] = $cvPath;
+        }
+        if ($empCols['diplome'] !== null) {
+            $columns[] = '`' . $empCols['diplome'] . '`';
+            $placeholders[] = ':diplome';
+            $paramsEmp[':diplome'] = $diplomePath;
+        }
+        if ($empCols['extrait_naissance'] !== null) {
+            $columns[] = '`' . $empCols['extrait_naissance'] . '`';
+            $placeholders[] = ':extrait_naissance';
+            $paramsEmp[':extrait_naissance'] = $extraitNaissancePath;
+        }
+
         $stmt = $bdd->prepare('INSERT INTO employes (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')');
         $stmt->execute($paramsEmp);
 
@@ -800,6 +1047,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
                 @unlink($abs);
             }
         }
+        foreach ([$pieceIdentitePath, $cvPath, $diplomePath, $extraitNaissancePath] as $p) {
+            if (!empty($p)) {
+                $abs = realpath(__DIR__ . '/../' . $p);
+                if ($abs && is_file($abs)) { @unlink($abs); }
+            }
+        }
         error_log('listeemployes.php insert: ' . $e->getMessage());
         redirectWith(['err' => 8, 'add' => 1]);
     } catch (Exception $e) {
@@ -810,6 +1063,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajouter_employe'])) {
             $abs = realpath(__DIR__ . '/../' . $photoPath);
             if ($abs && is_file($abs)) {
                 @unlink($abs);
+            }
+        }
+        foreach ([$pieceIdentitePath, $cvPath, $diplomePath, $extraitNaissancePath] as $p) {
+            if (!empty($p)) {
+                $abs = realpath(__DIR__ . '/../' . $p);
+                if ($abs && is_file($abs)) { @unlink($abs); }
             }
         }
         error_log('listeemployes.php insert ex: ' . $e->getMessage());
@@ -1187,10 +1446,61 @@ include('../PUBLIC/header.php');
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-primary" id="btn_open_edit_from_details">Modifier</button>
-                        <a class="btn btn-secondary" id="btn_open_docs_from_details" target="_blank" rel="noopener" href="#">Documents archivés</a>
-                        <button type="button" class="btn btn-default" id="btn_open_badge_from_details" style="display:none;">Badge</button>
-                        <button type="button" class="btn btn-dark" id="btn_open_contrat_from_details" style="display:none;">Engagement</button>
+                        <button type="button" class="btn btn-secondary" id="btn_open_docs_from_details">Documents</button>
                         <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Documents employé (liste + visualisation) -->
+        <div class="modal fade" id="modalEmployeDocuments" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Documents de l'employé</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Nom du fichier</th>
+                                        <th>Ajouté le</th>
+                                        <th style="width: 140px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="employeDocsTbody">
+                                    <tr><td colspan="4" class="text-muted">Aucun document.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Prévisualisation document (séparé du modal Documents) -->
+        <div class="modal fade" id="modalEmployeDocPreview" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="docPreviewTitle">Prévisualisation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="min-height:70vh;">
+                        <iframe id="docPreviewFrame" title="Document" style="width:100%; height:65vh; border:1px solid #e5e5e5;"></iframe>
+                        <div id="docPreviewHint" class="text-muted small mt-2" style="display:none;">Ce format ne peut pas être prévisualisé.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="btnPrintDocPreview" style="display:none;"><i class="fa fa-print"></i> Imprimer</button>
+                        <button type="button" class="btn btn-default" data-bs-dismiss="modal">Fermer</button>
                     </div>
                 </div>
             </div>
@@ -1413,6 +1723,27 @@ include('../PUBLIC/header.php');
                                     <small class="text-muted">Laisser vide pour conserver l'ancienne.</small>
                                 </div>
 
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Pièce d'identité</label>
+                                    <input type="file" class="form-control" name="piece_identite" accept="application/pdf,image/png,image/jpeg">
+                                    <small class="text-muted">Laisser vide pour conserver l'ancienne.</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">CV</label>
+                                    <input type="file" class="form-control" name="cv" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+                                    <small class="text-muted">Laisser vide pour conserver l'ancien.</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Diplôme</label>
+                                    <input type="file" class="form-control" name="diplome" accept="application/pdf,image/png,image/jpeg">
+                                    <small class="text-muted">Laisser vide pour conserver l'ancien.</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Extrait de naissance</label>
+                                    <input type="file" class="form-control" name="extrait_naissance" accept="application/pdf,image/png,image/jpeg">
+                                    <small class="text-muted">Laisser vide pour conserver l'ancien.</small>
+                                </div>
+
                                 <div class="col-md-12 mb-3">
                                     <label class="col-form-label">Notes</label>
                                     <textarea class="form-control" name="notes" id="edit_notes" rows="3"></textarea>
@@ -1432,6 +1763,8 @@ include('../PUBLIC/header.php');
             (function () {
                 var lastDetailsDataset = null;
                 var companyCurrency = '<?php echo h($devise ?? ''); ?>';
+                var docsEmployeId = null;
+                var docsBaseUrl = '<?php echo h($_SERVER['PHP_SELF']); ?>';
 
             function openContratTravailById(idEmploye) {
                 var frame = document.getElementById('contratTravailFrame');
@@ -1548,6 +1881,49 @@ include('../PUBLIC/header.php');
                     return '../' + p;
                 }
 
+                function isNonEmpty(v) {
+                    return v != null && String(v).trim() !== '';
+                }
+
+                function isServiceOk(ds) {
+                    if (!ds) return false;
+                    var sid = ds.service_id == null ? '' : String(ds.service_id).trim();
+                    if (sid !== '' && sid !== '0') return true;
+                    return isNonEmpty(ds.service);
+                }
+
+                function isEmployeCompleteForBadge(ds) {
+                    if (!ds) return false;
+                    if (!(ds.status === '1' || ds.status === 1)) return false;
+                    // Le script badge utilise: nom, poste, service, telephone, photo, date_embauche
+                    return isNonEmpty(ds.nom_employe)
+                        && isNonEmpty(ds.poste)
+                        && isServiceOk(ds)
+                        && isNonEmpty(ds.telephone)
+                        && isNonEmpty(ds.date_embauche)
+                        && isNonEmpty(ds.photo);
+                }
+
+                function isEmployeCompleteForContrat(ds) {
+                    if (!ds) return false;
+                    if (!(ds.status === '1' || ds.status === 1)) return false;
+                    // Contrat: on exige les infos d'identité + emploi principales
+                    return isNonEmpty(ds.nom_employe)
+                        && isNonEmpty(ds.sexe)
+                        && isNonEmpty(ds.date_naissance)
+                        && isNonEmpty(ds.lieu_naissance)
+                        && isNonEmpty(ds.nationalite)
+                        && isNonEmpty(ds.nin)
+                        && isNonEmpty(ds.adresse)
+                        && isNonEmpty(ds.telephone)
+                        && isNonEmpty(ds.date_embauche)
+                        && isNonEmpty(ds.poste)
+                        && isServiceOk(ds)
+                        && isNonEmpty(ds.type_contrat)
+                        && isNonEmpty(ds.engagement)
+                        && isNonEmpty(ds.salaire);
+                }
+
                 function fillEditFromDataset(ds) {
                     if (!ds) return;
                     setValue('edit_id_employe', ds.id_employe);
@@ -1611,23 +1987,18 @@ include('../PUBLIC/header.php');
                     var st = (ds.status === '1' || ds.status === 1) ? 'Actif' : 'Inactif';
                     setText('detail_status', st);
 
-                    var btnDocs = document.getElementById('btn_open_docs_from_details');
-                    if (btnDocs) {
-                        var idEmp = ds.id_employe == null ? '' : String(ds.id_employe).trim();
-                        btnDocs.href = idEmp ? ('archivagedocuments.php?id_employe=' + encodeURIComponent(idEmp)) : 'archivagedocuments.php';
-                    }
+                    // Bouton documents: on garde l'id employé en mémoire
+                    docsEmployeId = ds.id_employe == null ? null : String(ds.id_employe).trim();
 
                     // Si employé inactif: pas de badge
                     var btnBadge = document.getElementById('btn_open_badge_from_details');
                     if (btnBadge) {
-                        var actif = (ds.status === '1' || ds.status === 1);
-                        btnBadge.style.display = actif ? '' : 'none';
+                        btnBadge.style.display = isEmployeCompleteForBadge(ds) ? '' : 'none';
                     }
 
                     var btnContrat = document.getElementById('btn_open_contrat_from_details');
                     if (btnContrat) {
-                        var actif2 = (ds.status === '1' || ds.status === 1);
-                        btnContrat.style.display = actif2 ? '' : 'none';
+                        btnContrat.style.display = isEmployeCompleteForContrat(ds) ? '' : 'none';
                     }
 
                     var img = document.getElementById('detail_photo');
@@ -1694,6 +2065,220 @@ include('../PUBLIC/header.php');
                             if (editEl) {
                                 bootstrap.Modal.getOrCreateInstance(editEl).show();
                             }
+                        });
+                    }
+
+                    function escapeHtml(s) {
+                        return String(s == null ? '' : s)
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#039;');
+                    }
+
+                    function resetDocPreview() {
+                        var frame = document.getElementById('docPreviewFrame');
+                        var hint = document.getElementById('docPreviewHint');
+                        var title = document.getElementById('docPreviewTitle');
+                        var btnPrint = document.getElementById('btnPrintDocPreview');
+                        if (frame) frame.src = '';
+                        if (title) title.textContent = 'Prévisualisation';
+                        if (hint) hint.style.display = 'none';
+                        if (btnPrint) btnPrint.style.display = 'none';
+                    }
+
+                    function openDocPreview(idDocument, titleText, mime, inlineUrlOverride) {
+                        if (typeof bootstrap === 'undefined') return;
+
+                        var id = String(idDocument || '').trim();
+                        if (!id) return;
+
+                        var modalEl = document.getElementById('modalEmployeDocPreview');
+                        var frame = document.getElementById('docPreviewFrame');
+                        var hint = document.getElementById('docPreviewHint');
+                        var title = document.getElementById('docPreviewTitle');
+                        var btnPrint = document.getElementById('btnPrintDocPreview');
+                        if (!modalEl || !frame || !hint) return;
+
+                        var fallbackInlineUrl = 'telecharger_document_employe.php?id_document=' + encodeURIComponent(id) + '&inline=1';
+                        var inlineUrl = inlineUrlOverride || fallbackInlineUrl;
+                        if (title) title.textContent = titleText || 'Prévisualisation';
+
+                        var m = String(mime || '').toLowerCase();
+                        var previewable = (m.indexOf('application/pdf') === 0) || (m.indexOf('image/') === 0);
+                        if (previewable) {
+                            frame.src = inlineUrl;
+                            hint.style.display = 'none';
+                            if (btnPrint) btnPrint.style.display = '';
+                        } else {
+                            frame.src = '';
+                            hint.style.display = '';
+                            if (btnPrint) btnPrint.style.display = 'none';
+                        }
+
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                    }
+
+                    function renderDocsTable(items) {
+                        var tbody = document.getElementById('employeDocsTbody');
+                        if (!tbody) return;
+
+                        if (!items || !items.length) {
+                            tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Aucun document.</td></tr>';
+                            return;
+                        }
+
+                        var html = '';
+                        items.forEach(function (it) {
+                            var id = it.id_document;
+                            var typeLabel = it.document_label || it.document_type || 'Document';
+                            var original = it.original_name || 'document';
+                            var createdAt = it.created_at || '';
+                            var mime = it.mime_type || '';
+                            var inlineUrl = it.inline_url || '';
+                            html += '<tr>'
+                                + '<td>' + escapeHtml(typeLabel) + '</td>'
+                                + '<td>' + escapeHtml(original) + '</td>'
+                                + '<td>' + escapeHtml(createdAt) + '</td>'
+                                + '<td>'
+                                + '  <a href="#" class="btn-view-doc"'
+                                + ' data-id="' + escapeHtml(id) + '"'
+                                + ' data-title="' + escapeHtml(typeLabel + ' - ' + original) + '"'
+                                + ' data-mime="' + escapeHtml(mime) + '"'
+                                + ' data-inline="' + escapeHtml(inlineUrl) + '"'
+                                + '>Prévisualiser</a>'
+                                + '</td>'
+                                + '</tr>';
+                        });
+
+                        tbody.innerHTML = html;
+
+                        tbody.querySelectorAll('.btn-view-doc').forEach(function (link) {
+                            link.addEventListener('click', function (e) {
+                                e.preventDefault();
+                                var inlineUrl = link.getAttribute('data-inline') || '';
+                                openDocPreview(
+                                    link.getAttribute('data-id'),
+                                    link.getAttribute('data-title'),
+                                    link.getAttribute('data-mime'),
+                                    inlineUrl ? inlineUrl : null
+                                );
+                            });
+                        });
+                    }
+
+                    function loadEmployeDocs() {
+                        if (!docsEmployeId) return;
+                        var tbody = document.getElementById('employeDocsTbody');
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Chargement...</td></tr>';
+
+                        var url = docsBaseUrl + '?ajax=employe_docs&id_employe=' + encodeURIComponent(String(docsEmployeId));
+                        fetch(url, { credentials: 'same-origin' })
+                            .then(function (r) { return r.json(); })
+                            .then(function (data) {
+                                if (!data || data.ok !== true) {
+                                    renderDocsTable([]);
+                                    return;
+                                }
+                                var items = data.items || [];
+
+                                // Ajouter Badge + Contrat dans la liste (uniquement si infos employé complètes)
+                                var canBadge = isEmployeCompleteForBadge(lastDetailsDataset);
+                                var canContrat = isEmployeCompleteForContrat(lastDetailsDataset);
+                                if (canBadge || canContrat) {
+                                    var t = Date.now();
+                                    var virtualItems = [];
+                                    if (canBadge) {
+                                        var badgeUrl = '../impression/_badge_employe_image.php?id_employe=' + encodeURIComponent(String(docsEmployeId)) + '&t=' + t;
+                                        virtualItems.push({
+                                            id_document: '__badge__',
+                                            document_type: 'badge',
+                                            document_label: 'Badge',
+                                            original_name: 'badge',
+                                            mime_type: 'image/png',
+                                            file_size: 0,
+                                            created_at: '',
+                                            inline_url: badgeUrl,
+                                            download_url: badgeUrl
+                                        });
+                                    }
+                                    if (canContrat) {
+                                        var contratUrl = '../impression/_contrat_travail.php?id_employe=' + encodeURIComponent(String(docsEmployeId)) + '&t=' + t;
+                                        virtualItems.push({
+                                            id_document: '__contrat__',
+                                            document_type: 'contrat_travail',
+                                            document_label: 'Contrat de travail',
+                                            original_name: 'contrat_travail',
+                                            mime_type: 'application/pdf',
+                                            file_size: 0,
+                                            created_at: '',
+                                            inline_url: contratUrl,
+                                            download_url: contratUrl
+                                        });
+                                    }
+                                    items = virtualItems.concat(items);
+                                }
+
+                                renderDocsTable(items);
+                            })
+                            .catch(function () {
+                                renderDocsTable([]);
+                            });
+                    }
+
+                    var btnDocs = document.getElementById('btn_open_docs_from_details');
+                    if (btnDocs) {
+                        btnDocs.addEventListener('click', function () {
+                            if (!docsEmployeId || typeof bootstrap === 'undefined') return;
+
+                            var nameEl = document.getElementById('docsEmployeName');
+                            if (nameEl && lastDetailsDataset) {
+                                nameEl.textContent = lastDetailsDataset.nom_employe || '—';
+                            }
+
+                            var docsEl = document.getElementById('modalEmployeDocuments');
+                            if (docsEl) {
+                                bootstrap.Modal.getOrCreateInstance(docsEl).show();
+                                loadEmployeDocs();
+                            }
+                        });
+                    }
+
+                    var btnReload = document.getElementById('btnReloadEmployeDocs');
+                    if (btnReload) {
+                        btnReload.addEventListener('click', function () {
+                            loadEmployeDocs();
+                        });
+                    }
+
+                    var docsEl = document.getElementById('modalEmployeDocuments');
+                    if (docsEl) {
+                        docsEl.addEventListener('hidden.bs.modal', function () {
+                            // Ferme uniquement ce modal.
+                        });
+                    }
+
+                    var previewEl = document.getElementById('modalEmployeDocPreview');
+                    if (previewEl) {
+                        previewEl.addEventListener('hidden.bs.modal', function () {
+                            resetDocPreview();
+                        });
+                    }
+
+                    var btnPrintDoc = document.getElementById('btnPrintDocPreview');
+                    if (btnPrintDoc) {
+                        btnPrintDoc.addEventListener('click', function () {
+                            var frame = document.getElementById('docPreviewFrame');
+                            if (!frame || !frame.src) return;
+                            try {
+                                if (frame.contentWindow) {
+                                    frame.contentWindow.focus();
+                                    frame.contentWindow.print();
+                                    return;
+                                }
+                            } catch (e) {}
+                            window.open(frame.src, '_blank');
                         });
                     }
 
@@ -1956,6 +2541,23 @@ include('../PUBLIC/header.php');
                                     <label class="col-form-label">Photo d'identité</label>
                                     <input type="file" class="form-control" name="photo" accept="image/png,image/jpeg">
                                     <small class="text-muted">Formats: JPG/PNG</small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Pièce d'identité</label>
+                                    <input type="file" class="form-control" name="piece_identite" accept="application/pdf,image/png,image/jpeg">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">CV</label>
+                                    <input type="file" class="form-control" name="cv" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Diplôme</label>
+                                    <input type="file" class="form-control" name="diplome" accept="application/pdf,image/png,image/jpeg">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="col-form-label">Extrait de naissance</label>
+                                    <input type="file" class="form-control" name="extrait_naissance" accept="application/pdf,image/png,image/jpeg">
                                 </div>
 
                                 <div class="col-md-12 mb-3">

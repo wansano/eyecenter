@@ -150,7 +150,7 @@ if ($contenuTrim !== '') {
 	if ($contenuText === '') {
 		$pdf->MultiCell(0, 7, pdf_text_compat('—'), 0, 'L');
 	} else {
-		$lineHeight = 7; // interligne 1
+		$lineHeight = 3; // interligne 1
 		$pdf->MultiCell(0, $lineHeight, pdf_text_compat($contenuText), 0, 'J');
 	}
 } else {
@@ -164,6 +164,6 @@ $pdf->Cell(0, 7, pdf_text_compat($lieu . ', le ' . fmtDateFrLong($dtRef)), 0, 1,
 
 $pdf->Ln(22);
 $pdf->SetFont('CenturyGothic', '', 12);
-$pdf->Cell(0, 7, pdf_text_compat('Signature et cachet'), 0, 1, 'C');
+//$pdf->Cell(0, 7, pdf_text_compat('Signature et cachet'), 0, 1, 'C');
 
 $pdf->Output('AVIS_INFORMATION_' . $id . '.pdf', 'I');

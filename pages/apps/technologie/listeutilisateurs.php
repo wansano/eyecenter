@@ -11,6 +11,17 @@ function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+// Normalise la plage de connexion (compatibilité accents / anciennes valeurs)
+function normalize_plage_connexion($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    // Ancienne valeur enregistrée avec accent dans la clé
+    $value = str_replace('tresorérie', 'tresorerie', $value);
+    return $value;
+}
+
 // Enregistrer modification utilisateur (modal)
 try {
     if (isset($_POST['edit_user_save'])) {
@@ -20,7 +31,7 @@ try {
         $idService = isset($_POST['id_service']) ? (int) $_POST['id_service'] : 0;
         $dateEngagement = isset($_POST['date_engagement']) ? trim((string) $_POST['date_engagement']) : '';
         $responsable = isset($_POST['responsable']) ? (int) $_POST['responsable'] : 0;
-        $plageConnexion = isset($_POST['plage_connexion']) ? trim((string) $_POST['plage_connexion']) : '';
+        $plageConnexion = isset($_POST['plage_connexion']) ? normalize_plage_connexion($_POST['plage_connexion']) : '';
         $newPassword = isset($_POST['mdp']) ? (string) $_POST['mdp'] : '';
 
         if ($editId <= 0 || $pseudo === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -108,7 +119,7 @@ try {
         $idService = isset($_POST['id_service']) ? (int) $_POST['id_service'] : 0;
         $dateEngagement = isset($_POST['date_engagement']) ? trim((string) $_POST['date_engagement']) : '';
         $responsable = isset($_POST['responsable']) ? (int) $_POST['responsable'] : 0;
-        $plageConnexion = isset($_POST['plage_connexion']) ? trim((string) $_POST['plage_connexion']) : '';
+        $plageConnexion = isset($_POST['plage_connexion']) ? normalize_plage_connexion($_POST['plage_connexion']) : '';
         $password = isset($_POST['mdp']) ? (string) $_POST['mdp'] : '';
 
         if ($pseudo === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $idService <= 0 || $dateEngagement === '' || trim($password) === '') {
@@ -200,6 +211,8 @@ $plageProfiles = [
     'medecin' => 'Chirurgie',
     'logistique' => 'Logistique',
     'boutique' => 'Boutique',
+    'tresorerie' => 'Trésorerie',
+    'hr' => 'HR',
     'comptabilite' => 'Comptabilité',
     'technologie' => 'Administrateur',
 ];
@@ -467,10 +480,10 @@ try {
                                                                         <select class="form-control populate" name="type" id="add_type">
                                                                             <option value="">------ Choisir ------</option>
                                                                             <option value="administrateur">Administrateur</option>
-                                                                            <option value="caisse">Caisse</option>
-                                                                            <option value="caisseoptic">Caisse Optique</option>
-                                                                            <option value="modeservices">Medecin traitant</option>
-                                                                            <option value="acceuil">Acceuil</option>
+                                                                            <option value="caisse">Caisse Optique</option>
+                                                                            <option value="boutique">Caisse Boutique</option>
+                                                                            <option value="medecin">Medecin traitant</option>
+                                                                            <option value="tresorérie">Tresorérie</option>
                                                                             <option value="comptabilité">Comptable</option>
                                                                             <option value="superviseur">Superviseur</option>
                                                                             <option value="secretariat">Secrétariat</option>
@@ -648,6 +661,8 @@ try {
                                 if (idx <= 0) return;
                                 var day = part.slice(0, idx).trim().toLowerCase();
                                 var val = part.slice(idx + 1).trim();
+                                // Compatibilité: ancienne valeur avec accent
+                                if (val === 'tresorérie') val = 'tresorerie';
                                 if (!day) return;
                                 out[day] = val;
                             });

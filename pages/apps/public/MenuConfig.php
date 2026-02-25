@@ -40,6 +40,7 @@ class MenuConfig {
         return self::getMenuItems($user_data);
     }
 
+    // Menu IT et Support
     private static function getTechnologieMenu($user_data) {
         return '
         <li class="dropdown">
@@ -50,48 +51,85 @@ class MenuConfig {
                 <li><a class="nav-link" href="traitementslist.php">Liste des traitements</a></li>
                 <li><a class="nav-link" href="profilentreprise.php?pe=entreprise">Profil de l\'entreprise</a></li>
             </ul>
-        </li>
+        </li>';
+    }
+
+    // Menu Ressources Humaines
+    private static function getHRMenu($user_data) {
+        return '
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle">Gestion HR</a>
+            <a class="nav-link dropdown-toggle">Employés</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="listeemployes.php">Liste des employés</a></li>
-                <li><a class="nav-link" href="bulletinsalaire.php">Bulletin de salaire</a></li>
                 <li><a class="nav-link" href="realisationindividuelle.php">Réalisation individuelle</a></li>
-                <li><a class="nav-link" href="attestationtravail.php">Attestation de travail</a></li>
-                <li><a class="nav-link" href="notedeservice.php">Note de service</a></li>
-                <li><a class="nav-link" href="avisinformation.php">Avis d\'information</a></li>
             </ul>
         </li>
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle">Gestion Trésorerie</a>
+            <a class="nav-link dropdown-toggle">Attestations</a>
             <ul class="dropdown-menu">
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Paiements</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="annulationpaiementcaisse.php">Annuler paiement caisse</a></li>
-                    </ul>
-                </li>
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Preuve de caisse</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="listepreuvecaisse.php">Liste des preuves</a></li>
-                    </ul>
-                </li>
+                <li><a class="nav-link" href="attestationtravail.php">Attestation ou Certificat</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle">Notes et Avis</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="notedeservice.php">Note de service</a></li>
+                <li><a class="nav-link" href="avisinformation.php">Avis d\'information</a></li>
             </ul>
         </li>';
     }
 
+    // Menu Tresorerie
+    private static function getTresorerieMenu($user_data) {
+        return '
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Paiement</a>
+            <ul class="dropdown-menu">
+                <li>
+                    <a class="nav-link" href="remboursement.php">Rembourssement</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="demandes.php?view=to_pay&type=depense">Dépense interne</a>
+                </li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Traitements</a>
+            <ul class="dropdown-menu">
+                <li>
+                    <li><a class="nav-link" href="interocompte.php">Intérogation compte</a></li>
+                </li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle">Caisse</a>
+            <ul class="dropdown-menu">
+                <li>
+                    <a class="nav-link" href="annulationpaiementcaisse.php">Annuler paiement caisse</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="listepreuvecaisse.php">Liste des preuves</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="listepaiementannuler.php">Paiements annulés</a>
+                </li>
+            </ul>
+        </li>
+        <li class="dropdown">
+            <a class="nav-link dropdown-toggle">Bulletins</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="bulletinsalaire.php">Bulletin de salaire</a></li>
+            </ul>
+        </li>';
+    }
+
+    // Menu Secretariat
     private static function getSecretariatMenu($user_data) {
         return '
         <li class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#">Gestion Patients</a>
+            <a class="nav-link dropdown-toggle" href="#">Patients</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="historiquedossier.php">Historique des passages</a></li>
-                <li><a class="nav-link" href="rechercheinformation.php">Recherche</a></li>
-                <li><a class="nav-link" href="addpatient.php?ap=default">Ajout</a></li>
-                <li><a class="nav-link" href="editpatient.php?ep=default">Modification</a></li>
-                <li><a class="nav-link" href="transmission-caisse.php">Affectation</a></li>
-                <li><a class="nav-link" href="patientensalle.php?pes=' . $user_data['type'] . '">En salle</a></li>
+                <li><a class="nav-link" href="patientensalle.php?pes=' . $user_data['type'] . '">Mes Patients</a></li>
             </ul>
         </li>
         <li class="dropdown">
@@ -109,6 +147,7 @@ class MenuConfig {
         </li>';
     }
 
+    // Menu Caisse
     private static function getCaisseMenu($user_data) {
         return '
         <li class="dropdown">
@@ -139,6 +178,8 @@ class MenuConfig {
             </ul>
         </li>';
     }
+
+    // Menu gestion boutique
     private static function getCaisseOptiqueMenu($user_data) {
         return '
         <li class="dropdown">
@@ -172,6 +213,8 @@ class MenuConfig {
             </ul>
         </li>';
     }
+
+    // Menu Medecin chirurgie
     private static function getMedecinMenu($user_data) {
         return '
         <li class="dropdown">
@@ -201,6 +244,7 @@ class MenuConfig {
         </li>';
     }
 
+    // Menu Ophtalmologue
     private static function getophtalmologueMenu($user_data) {
         return '
         <li class="dropdown">
@@ -231,6 +275,7 @@ class MenuConfig {
         </li>';
     }
 
+    // Menu Infirmier
     private static function getinfirmierMenu($user_data) {
         return '
         <li class="dropdown">
@@ -255,6 +300,7 @@ class MenuConfig {
         </li>';
     }
 
+    // Menu Optometriste
     private static function getOptometristeMenu($user_data) {
         return '
         <li class="dropdown">
@@ -288,6 +334,7 @@ class MenuConfig {
     private static function getComptabiliteMenu($user_data) {
         $submenus = [
             self::getComptabiliteTraitementsMenu(),
+            self::getComptabilitePaiementMenu(),
             self::getComptabiliteStructureMenu(),
             self::getComptabiliteConfigurationMenu(),
             self::getComptabiliteStocksMenu(),
@@ -303,17 +350,6 @@ class MenuConfig {
         <li class="dropdown">
             <a href="#" class="nav-link dropdown-toggle">Traitements</a>
             <ul class="dropdown-menu">
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Paiements</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="demandes.php?view=to_pay&type=depense">Demandes et Dépenses à payer</a></li>
-                        <li><a class="nav-link" href="remboursement.php">Rembourssement</a></li>
-                        <li><a class="nav-link" href="listepaiementannuler.php">Paiements annulés</a></li>
-                    </ul>
-                </li>
-                <li>
-                     <a class="nav-link" href="listeremisecompteinterne.php">Liste des remises</a></li>
-                </li>
                 <li>
                     <li><a class="nav-link" href="interocompte.php">Intérogation compte</a></li>
                 </li>
@@ -322,6 +358,27 @@ class MenuConfig {
                 </li>
                 <li>
                     <li><a class="nav-link" href="findingcommand.php">Ajouter une livraison</a></li>
+                </li>
+            </ul>
+        </li>';
+    }
+
+    private static function getComptabilitePaiementMenu() {
+        return '
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Paiement</a>
+            <ul class="dropdown-menu">
+                <li>
+                    <a class="nav-link" href="remboursement.php">Rembourssement</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="demandes.php?view=to_pay&type=depense">Dépense interne</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="#">Autre paiement</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="#">Encaissement</a>
                 </li>
             </ul>
         </li>';
@@ -338,6 +395,12 @@ class MenuConfig {
                         <li><a class="nav-link" href="#">Etats financiers</a></li>
                         <li><a class="nav-link" href="#">Grand livre</a></li>
                     </ul>
+                </li>
+                <li>
+                     <a class="nav-link" href="listeremisecompteinterne.php">Liste des remises</a></li>
+                </li>
+                <li>
+                    <a class="nav-link" href="listepaiementannuler.php">Paiements annulés</a>
                 </li>
                 <li class="dropdown-submenu">
                     <a class="nav-link" href="#">Commandes</a>
@@ -456,6 +519,8 @@ class MenuConfig {
         </li>';
     }
 
+
+    // Menu Logistique....
     private static function getLogistiqueMenu($user_data) {
         return '
         <li class="dropdown">
@@ -481,6 +546,7 @@ class MenuConfig {
         </li>';
     }
 
+    // Menu si Responsable de la clinique
     private static function getResponsableMenu($user_data) {
         return '
         <li class="dropdown">
@@ -532,6 +598,12 @@ class MenuConfig {
                 break;
             case 'medecin':
                 $menu_items .= self::getMedecinMenu($user_data);
+                break;
+            case 'hr':
+                $menu_items .= self::getHRMenu($user_data);
+                break;
+            case 'tresorerie':
+                $menu_items .= self::getTresorerieMenu($user_data);
                 break;
         }
 

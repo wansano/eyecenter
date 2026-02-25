@@ -86,7 +86,7 @@
 										</div>
 									</div>
 									<!-- end: header nav menu -->
-									<a href="login.php?r=2" class="nav-link btn-gradient btn-modern text-3 ms-4 d-sm-block">Connexion</a>
+									<a href="login.php" class="nav-link btn-gradient btn-modern text-3 ms-4 d-sm-block js-open-login">Connexion</a>
 								</div>
 							</div>
 						</div>
@@ -136,6 +136,10 @@
 				</section>
 			</div>
 
+			<div id="auth-popup" class="dialog dialog-sm zoom-anim-dialog rounded p-3 mfp-hide mfp-close-out">
+				<div id="auth-popup-body"></div>
+			</div>
+
 			<footer id="footer" class="bg-color-dark-scale-5 border border-end-0 border-start-0 border-bottom-0 border-color-light-3 mt-0">
 				<div class="copyright bg-color-dark-scale-4 py-2">
 					<div class="container text-center py-2">
@@ -169,6 +173,131 @@
 
 		<!-- Theme Initialization Files -->
 		<script src="js/theme.init.js"></script>
+
+		<script>
+			(function ($) {
+				if (!$ || !$.magnificPopup) return;
+
+				function escapeHtml(text) {
+					return $('<div>').text(text == null ? '' : String(text)).html();
+				}
+
+				function renderErrors($container, errors) {
+					if (!$container || !$container.length) return;
+					if (!errors || !errors.length) {
+						$container.empty();
+						return;
+					}
+					var html = '<div class="alert alert-danger"><ul class="mb-0">';
+					$.each(errors, function (_, err) {
+						html += '<li>' + escapeHtml(err) + '</li>';
+					});
+					html += '</ul></div>';
+					$container.html(html);
+				}
+
+				function setAuthContent(html) {
+					$('#auth-popup-body').html(html);
+				}
+
+				function openAuthPopup(url) {
+					setAuthContent('<div class="text-center py-4">Chargement...</div>');
+					$.magnificPopup.open({
+						items: {
+							src: '#auth-popup',
+							type: 'inline'
+						},
+						removalDelay: 160,
+						mainClass: 'mfp-zoom-in',
+						closeBtnInside: true
+					});
+
+					$.get(url)
+						.done(function (html) { setAuthContent(html); })
+						.fail(function () {
+							setAuthContent('<div class="alert alert-danger mb-0">Impossible de charger le formulaire.</div>');
+						});
+				}
+
+				$(document).on('click', '.js-open-login', function (e) {
+					e.preventDefault();
+					openAuthPopup('login.php?modal=1');
+				});
+
+				$(document).on('submit', 'form[data-auth-form]', function (e) {
+					e.preventDefault();
+					var $form = $(this);
+					var ajaxAction = $form.data('ajaxAction');
+					var $errors = $form.find('[data-auth-errors]').first();
+					if (!$errors.length) {
+						$errors = $('#auth-popup-body').find('[data-auth-errors]').first();
+					}
+					renderErrors($errors, []);
+
+					if (!ajaxAction) {
+						renderErrors($errors, ['Configuration manquante: action AJAX introuvable.']);
+						return;
+					}
+
+					$.ajax({
+						url: ajaxAction,
+						method: 'POST',
+						data: $form.serialize(),
+						dataType: 'json'
+					}).done(function (res) {
+						if (res && res.success) {
+							if (res.nextUrl) {
+								openAuthPopup(res.nextUrl);
+								return;
+							}
+							if (res.redirectUrl) {
+								window.location.href = res.redirectUrl;
+								return;
+							}
+							renderErrors($errors, ['Réponse inattendue du serveur.']);
+						} else {
+							renderErrors($errors, (res && res.errors) ? res.errors : ['Identifiants/code incorrect.']);
+						}
+					}).fail(function (xhr) {
+						var res = null;
+						try { res = xhr && xhr.responseJSON ? xhr.responseJSON : JSON.parse(xhr.responseText); } catch (e2) {}
+						renderErrors($errors, (res && res.errors) ? res.errors : ['Une erreur est survenue.']);
+					});
+				});
+
+				$(document).on('click', '[data-toggle-password]', function () {
+					var $btn = $(this);
+					var $group = $btn.closest('.input-group');
+					var $input = $group.find('input[type="password"], input[type="text"]').first();
+					if (!$input.length) return;
+					var isHidden = $input.attr('type') === 'password';
+					$input.attr('type', isHidden ? 'text' : 'password');
+					$btn.attr('aria-pressed', isHidden ? 'true' : 'false');
+					$btn.attr('aria-label', isHidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+					var $icon = $btn.find('i');
+					if ($icon.length) {
+						$icon.toggleClass('bx-show', !isHidden);
+						$icon.toggleClass('bx-hide', isHidden);
+					}
+				});
+
+				$(document).on('click', '[data-toggle-otp]', function () {
+					var $btn = $(this);
+					var $group = $btn.closest('.input-group');
+					var $input = $group.find('input[type="password"], input[type="text"]').first();
+					if (!$input.length) return;
+					var isHidden = $input.attr('type') === 'password';
+					$input.attr('type', isHidden ? 'text' : 'password');
+					$btn.attr('aria-pressed', isHidden ? 'true' : 'false');
+					$btn.attr('aria-label', isHidden ? 'Masquer le code' : 'Afficher le code');
+					var $icon = $btn.find('i');
+					if ($icon.length) {
+						$icon.toggleClass('bx-show', !isHidden);
+						$icon.toggleClass('bx-hide', isHidden);
+					}
+				});
+			})(window.jQuery);
+		</script>
 
 	</body>
 </html>

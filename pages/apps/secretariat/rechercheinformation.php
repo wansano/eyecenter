@@ -1,6 +1,9 @@
 <?php
 include('../PUBLIC/connect.php');
+require_once('../PUBLIC/fonction.php');
 session_start();
+
+$isModal = isset($_GET['modal']) && (string)$_GET['modal'] === '1';
 
 $errors = [];
 $resultats = [];
@@ -33,6 +36,83 @@ if (isset($_POST['recherche'])) {
             $errors[] = "Une erreur est survenue lors de la recherche : " . $e->getMessage();
         }
     }
+}
+
+if ($isModal) {
+    ?>
+    <div class="col-md-12">
+        <section class="card">
+            <div class="card-body">
+                <?php if (!empty($errors)): ?>
+                    <div class="alert alert-danger">
+                        <?php foreach ($errors as $error): ?>
+                            <li><?php echo htmlspecialchars($error); ?></li>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <form class="form-horizontal" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?modal=1&amp;embed=1">
+                    <div class="row form-group pb-3">
+                        <div class="col-md-10">
+                            <div class="form-group">
+                                <label class="col-form-label" for="recherche">
+                                    Saisir : un prénom, un nom, un numéro de téléphone, une profession, une adresse ou le nom du responsable (minimum 2 caractères)
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       name="recherche"
+                                       id="recherche"
+                                       value="<?php echo htmlspecialchars($recherche); ?>"
+                                       minlength="2"
+                                       placeholder="Entrez au moins 2 caractères"
+                                       required>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="card-footer text-end">
+                        <button class="btn btn-primary" type="submit">Rechercher</button>
+                    </footer>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    <?php if (!empty($resultats)): ?>
+        <div class="col-md-12 mt-3">
+            <section class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-responsive-md table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>DOSSIER</th>
+                                    <th>PATIENT</th>
+                                    <th>PROFESSION</th>
+                                    <th>CONTACT</th>
+                                    <th>ADRESSE</th>
+                                    <th>RESPONSABLE</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($resultats as $patient): ?>
+                                    <tr>
+                                        <td>PAT-<?php echo htmlspecialchars($patient['id_patient']); ?></td>
+                                        <td><?php echo htmlspecialchars($patient['nom_patient']); ?></td>
+                                        <td><?php echo htmlspecialchars($patient['profession']); ?></td>
+                                        <td><?php echo htmlspecialchars($patient['phone']); ?></td>
+                                        <td><?php echo htmlspecialchars(adress($patient['adresse']) ?: $patient['adresse']); ?></td>
+                                        <td><?php echo htmlspecialchars($patient['responsable']); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    <?php endif; ?>
+    <?php
+    exit;
 }
 
 require('../PUBLIC/header.php');

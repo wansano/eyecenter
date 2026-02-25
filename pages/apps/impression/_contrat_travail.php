@@ -295,6 +295,21 @@ $nomEmploye = trim((string)($emp['nom_employe'] ?? ''));
 $poste = trim((string)($emp['poste'] ?? ''));
 $adresseEmp = trim((string)($emp['adresse'] ?? ''));
 
+function strContainsInsensitive(string $haystack, string $needle): bool
+{
+	if ($needle === '') return true;
+	if (function_exists('mb_stripos')) {
+		return mb_stripos($haystack, $needle, 0, 'UTF-8') !== false;
+	}
+	return stripos($haystack, $needle) !== false;
+}
+
+// Stagiaire: détection via la profession/poste (mot "stagiaire")
+$isStagiaire = false;
+if ($poste !== '' && strContainsInsensitive($poste, 'stagiaire')) {
+	$isStagiaire = true;
+}
+
 $sexeRaw = trim((string)($emp['sexe'] ?? ''));
 $sexeLower = strtolower($sexeRaw);
 $civilite = 'Madame/Monsieur';
@@ -668,7 +683,7 @@ writeBoldPara($pdf, 'D’autre part,');
 $pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
-$pdf->Cell(0, 8, pdf_text_compat('IL A ETE CONVENU CE QUI SUIT'), 0, 1, 'C');
+$pdf->Cell(0, 8, pdf_text_compat('IL A ETE CONVENU CE QUI SUIT :'), 0, 1, 'C');
 
 $pdf->Ln(2);
 
@@ -736,42 +751,78 @@ $pdf->Ln(2);
 $salLine = $salaireBase !== null ? moneyLine($salaireBase, $currency) : '____________________________';
 writePara($pdf, 'En rémunération de ses services, ' . $employeLabel . ' percevra un salaire de base mensuel de :');
 writeBoldPara($pdf, '' . $salLine . '.');
-writePara($pdf, 'Auquel pourra s’ajouter les primes ci-dessous :');
-
-$pt = $primeTransport !== null ? (number_format((int)round($primeTransport), 0, ',', ' ') . ' ' . $currency) : '________________';
-$pv = $primeVie !== null ? (number_format((int)round($primeVie), 0, ',', ' ') . ' ' . $currency) : '________________';
-$pl = $primeLogement !== null ? (number_format((int)round($primeLogement), 0, ',', ' ') . ' ' . $currency) : '________________';
 
 $indent = 8.0;
-writeIndentedLabelAmountBold($pdf, $indent, 'a)  Indemnité de transport : ', $pt);
-writeIndentedLabelAmountBold($pdf, $indent, 'b)  Prime de cherté de vie : ', $pv);
-writeIndentedLabelAmountBold($pdf, $indent, 'c)  Prime de Logement : ', $pl);
-writeIndentedPara($pdf, $indent, 'd)  Prime de rendement et qualité : (En fonction du prorata retenu par la direction)');
+$primeLines = [];
+
+$ptStr = null;
+if ($primeTransport === null) {
+	$ptStr = '________________';
+} elseif ((float)$primeTransport != 0.0) {
+	$ptStr = number_format((int)round($primeTransport), 0, ',', ' ') . ' ' . $currency;
+}
+if ($ptStr !== null) {
+	$primeLines[] = ['a)  Indemnité de transport : ', $ptStr];
+}
+
+$pvStr = null;
+if ($primeVie === null) {
+	$pvStr = '________________';
+} elseif ((float)$primeVie != 0.0) {
+	$pvStr = number_format((int)round($primeVie), 0, ',', ' ') . ' ' . $currency;
+}
+if ($pvStr !== null) {
+	$primeLines[] = ['b)  Prime de cherté de vie : ', $pvStr];
+}
+
+$plStr = null;
+if ($primeLogement === null) {
+	$plStr = '________________';
+} elseif ((float)$primeLogement != 0.0) {
+	$plStr = number_format((int)round($primeLogement), 0, ',', ' ') . ' ' . $currency;
+}
+if ($plStr !== null) {
+	$primeLines[] = ['c)  Prime de Logement : ', $plStr];
+}
+
+if (!empty($primeLines)) {
+	writePara($pdf, 'Auquel pourra s’ajouter les primes ci-dessous :');
+	foreach ($primeLines as $ln) {
+		writeIndentedLabelAmountBold($pdf, $indent, $ln[0], $ln[1]);
+	}
+	writeIndentedPara($pdf, $indent, 'd)  Prime de rendement et qualité : (En fonction du prorata retenu par la direction)');
+}
 
 $pdf->Ln(2);
+
+$articleRupture = $isStagiaire ? 6 : 8;
+$articleDiscretion = $isStagiaire ? 7 : 9;
+$articleLitiges = $isStagiaire ? 8 : 10;
+
+if (!$isStagiaire) {
+	$pdf->SetFont('CenturyGothic', 'B', 11);
+	writePara($pdf, 'Article 6 : Congés payés', 6, 'L');
+	$pdf->SetFont('CenturyGothic', '', 11);
+
+	$pdf->Ln(2);
+
+	writePara($pdf, $employeLabel . ' aura droit à deux jours et demi ouvrables de congés payés par mois de service. L’ordre des départs en congé est établi par l’employeur en fonction des nécessités de services et autant que possible, en tenant compte des préférences des salariés.');
+
+	$pdf->Ln(2);
+
+	$pdf->SetFont('CenturyGothic', 'B', 11);
+	writePara($pdf, 'Article 7 : Sécurité Sociale', 6, 'L');
+	$pdf->SetFont('CenturyGothic', '', 11);
+
+	$pdf->Ln(2);
+
+	writePara($pdf, $employeLabel . ' sera immatriculée à la Caisse Nationale de la Sécurité Sociale conformément à la loi, il s’engage à respecter les normes d’hygiène et de sécurité sur les lieux de travail.');
+
+	$pdf->Ln(2);
+}
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
-writePara($pdf, 'Article 6 : Congés payés', 6, 'L');
-$pdf->SetFont('CenturyGothic', '', 11);
-
-$pdf->Ln(2);
-
-writePara($pdf, $employeLabel . ' aura droit à deux jours et demi ouvrables de congés payés par mois de service. L’ordre des départs en congé est établi par l’employeur en fonction des nécessités de services et autant que possible, en tenant compte des préférences des salariés.');
-
-$pdf->Ln(2);
-
-$pdf->SetFont('CenturyGothic', 'B', 11);
-writePara($pdf, 'Article 7 : Sécurité Sociale', 6, 'L');
-$pdf->SetFont('CenturyGothic', '', 11);
-
-$pdf->Ln(2);
-
-writePara($pdf, $employeLabel . ' sera immatriculée à la Caisse Nationale de la Sécurité Sociale conformément à la loi, il s’engage à respecter les normes d’hygiène et de sécurité sur les lieux de travail.');
-
-$pdf->Ln(2);
-
-$pdf->SetFont('CenturyGothic', 'B', 11);
-writePara($pdf, 'Article 8 : Rupture du contrat', 6, 'L');
+writePara($pdf, 'Article ' . $articleRupture . ' : Rupture du contrat', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
 $pdf->Ln(2);
@@ -794,7 +845,7 @@ writeIndentedPara($pdf, $indent,'-  L’intempérance, les rixes ou brutalité d
 $pdf->Ln(2);
 
 $pdf->SetFont('CenturyGothic', 'B', 11);
-writePara($pdf, 'Article 9 : Obligation de discrétion', 6, 'L');
+writePara($pdf, 'Article ' . $articleDiscretion . ' : Obligation de discrétion', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
 $pdf->Ln(2);
@@ -803,7 +854,7 @@ writePara($pdf, 'Dans l’exécution du présent contrat, ' . $employeLabel . ' 
 writePara($pdf, 'La présente obligation demeure en vigueur même après l’expiration ou la résiliation du contrat.');
 $pdf->Ln(2);
 $pdf->SetFont('CenturyGothic', 'B', 11);
-writePara($pdf, 'Article 10 : Cas de litiges', 6, 'L');
+writePara($pdf, 'Article ' . $articleLitiges . ' : Cas de litiges', 6, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 
 $pdf->Ln(2);

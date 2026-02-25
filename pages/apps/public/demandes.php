@@ -1738,7 +1738,7 @@ include(__DIR__ . '/header.php');
 											<small class="text-muted d-block mt-1">Le montant total est calculé automatiquement (qte × prix unitaire).</small>
 										</div>
 										<div class="col-md-12 mb-3">
-															<label class="form-label">Validateur (responsable de la clinique)</label>
+															<label class="form-label">Validateur</label>
 															<input type="text" class="form-control" value="<?= htmlspecialchars(($cliniquePseudoForUser !== '' ? $cliniquePseudoForUser : '—'), ENT_QUOTES, 'UTF-8') ?>" readonly>
 															<small class="text-muted d-block mt-1">Après validation, la demande part vers la comptabilité (dépense) ou la logistique (sortie stock).</small>
 										</div>

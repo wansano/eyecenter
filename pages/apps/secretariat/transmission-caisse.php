@@ -57,6 +57,20 @@ function tc_patientLastAffectationDate(PDO $bdd, string $idPatient): ?DateTime {
     }
 }
 
+function tc_patientLastPrestation(PDO $bdd, string $idPatient): array {
+    try {
+        $st = $bdd->prepare('SELECT type, date FROM affectations WHERE id_patient = ? ORDER BY date DESC LIMIT 1');
+        $st->execute([$idPatient]);
+        $row = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+        return [
+            'motif_id' => (int)($row['type'] ?? 0),
+            'date' => (string)($row['date'] ?? ''),
+        ];
+    } catch (Throwable $e) {
+        return ['motif_id' => 0, 'date' => ''];
+    }
+}
+
 function tc_patientHasFutureRdvForTraitement(PDO $bdd, string $idPatient, int $traitementId): bool {
     if ($traitementId <= 0) return false;
     try {
@@ -93,6 +107,20 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
     $age = return_age($id_patient);
     $sexe = return_sexe($id_patient);
     $assure = return_assure($id_patient);
+
+    $lastPrestation = tc_patientLastPrestation($bdd, $id_patient);
+    $prevMotifId = (int)($lastPrestation['motif_id'] ?? 0);
+    $prevMotifLabel = $prevMotifId > 0 ? (string)model($prevMotifId) : '—';
+    $prevDateRaw = trim((string)($lastPrestation['date'] ?? ''));
+    $prevDateLabel = '—';
+    if ($prevDateRaw !== '') {
+        try {
+            $dt = new DateTime($prevDateRaw);
+            $prevDateLabel = $dt->format('d/m/Y');
+        } catch (Throwable $e) {
+            $prevDateLabel = $prevDateRaw;
+        }
+    }
 
     ob_start();
     ?>
@@ -165,6 +193,8 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                             <tr><th>Adresse</th><td><?php echo htmlspecialchars((adress($adresse) ?: $adresse), ENT_QUOTES, 'UTF-8'); ?></td></tr>
                             <tr><th>Responsable</th><td><?php echo htmlspecialchars($responsable, ENT_QUOTES, 'UTF-8'); ?></td></tr>
                             <tr><th>Type de patient</th><td><?php echo htmlspecialchars(determinerStatutAssurance($assure), ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Prestation précédente</th><td><?php echo htmlspecialchars($prevMotifLabel, ENT_QUOTES, 'UTF-8'); ?></td></tr>
+                            <tr><th>Date prestation</th><td><?php echo htmlspecialchars($prevDateLabel, ENT_QUOTES, 'UTF-8'); ?></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -179,7 +209,7 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                         <input type="hidden" name="motif_id" value="<?php echo (int)$consultationTypeId; ?>">
                     <?php endif; ?>
                     <div class="row form-group pb-3">
-                        <div class="col-md-2">
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label class="col-form-label">Departement concerné</label>
                                 <?php if ($lockConsultation): ?>
@@ -198,19 +228,24 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <div class="form-group">
                                 <label class="col-form-label">Motif de présence</label>
                                 <?php if ($lockConsultation): ?>
                                     <input type="text" class="form-control" value="Consultation" disabled>
                                 <?php else: ?>
                                     <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
-                                        <option value=""> ------ Choisir un service ----- </option>
+                                        <option value=""> ------ Choisir un service d'abord----- </option>
                                     </select>
                                     <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="">
                                 <?php endif; ?>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="text-end mt-3">
+                        <button type="submit" class="btn btn-primary">Transmettre</button>
+                        <button type="button" class="btn btn-danger ms-2" data-bs-dismiss="modal">Fermer</button>
                     </div>
                 </form>
             </div>

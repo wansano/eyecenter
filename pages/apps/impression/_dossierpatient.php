@@ -1,9 +1,9 @@
 <?php
-require_once('../PDF/fpdf.php');
-require_once('../PDF/font/CenturyGothic.php');
-require_once('../PDF/html_table13.php');
-require_once('../PUBLIC/connect.php');
-require_once('../PUBLIC/fonction.php');
+require_once(__DIR__ . '/../PDF/fpdf.php');
+require_once(__DIR__ . '/../PDF/font/CenturyGothic.php');
+require_once(__DIR__ . '/../PDF/html_table13.php');
+require_once(__DIR__ . '/../PUBLIC/connect.php');
+require_once(__DIR__ . '/../PUBLIC/fonction.php');
 
 class DossierPatientPDF extends PDF {
     private $data;

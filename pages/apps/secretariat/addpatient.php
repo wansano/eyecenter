@@ -3,6 +3,8 @@ include('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 session_start();
 
+$isModal = isset($_GET['modal']) && (string)$_GET['modal'] === '1';
+
 // Ajout quartier (AJAX) : renvoie JSON et stoppe l'exécution pour ne pas afficher toute la page.
 if (isset($_POST['ajax_add_quartier'])) {
     header('Content-Type: application/json; charset=UTF-8');
@@ -180,6 +182,372 @@ if (isset($_POST['ajouter'])) {
         }
     }
 }
+
+// Mode modal: renvoyer uniquement le bloc formulaire + messages (sans layout, sans modals imbriqués)
+if ($isModal) {
+    $apSuccess = ($errors == 2 && !empty($id_patient));
+    ?>
+    <div class="col-md-12">
+        <section class="card">
+            <div class="card-body">
+                <?php if ($errors == 2 && $id_patient): ?>
+                    <div class="alert alert-success" id="apSuccessBox" data-new-patient-id="<?= (int)$id_patient ?>">
+                        <strong>Succès</strong><br/>
+                        <li>Enregistrement du patient effectué avec succès. Le dossier est ouvert sous le numéro <strong>PAT-<?= (int)$id_patient ?></strong>.</li>
+                    </div>
+                <?php elseif ($errors == 3): ?>
+                    <div class="alert alert-danger">
+                        <li>Enregistrement non effectué, merci de vérifier les informations saisies.</li>
+                    </div>
+                <?php elseif ($existe == 1): ?>
+                    <div class="alert alert-warning">
+                        <li>Ce patient est déjà enregistré dans le système et possède le numéro dossier N° <strong>PAT-<?= htmlspecialchars($patientid ?? '') ?></strong>.</li>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($error_messages)): ?>
+                    <div class="alert alert-danger">
+                        <strong>Erreurs :</strong><br/>
+                        <?php foreach($error_messages as $message): ?>
+                            <li><?php echo htmlspecialchars($message); ?></li>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <form class="form-horizontal" id="apAddPatientForm" novalidate="novalidate" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?ap=default&amp;modal=1&amp;embed=1" enctype="multipart/form-data">
+                    <input type="hidden" name="ajouter" value="1">
+                    <div class="row form-group pb-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Prénoms & Nom</label>
+                                <input type="text" name="nom_patient" class="form-control" placeholder="" value="<?php echo isset($_POST['nom_patient']) ? htmlspecialchars($_POST['nom_patient']) : ''; ?>" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Genre</label>
+                                <select class="form-control populate" name="sexe" required="">
+                                    <option value="Masculin" <?php echo (isset($_POST['sexe']) && $_POST['sexe'] == 'Masculin') ? 'selected' : ''; ?>>Masculin</option>
+                                    <option value="Feminin" <?php echo (isset($_POST['sexe']) && $_POST['sexe'] == 'Feminin') ? 'selected' : ''; ?>>Feminin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Date de naissance</label>
+                                <input type="date" class="form-control" name="age" id="formGroupExampleInput" value="<?php echo isset($_POST['age']) ? htmlspecialchars($_POST['age']) : ''; ?>" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Profession</label>
+                                <input type="text" class="form-control" name="profession" id="formGroupExampleInput" value="<?php echo isset($_POST['profession']) ? htmlspecialchars($_POST['profession']) : ''; ?>" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Contact</label>
+                                <input type="number" class="form-control" maxlength="" name="phone" id="formGroupExampleInput" value="<?php echo isset($_POST['phone']) ? htmlspecialchars($_POST['phone']) : ''; ?>" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Ville de residence</label>
+                                <select class="form-control populate" id="villeSelect" onchange="updateQuartier()" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                    <option value="">--- Choisir la ville ---</option>';
+                                        <?php
+                                        $coll = $bdd->prepare('SELECT id_ville, nom FROM adresses_villes');
+                                        $coll -> execute();
+                                        while ($ville = $coll->fetch(PDO::FETCH_ASSOC))
+                                        {
+                                            echo '<option value="'.$ville['id_ville'].'">'.$ville['nom'].'</option>';
+                                        }
+                                        ?>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Quartier</label>
+                                <select name="adresse" class="form-control populate" id="quartierSelect" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                    <option value="">-- vous devez choisir une ville --</option>
+                                </select>
+                                <input type="hidden" id="hiddenquartierId" name="quartier_id" value="">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-form-label" for="formGroupExampleInput">Autre personne à contacter</label>
+                                <input type="text" class="form-control" name="responsable" id="formGroupExampleInput" value="<?php echo isset($_POST['responsable']) ? htmlspecialchars($_POST['responsable']) : ''; ?>" placeholder="">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row form-group pb-3">
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <input type="radio" name="estAssure" value="0" onclick="toggleAssuranceField()" <?php echo (!isset($_POST['estAssure']) || $_POST['estAssure'] == '0') ? 'checked' : ''; ?>> non assuré
+                            </div>
+                        </div>
+                        <div class="col-md-10">
+                            <div class="form-group">
+                                <input type="radio" name="estAssure" value="1" onclick="toggleAssuranceField()" <?php echo (isset($_POST['estAssure']) && $_POST['estAssure'] == '1') ? 'checked' : ''; ?>> assuré
+                            </div>
+                        </div>
+                    </div>
+                    <div id="assuranceField" style="display: <?php echo (isset($_POST['estAssure']) && (string)$_POST['estAssure'] === '1') ? 'block' : 'none'; ?>;">
+                        <div class="row form-group pb-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="col-form-label" for="formGroupExampleInput">Assureur</label>
+                                    <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssurance" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' >
+                                        <option value="">-------- Choisir l'assureur --------</option>
+                                        <?php
+                                        $client = $bdd->prepare('SELECT * FROM assurances WHERE status= ?');
+                                        $client -> execute([1]);
+                                        while ($clients = $client->fetch(PDO::FETCH_ASSOC))
+                                        {
+                                            $selected = (isset($_POST['entrepriseAssurance']) && $_POST['entrepriseAssurance'] == $clients['id_assurance']) ? 'selected' : '';
+                                            echo '<option value="'.$clients['id_assurance'].'" '.$selected.'>'.$clients['assurance'].'</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label class="col-form-label" for="formGroupExampleInput">N° Carte d'adhesion</label>
+                                    <input type="text" class="form-control" name="carteAdhesion" id="formGroupExampleInput" value="<?php echo isset($_POST['carteAdhesion']) ? htmlspecialchars($_POST['carteAdhesion']) : ''; ?>" placeholder="">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label class="col-form-label" for="formGroupExampleInput">Taux de prise en charge %</label>
+                                    <input type="number" class="form-control" name="tauxPrisecharge" step="0.01" min="0" max="100" id="formGroupExampleInput" value="<?php echo isset($_POST['tauxPrisecharge']) ? htmlspecialchars($_POST['tauxPrisecharge']) : ''; ?>" placeholder="">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label class="col-form-label" for="formGroupExampleInput">Date expiration carte</label>
+                                    <input type="date" class="form-control" name="dateExpiration" id="formGroupExampleInput" value="<?php echo isset($_POST['dateExpiration']) ? htmlspecialchars($_POST['dateExpiration']) : ''; ?>" placeholder="">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="card-footer text-end">
+                        <button class="btn btn-primary" type="submit" name="ajouter" id="apBtnAjouter" style="<?php echo $apSuccess ? 'display:none;' : ''; ?>">Ajouter</button>
+
+                        <button class="btn btn-warning" type="button" id="apBtnTransmit" data-patient-id="<?= (int)($id_patient ?? 0) ?>" style="<?php echo $apSuccess ? '' : 'display:none;'; ?>">
+                            Transmettre
+                        </button>
+                    </footer>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        function toggleAssuranceField() {
+            var assuranceField = document.getElementById("assuranceField");
+            var r = document.querySelector('input[name="estAssure"]:checked');
+            var estAssure = r ? r.value : '0';
+            if (assuranceField) assuranceField.style.display = estAssure === "1" ? "block" : "none";
+        }
+
+        function apResetFormUi() {
+            var form = document.getElementById('apAddPatientForm');
+            if (!form) return;
+
+            // Attention: après un POST succès, les attributs value="..." contiennent encore les valeurs saisies.
+            // Un simple form.reset() remet donc les mêmes valeurs. Ici on vide explicitement.
+            try {
+                // Inputs texte/num/date
+                Array.prototype.forEach.call(form.querySelectorAll('input'), function (input) {
+                    if (!input || !input.name) return;
+                    var type = String(input.type || '').toLowerCase();
+                    if (type === 'hidden' || type === 'submit' || type === 'button') return;
+                    if (type === 'radio' || type === 'checkbox') return;
+                    input.value = '';
+                });
+            } catch (e) {}
+
+            // Selects: remettre sur option vide si possible, sinon 1ère option
+            try {
+                Array.prototype.forEach.call(form.querySelectorAll('select'), function (sel) {
+                    if (!sel) return;
+                    var emptyOpt = sel.querySelector('option[value=""]');
+                    if (emptyOpt) {
+                        sel.value = '';
+                    } else if (sel.options && sel.options.length) {
+                        sel.selectedIndex = 0;
+                    }
+                });
+            } catch (e) {}
+
+            // Radios (assurance): repasser sur "non assuré" par défaut
+            try {
+                var r0 = form.querySelector('input[name="estAssure"][value="0"]');
+                if (r0) r0.checked = true;
+            } catch (e) {}
+
+            // Réinitialiser selects + select2
+            try {
+                if (typeof window.jQuery !== 'undefined') {
+                    var $ = window.jQuery;
+                    $(form).find('[data-plugin-selectTwo]').each(function () {
+                        try {
+                            // Select2 accepte souvent null; on force aussi le change
+                            $(this).val(null).trigger('change');
+                        } catch (e) {}
+                    });
+                }
+            } catch (e) {}
+
+            // Réinitialiser quartier (dépend de ville)
+            try {
+                var ville = document.getElementById('villeSelect');
+                if (ville) ville.value = '';
+                if (typeof window.updateQuartier === 'function') window.updateQuartier();
+            } catch (e) {}
+
+            // Masquer le bloc assurance
+            try { toggleAssuranceField(); } catch (e) {}
+
+            // Masquer message succès et remettre le bouton Ajouter
+            var successBox = document.getElementById('apSuccessBox');
+            if (successBox) successBox.style.display = 'none';
+            var btnAdd = document.getElementById('apBtnAjouter');
+            if (btnAdd) btnAdd.style.display = '';
+            var btnTransmit = document.getElementById('apBtnTransmit');
+            if (btnTransmit) btnTransmit.style.display = 'none';
+        }
+
+        function apOpenPrint(url, title) {
+            try {
+                if (typeof window.gpOpenPrintModal === 'function') {
+                    window.gpOpenPrintModal(url, title || 'Impression');
+                    return true;
+                }
+            } catch (e) {}
+
+            try {
+                var w = window.open(url, '_blank');
+                return !!w;
+            } catch (e2) {
+                return false;
+            }
+        }
+
+        (function () {
+            var btnTransmit = document.getElementById('apBtnTransmit');
+            var successBox = document.getElementById('apSuccessBox');
+
+            function getPid(btn) {
+                var pid = btn ? String(btn.getAttribute('data-patient-id') || '').trim() : '';
+                var n = parseInt(pid, 10);
+                return isFinite(n) && n > 0 ? n : 0;
+            }
+
+            // Après succès: ouvrir automatiquement le modal d'impression du dossier.
+            // IMPORTANT: on n'appelle pas print() ici; l'utilisateur clique sur le bouton "Imprimer" du modal.
+            try {
+                var pidSuccess = 0;
+                if (successBox) {
+                    pidSuccess = parseInt(String(successBox.getAttribute('data-new-patient-id') || ''), 10);
+                }
+                if (isFinite(pidSuccess) && pidSuccess > 0) {
+                    window.__apAutoPrintDone = window.__apAutoPrintDone || {};
+                    if (!window.__apAutoPrintDone[String(pidSuccess)]) {
+                        window.__apAutoPrintDone[String(pidSuccess)] = true;
+                        setTimeout(function () {
+                            apOpenPrint('imprimer_dossier.php?id_patient=' + encodeURIComponent(String(pidSuccess)) + '&autoprint=0', 'Impression dossier');
+                        }, 50);
+                    }
+                }
+            } catch (e) {}
+
+            if (btnTransmit) {
+                btnTransmit.addEventListener('click', function () {
+                    var pid = getPid(btnTransmit);
+                    if (!pid) return;
+
+                    // Vider le formulaire uniquement au moment de transmettre (anti-doublon)
+                    try { apResetFormUi(); } catch (e0) {}
+
+                    // Basculer le contenu du modal vers l'affectation et charger automatiquement le patient
+                    try {
+                        if (typeof window.openGestionPatientsModal === 'function') {
+                            window.openGestionPatientsModal('affectation');
+                        }
+                    } catch (e) {}
+
+                    setTimeout(function () {
+                        try {
+                            var input = document.getElementById('gpAffectPatientId');
+                            if (input) input.value = String(pid);
+                            if (typeof window.gpLoadAffectation === 'function') {
+                                window.gpLoadAffectation();
+                            } else {
+                                var btn = document.getElementById('gpBtnLoadAffect');
+                                if (btn) btn.click();
+                            }
+                        } catch (e2) {
+                            // noop
+                        }
+                    }, 50);
+                });
+            }
+        })();
+
+        window.updateQuartier = window.updateQuartier || function () {
+            const villeId = document.getElementById('villeSelect') ? document.getElementById('villeSelect').value : '';
+            const quartierSelect = document.getElementById('quartierSelect');
+            const hiddenId = document.getElementById('hiddenquartierId');
+            if (!quartierSelect) return;
+
+            if (!villeId) {
+                quartierSelect.innerHTML = '<option value="">-- vous devez choisir une ville --</option>';
+                if (hiddenId) hiddenId.value = '';
+                return;
+            }
+
+            quartierSelect.innerHTML = '<option value="">Chargement...</option>';
+            fetch(`../public/getQuartiers.php?ville=${encodeURIComponent(villeId)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || !data.success || !Array.isArray(data.quartier)) {
+                        quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                        return;
+                    }
+                    quartierSelect.innerHTML = '<option value="">-- Choisir le quartier --</option>';
+                    for (const q of data.quartier) {
+                        const opt = document.createElement('option');
+                        opt.value = q.id;
+                        opt.textContent = q.nom;
+                        quartierSelect.appendChild(opt);
+                    }
+                    if (hiddenId) hiddenId.value = quartierSelect.value || '';
+                })
+                .catch(() => {
+                    quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                });
+        };
+
+        (function initAddPatientModal() {
+            try { toggleAssuranceField(); } catch (e) {}
+            var quartierSelect = document.getElementById('quartierSelect');
+            var hiddenId = document.getElementById('hiddenquartierId');
+            if (quartierSelect && hiddenId) {
+                quartierSelect.addEventListener('change', function () {
+                    hiddenId.value = quartierSelect.value || '';
+                });
+            }
+        })();
+    </script>
+    <?php
+    exit;
+}
+
 require('../PUBLIC/header.php');
 ?>
 <body>

@@ -5,6 +5,23 @@
 session_start();
 session_regenerate_id(true);
 
+function is_ajax_request(): bool {
+    if (isset($_GET['ajax']) && (string)$_GET['ajax'] === '1') {
+        return true;
+    }
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        return true;
+    }
+    return false;
+}
+
+function json_response(array $payload, int $statusCode = 200): void {
+    http_response_code($statusCode);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload);
+    exit;
+}
+
 // Initialisation des variables
 $errors = [];
 $max_attempts = 3;
@@ -74,7 +91,14 @@ if (isset($_POST['goverif'])) {
                         $_SESSION['user_type'] = $user['type'];
                         $_SESSION['last_activity'] = time();
 
-                        // Redirection
+                        // Redirection / suite du flux
+                        if (is_ajax_request()) {
+                            json_response([
+                                'success' => true,
+                                'nextUrl' => 'verifusercompte.php?profil=verification&modal=1',
+                            ]);
+                        }
+
                         header('Location: verifusercompte.php?profil=verification');
                         exit;
                     }
@@ -91,6 +115,58 @@ if (isset($_POST['goverif'])) {
             }
         }
     }
+}
+
+// Réponse AJAX en cas d'erreurs
+if (is_ajax_request() && isset($_POST['goverif'])) {
+    json_response([
+        'success' => false,
+        'errors' => $errors,
+    ], 400);
+}
+
+// Rendu partiel pour affichage en modal (chargé via AJAX)
+if (isset($_GET['modal']) && (string)$_GET['modal'] === '1') {
+    ?>
+    <div class="panel card-sign mb-0">
+        <div class="card-body">
+            <h4 class="mb-3"></h4>
+            <form action="login.php" method="post" data-auth-form="login" data-ajax-action="login.php?ajax=1">
+                <input type="hidden" name="goverif" value="1" />
+                <div data-auth-errors></div>
+                <div class="form-group mb-3">
+                    <label>Courriel</label>
+                    <div class="input-group">
+                        <input name="username" type="email" class="form-control" required
+                            pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" autocomplete="username" />
+                        <span class="input-group-text">
+                            <i class="bx bx-user text-4"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="clearfix">
+                        <label class="float-start">Mot de passe</label>
+                    </div>
+                    <div class="input-group">
+                        <input name="pwd" type="password" class="form-control" autocomplete="current-password" />
+                        <button type="button" class="input-group-text" data-toggle-password aria-label="Afficher le mot de passe" aria-pressed="false">
+                            <i class="bx bx-show text-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-sm-12 text-end">
+                        <button type="submit" class="btn btn-primary mt-2">connexion</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php
+    exit;
 }
 
 ?>

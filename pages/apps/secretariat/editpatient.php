@@ -3,6 +3,8 @@ session_start();
 require_once('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
 
+$isModal = isset($_GET['modal']) && (string)$_GET['modal'] === '1';
+
 if (!function_exists('appec_isCardValid')) {
     function appec_isCardValid($dateStr): bool
     {
@@ -316,8 +318,13 @@ $patientData = null;
 if (isset($_POST['recherche']) && !empty($_POST['recherche'])) {
     $searchResult = $patientManager->searchPatient($_POST['recherche']);
     if ($searchResult) {
-        header('Location: editpatient.php?ep=default&id_patient=' . $_POST['recherche']);
-        exit;
+        if ($isModal) {
+            $_GET['id_patient'] = $_POST['recherche'];
+            $patientData = $searchResult;
+        } else {
+            header('Location: editpatient.php?ep=default&id_patient=' . $_POST['recherche']);
+            exit;
+        }
     }
 }
 
@@ -331,6 +338,306 @@ if (isset($_POST['modif_in'])) {
 // Récupération des données du patient pour l'affichage
 if (isset($_GET['id_patient'])) {
     $patientData = $patientManager->searchPatient($_GET['id_patient']);
+}
+
+if ($isModal) {
+    ?>
+    <div class="col-md-12">
+        <section class="card">
+            <div class="card-body">
+                <?php
+                if ($patientManager->hasSuccess()) {
+                    echo '<div class="alert alert-success"><strong>Succès</strong><br/>Information du patient mise à jour</div>';
+                }
+                if (!empty($patientManager->getErrors())) {
+                    echo '<div class="alert alert-danger"><ul>';
+                    foreach ($patientManager->getErrors() as $error) {
+                        echo '<li>' . htmlspecialchars($error) . '</li>';
+                    }
+                    echo '</ul></div>';
+                }
+
+                if (!isset($_GET['id_patient'])) {
+                    ?>
+                    <form class="form-horizontal" method="POST" action="editpatient.php?modal=1&amp;embed=1" id="patientSearchForm">
+                        <div class="row form-group pb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="col-form-label">Saisir le numéro de dossier</label>
+                                    <input type="text" class="form-control" name="recherche" id="patientSearchInput" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer text-end">
+                            <button class="btn btn-primary" type="submit" id="patientSearchBtn">Rechercher</button>
+                        </div>
+                    </form>
+                    <?php
+                }
+
+                if ($patientData) {
+                    $assureCurrent = 0;
+                    $assuranceCurrent = 0;
+                    $carteCurrent = '';
+                    $dateExpCurrent = '';
+                    $tauxCurrent = '';
+                    if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assure')) {
+                        $assureCurrent = (int)($patientData['assure'] ?? 0);
+                    }
+                    if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assurance')) {
+                        $assuranceCurrent = (int)($patientData['assurance'] ?? 0);
+                    }
+                    if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'carteAdhesion')) {
+                        $carteCurrent = (string)($patientData['carteAdhesion'] ?? '');
+                    }
+                    if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'dateExpiration')) {
+                        $dateExpCurrent = (string)($patientData['dateExpiration'] ?? '');
+                    }
+                    $tauxKeyCurrent = appec_pickRowKey($patientData, ['TauxPrisecharge', 'tauxPrisecharge', 'tauxPriseCharge', 'taux_prisecharge', 'taux_priseCharge', 'taux_prise_en_charge', 'tauxPriseEnCharge']);
+                    if ($tauxKeyCurrent) {
+                        $tauxCurrent = (string)($patientData[$tauxKeyCurrent] ?? '');
+                        $tauxCurrent = trim(rtrim($tauxCurrent, "% \t\n\r\0\x0B"));
+                        $tauxCurrent = str_replace(',', '.', $tauxCurrent);
+                    }
+
+                    $quartierIdActuel = 0;
+                    $villeIdActuelle = 0;
+                    if (isset($patientData['adresse']) && $patientData['adresse'] !== '' && ctype_digit((string)$patientData['adresse'])) {
+                        $quartierIdActuel = (int)$patientData['adresse'];
+                        if ($quartierIdActuel > 0) {
+                            $st = $bdd->prepare('SELECT id_ville FROM adresses_quartiers WHERE id_quartier = ? LIMIT 1');
+                            $st->execute([$quartierIdActuel]);
+                            $villeIdActuelle = (int)($st->fetchColumn() ?: 0);
+                        }
+                    }
+                    ?>
+                    <form class="form-horizontal" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?ep=default&amp;id_patient=<?php echo htmlspecialchars($_GET['id_patient']); ?>&amp;modal=1&amp;embed=1">
+                        <input type="hidden" name="modif_in" value="<?php echo htmlspecialchars($_GET['id_patient']); ?>">
+
+                        <div class="row form-group pb-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="col-form-label">Prénoms & Nom</label>
+                                    <input type="text" name="nom_patient" class="form-control" value="<?php echo htmlspecialchars($patientData['nom_patient']); ?>" required>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label class="col-form-label">Genre</label>
+                                    <select class="form-control" name="sexe" required>
+                                        <option value="Homme" <?php echo $patientData['sexe'] === 'Homme' ? 'selected' : ''; ?>>Homme</option>
+                                        <option value="Femme" <?php echo $patientData['sexe'] === 'Femme' ? 'selected' : ''; ?>>Femme</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label class="col-form-label">Date de naissance</label>
+                                    <input type="date" class="form-control" name="age" value="<?php echo htmlspecialchars($patientData['age']); ?>" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="col-form-label">Profession</label>
+                                    <input type="text" class="form-control" name="profession" value="<?php echo htmlspecialchars($patientData['profession']); ?>">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row form-group pb-3">
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <input type="radio" name="estAssure" value="0" onclick="toggleAssuranceFieldEdit()" <?php echo ($assureCurrent === 1) ? '' : 'checked'; ?>> non assuré
+                                </div>
+                            </div>
+                            <div class="col-md-10">
+                                <div class="form-group">
+                                    <input type="radio" name="estAssure" value="1" onclick="toggleAssuranceFieldEdit()" <?php echo ($assureCurrent === 1) ? 'checked' : ''; ?>> assuré
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="assuranceFieldEdit" style="display: <?php echo ($assureCurrent === 1) ? 'block' : 'none'; ?>;">
+                            <div class="row form-group pb-3">
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label class="col-form-label">Assureur</label>
+                                        <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssuranceEdit" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }'>
+                                            <option value="">-------- Choisir l'assureur --------</option>
+                                            <?php
+                                            $assuranceIdCol = null;
+                                            if (function_exists('dbTableHasColumn')) {
+                                                if (dbTableHasColumn($bdd, 'assurances', 'id_assurance')) {
+                                                    $assuranceIdCol = 'id_assurance';
+                                                } elseif (dbTableHasColumn($bdd, 'assurances', 'd_assurance')) {
+                                                    $assuranceIdCol = 'd_assurance';
+                                                } elseif (dbTableHasColumn($bdd, 'assurances', 'id')) {
+                                                    $assuranceIdCol = 'id';
+                                                }
+                                            }
+                                            $stAssList = $bdd->prepare('SELECT * FROM assurances WHERE status = ?');
+                                            $stAssList->execute([1]);
+                                            while ($assRow = $stAssList->fetch(PDO::FETCH_ASSOC)) {
+                                                $optId = $assuranceIdCol ? (int)($assRow[$assuranceIdCol] ?? 0) : (int)($assRow['id_assurance'] ?? 0);
+                                                $optLabel = (string)($assRow['assurance'] ?? '');
+                                                $selected = ($optId > 0 && $optId === (int)$assuranceCurrent) ? ' selected' : '';
+                                                echo '<option value="' . (int)$optId . '"' . $selected . '>' . htmlspecialchars($optLabel) . '</option>';
+                                            }
+                                            ?>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label class="col-form-label">N° Carte d'adhesion</label>
+                                        <input type="text" class="form-control" name="carteAdhesion" value="<?php echo htmlspecialchars($carteCurrent); ?>" placeholder="">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label class="col-form-label">Taux de prise en charge %</label>
+                                        <input type="number" class="form-control" name="tauxPrisecharge" step="0.01" min="0" max="100" value="<?php echo htmlspecialchars($tauxCurrent); ?>" placeholder="">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label class="col-form-label">Date expiration carte</label>
+                                        <input type="date" class="form-control" name="dateExpiration" value="<?php echo htmlspecialchars($dateExpCurrent); ?>" placeholder="">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row form-group pb-3">
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label class="col-form-label" for="formGroupExampleInput">Ville de residence</label>
+                                    <select class="form-control populate" id="villeSelect" onchange="updateQuartier()" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                        <option value="">--- Choisir la ville ---</option>
+                                        <?php
+                                        $coll = $bdd->prepare('SELECT id_ville, nom FROM adresses_villes');
+                                        $coll -> execute();
+                                        while ($ville = $coll->fetch(PDO::FETCH_ASSOC))
+                                        {
+                                            $selectedVille = ($villeIdActuelle > 0 && (int)$ville['id_ville'] === $villeIdActuelle) ? ' selected' : '';
+                                            echo '<option value="'.(int)$ville['id_ville'].'"'.$selectedVille.'>'.htmlspecialchars($ville['nom']).'</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label class="col-form-label" for="formGroupExampleInput">Quartier</label>
+                                    <select name="adresse" class="form-control populate" id="quartierSelect" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                        <?php
+                                        if ($villeIdActuelle > 0) {
+                                            echo '<option value="">--- Choisir le quartier ---</option>';
+                                            $stQ = $bdd->prepare('SELECT id_quartier, quartier FROM adresses_quartiers WHERE id_ville = ? ORDER BY quartier ASC');
+                                            $stQ->execute([$villeIdActuelle]);
+                                            while ($q = $stQ->fetch(PDO::FETCH_ASSOC)) {
+                                                $selectedQ = ($quartierIdActuel > 0 && (int)$q['id_quartier'] === $quartierIdActuel) ? ' selected' : '';
+                                                echo '<option value="'.(int)$q['id_quartier'].'"'.$selectedQ.'>'.htmlspecialchars($q['quartier']).'</option>';
+                                            }
+                                        } else {
+                                            $quartierValue = '';
+                                            if ($patientData && isset($patientData['adresse'])) {
+                                                $quartierNom = quartier($patientData['adresse']);
+                                                if (is_array($quartierNom)) {
+                                                    $quartierValue = (string)$patientData['adresse'];
+                                                } elseif ($quartierNom) {
+                                                    $quartierValue = (string)$quartierNom;
+                                                } else {
+                                                    $quartierValue = (string)$patientData['adresse'];
+                                                }
+                                            }
+                                            echo '<option value="">'.htmlspecialchars($quartierValue).'</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                    <input type="hidden" id="hiddenquartierId" name="quartier_id" value="">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label class="col-form-label">Contact</label>
+                                    <input type="tel" class="form-control" name="phone" maxlength="9" value="<?php echo htmlspecialchars($patientData['phone']); ?>">
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label class="col-form-label">Responsable</label>
+                                    <input type="text" class="form-control" name="responsable" value="<?php echo htmlspecialchars($patientData['responsable']); ?>">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer text-end">
+                            <button class="btn btn-primary" type="submit">Mettre à jour</button>
+                        </div>
+                    </form>
+                    <?php
+                }
+                ?>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        function toggleAssuranceFieldEdit() {
+            var wrap = document.getElementById('assuranceFieldEdit');
+            var estAssureRadio = document.querySelector('input[name="estAssure"]:checked');
+            var estAssure = estAssureRadio ? estAssureRadio.value : '0';
+            if (wrap) wrap.style.display = estAssure === '1' ? 'block' : 'none';
+        }
+
+        window.updateQuartier = window.updateQuartier || function () {
+            const villeId = document.getElementById('villeSelect') ? document.getElementById('villeSelect').value : '';
+            const quartierSelect = document.getElementById('quartierSelect');
+            const hiddenId = document.getElementById('hiddenquartierId');
+            if (!quartierSelect) return;
+
+            if (!villeId) {
+                quartierSelect.innerHTML = '<option value="">-- vous devez choisir une ville --</option>';
+                if (hiddenId) hiddenId.value = '';
+                return;
+            }
+
+            quartierSelect.innerHTML = '<option value="">Chargement...</option>';
+            fetch(`../public/getQuartiers.php?ville=${encodeURIComponent(villeId)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || !data.success || !Array.isArray(data.quartier)) {
+                        quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                        return;
+                    }
+                    quartierSelect.innerHTML = '<option value="">-- Choisir le quartier --</option>';
+                    for (const q of data.quartier) {
+                        const opt = document.createElement('option');
+                        opt.value = q.id;
+                        opt.textContent = q.nom;
+                        quartierSelect.appendChild(opt);
+                    }
+                    if (hiddenId) hiddenId.value = quartierSelect.value || '';
+                })
+                .catch(() => {
+                    quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                });
+        };
+
+        (function initEditPatientModal() {
+            try { toggleAssuranceFieldEdit(); } catch (e) {}
+            var quartierSelect = document.getElementById('quartierSelect');
+            var hiddenId = document.getElementById('hiddenquartierId');
+            if (quartierSelect && hiddenId) {
+                quartierSelect.addEventListener('change', function () {
+                    hiddenId.value = quartierSelect.value || '';
+                });
+            }
+        })();
+    </script>
+    <?php
+    exit;
 }
 
 include('../PUBLIC/header.php');

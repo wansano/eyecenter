@@ -1,8 +1,63 @@
 <?php
 session_start();
 
+function is_ajax_request(): bool {
+    if (isset($_GET['ajax']) && (string)$_GET['ajax'] === '1') {
+        return true;
+    }
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        return true;
+    }
+    return false;
+}
+
+function json_response(array $payload, int $statusCode = 200): void {
+    http_response_code($statusCode);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload);
+    exit;
+}
+
+function build_redirect_url(string $redirection, string $jour): string {
+    switch ($redirection) {
+        case 'boutique':
+            return 'apps/boutique/homeboutique.php?day=' . rawurlencode($jour);
+        case 'logistique':
+            return 'apps/logistique/homelogistique.php?day=' . rawurlencode($jour);
+        case 'secretariat':
+            return 'apps/secretariat/homesecretariat.php?day=' . rawurlencode($jour);
+        case 'caisse':
+            return 'apps/caisse/homecaisse.php?day=' . rawurlencode($jour);
+        case 'ophtalmologue':
+            return 'apps/ophtalmologie/homeophtalmologie.php?day=' . rawurlencode($jour);
+        case 'comptabilite':
+            return 'apps/comptabilite/homecomptabilite.php?day=' . rawurlencode($jour);
+        case 'technologie':
+            return 'apps/technologie/hometechnologie.php?day=' . rawurlencode($jour);
+        case 'infirmier':
+            return 'apps/infirmerie/homeinfirmier.php?day=' . rawurlencode($jour);
+        case 'optometriste':
+            return 'apps/optometrie/homeoptometriste.php?day=' . rawurlencode($jour);
+        case 'medecin':
+            return 'apps/medecinchef/homemedecin.php?day=' . rawurlencode($jour);
+        case 'tresorerie':
+            return 'apps/tresorerie/hometresorerie.php?day=' . rawurlencode($jour);
+        case 'hr':
+            return 'apps/RH/homeHR.php?day=' . rawurlencode($jour);
+        default:
+            return 'index.php';
+    }
+}
+
 // Vérification de la session existante
 if (!isset($_SESSION['auth']) || empty($_SESSION['auth'])) {
+    if (is_ajax_request()) {
+        json_response([
+            'success' => false,
+            'errors' => ['Session expirée. Veuillez vous reconnecter.'],
+            'redirectUrl' => 'login.php',
+        ], 401);
+    }
     header('Location: login.php');
     exit;
 }
@@ -10,7 +65,7 @@ if (!isset($_SESSION['auth']) || empty($_SESSION['auth'])) {
 include('apps/PUBLIC/connect.php');
 
 // Configuration
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 4;
 const LOCKOUT_TIME = 300; // 5 minutes
 const SESSION_TIMEOUT = 600; // 10 minutes
 
@@ -67,8 +122,8 @@ if (isset($_POST['goin'])) {
                     $stmt2->execute([$user['id']]);
                     $user_plage = $stmt2->fetch(PDO::FETCH_ASSOC);
                     $redirection = '';
+                    $jour = strtolower(date('l', time()));
                     if ($user_plage && !empty($user_plage['plage_connexion'])) {
-                        $jour = strtolower(date('l', time()));
                         $jours_fr = [
                             'monday' => 'lundi',
                             'tuesday' => 'mardi',
@@ -88,41 +143,16 @@ if (isset($_POST['goin'])) {
                             }
                         }
                     }
-                    // Redirection stricte selon la valeur du jour dans plage_connexion
-                    switch ($redirection) {
-                        case 'boutique':
-                            header('Location: apps/boutique/homeboutique.php?day='.$jour);
-                            break;
-                        case 'logistique':
-                            header('Location: apps/logistique/homelogistique.php?day='.$jour);
-                            break;
-                        case 'secretariat':
-                            header('Location: apps/secretariat/homesecretariat.php?day='.$jour);
-                            break;
-                        case 'caisse':
-                            header('Location: apps/caisse/homecaisse.php?day='.$jour);
-                            break;
-                        case 'ophtalmologue':
-                            header('Location: apps/ophtalmologie/homeophtalmologie.php?day='.$jour);
-                            break;
-                        case 'comptabilite':
-                            header('Location: apps/comptabilite/homecomptabilite.php?day='.$jour);
-                            break;
-                        case 'technologie':
-                            header('Location: apps/technologie/hometechnologie.php?day='.$jour);
-                            break;
-                        case 'infirmier':
-                            header('Location: apps/infirmerie/homeinfirmier.php?day='.$jour);
-                            break;
-                        case 'optometriste':
-                            header('Location: apps/optometrie/homeoptometriste.php?day='.$jour);
-                            break;
-                        case 'medecin':
-                            header('Location: apps/medecinchef/homemedecin.php?day='.$jour);
-                            break;
-                        default:
-                            header('Location: index.php');
+
+                    $redirectUrl = build_redirect_url($redirection, $jour);
+                    if (is_ajax_request()) {
+                        json_response([
+                            'success' => true,
+                            'redirectUrl' => $redirectUrl,
+                        ]);
                     }
+
+                    header('Location: ' . $redirectUrl);
                     exit;
                 } else {
                     $_SESSION['otp_attempts']++;
@@ -135,6 +165,52 @@ if (isset($_POST['goin'])) {
             }
         }
     }
+}
+
+// Réponse AJAX en cas d'erreurs
+if (is_ajax_request() && isset($_POST['goin'])) {
+    json_response([
+        'success' => false,
+        'errors' => $errors,
+    ], 400);
+}
+
+// Rendu partiel pour affichage en modal (chargé via AJAX)
+if (isset($_GET['modal']) && (string)$_GET['modal'] === '1') {
+    ?>
+    <div class="panel card-sign mb-0">
+        <div class="card-body">
+            <h4 class="mb-3"></h4>
+            <form action="verifusercompte.php?profil=verification" method="post" data-auth-form="verify" data-ajax-action="verifusercompte.php?ajax=1&profil=verification">
+                <input type="hidden" name="goin" value="1" />
+                <div data-auth-errors></div>
+                <div class="form-group mb-3">
+                    <div class="clearfix">
+                        <label class="float-start">Code OTP</label>
+                        <?php if (!empty($_SESSION['otp_attempts'])): ?>
+                            <small class="text-danger float-end">
+                                <?php echo MAX_ATTEMPTS - (int)$_SESSION['otp_attempts']; ?> tentatives restantes
+                            </small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="input-group">
+                            <input name="code" type="password" class="form-control" required minlength="6" maxlength="20" autocomplete="one-time-code" />
+                        <button class="input-group-text" type="button" data-toggle-otp aria-label="Afficher le code" aria-pressed="false">
+                            <i class="bx bx-show text-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-sm-12 text-end">
+                        <button type="submit" class="btn btn-primary mt-2">continuer</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php
+    exit;
 }
 ?>
 

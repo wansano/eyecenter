@@ -1,32 +1,99 @@
 <?php
 // Fonctions principales du module Logistique
 // Création et gestion d'inventaire, fournisseurs, commandes d'achat, mouvements de stock et alertes
-session_start();
-require_once('../public/connect.php');
-require_once('../public/fonction.php');
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+require_once(__DIR__ . '/../public/connect.php');
+require_once(__DIR__ . '/../public/fonction.php');
+
+if (!function_exists('logistique_exec_ddl')) {
+    function logistique_exec_ddl(PDO $bdd, string $sql): void {
+        try {
+            $bdd->exec($sql);
+            return;
+        } catch (PDOException $e) {
+            $mysqlCode = (int)($e->errorInfo[1] ?? 0);
+            $message = $e->getMessage();
+
+            // 1142: permission refusée. Si c'est lié à REFERENCES/FOREIGN KEY,
+            // on retente sans contraintes FK afin d'éviter un crash en prod.
+            if ($mysqlCode === 1142 && (stripos($message, 'REFERENCES') !== false || stripos($message, 'FOREIGN KEY') !== false)) {
+                $sqlNoFk = $sql;
+
+                // Retire les clauses FK (CONSTRAINT ... FOREIGN KEY ... REFERENCES ...)
+                $sqlNoFk = preg_replace(
+                    '/,\s*(CONSTRAINT\s+`?[^`\s]+`?\s+)?FOREIGN\s+KEY\s*\([^\)]*\)\s*REFERENCES\s*[^\(]*\([^\)]*\)\s*(ON\s+DELETE\s+\w+\s*)?(ON\s+UPDATE\s+\w+\s*)?/i',
+                    '',
+                    $sqlNoFk
+                );
+                // Variante où la virgule est après la clause FK
+                $sqlNoFk = preg_replace(
+                    '/(CONSTRAINT\s+`?[^`\s]+`?\s+)?FOREIGN\s+KEY\s*\([^\)]*\)\s*REFERENCES\s*[^\(]*\([^\)]*\)\s*(ON\s+DELETE\s+\w+\s*)?(ON\s+UPDATE\s+\w+\s*)?\s*,/i',
+                    '',
+                    $sqlNoFk
+                );
+                // Nettoie une virgule éventuelle avant la parenthèse fermante
+                $sqlNoFk = preg_replace('/,\s*\)\s*ENGINE/i', ') ENGINE', $sqlNoFk);
+
+                try {
+                    $bdd->exec($sqlNoFk);
+                    return;
+                } catch (PDOException $e2) {
+                    error_log('[logistique] DDL fallback sans FK: ' . $e2->getMessage());
+                    return;
+                }
+            }
+
+            error_log('[logistique] DDL: ' . $message);
+        }
+    }
+}
 
 /**
  * Initialise les tables si inexistantes.
  */
 function createTablesLogistique(PDO $bdd) {
+    // Note: certains comptes MySQL applicatifs n'ont pas le privilège REFERENCES.
+    // On crée donc les tables sans contraintes FK (et on ajoute des index).
     $queries = [
-        // Articles
         "CREATE TABLE IF NOT EXISTS log_articles (\n            id_article INT AUTO_INCREMENT PRIMARY KEY,\n            code VARCHAR(30) UNIQUE,\n            nom VARCHAR(150) NOT NULL,\n            categorie VARCHAR(100),\n            description TEXT,\n            unite VARCHAR(30) DEFAULT 'pcs',\n            stock_initial INT DEFAULT 0,\n            stock_actuel INT DEFAULT 0,\n            seuil_alerte INT DEFAULT 0,\n            prix_achat DECIMAL(12,2) DEFAULT 0,\n            prix_vente DECIMAL(12,2) DEFAULT 0,\n            actif TINYINT DEFAULT 1,\n            date_creation DATETIME DEFAULT CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-        // Fournisseurs
         "CREATE TABLE IF NOT EXISTS log_fournisseurs (\n            id_fournisseur INT AUTO_INCREMENT PRIMARY KEY,\n            nom VARCHAR(150) NOT NULL,\n            contact VARCHAR(150),\n            telephone VARCHAR(30),\n            email VARCHAR(120),\n            adresse TEXT,\n            actif TINYINT DEFAULT 1,\n            date_creation DATETIME DEFAULT CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-        // Commandes d'achat
-        "CREATE TABLE IF NOT EXISTS log_commandes_achat (\n            id_commande INT AUTO_INCREMENT PRIMARY KEY,\n            numero VARCHAR(40) UNIQUE,\n            id_fournisseur INT,\n            date_commande DATE,\n            statut ENUM('brouillon','envoyee','reçue','partielle','annulée') DEFAULT 'brouillon',\n            total_estime DECIMAL(14,2) DEFAULT 0,\n            date_reception_prevue DATE NULL,\n            date_reception_effective DATE NULL,\n            FOREIGN KEY (id_fournisseur) REFERENCES log_fournisseurs(id_fournisseur) ON DELETE SET NULL\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-        // Lignes de commande
-        "CREATE TABLE IF NOT EXISTS log_commandes_lignes (\n            id_ligne INT AUTO_INCREMENT PRIMARY KEY,\n            id_commande INT NOT NULL,\n            id_article INT NOT NULL,\n            quantite INT NOT NULL,\n            prix_unitaire DECIMAL(12,2) DEFAULT 0,\n            FOREIGN KEY (id_commande) REFERENCES log_commandes_achat(id_commande) ON DELETE CASCADE,\n            FOREIGN KEY (id_article) REFERENCES log_articles(id_article) ON DELETE RESTRICT\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-        // Mouvements de stock
-        "CREATE TABLE IF NOT EXISTS log_mouvements_stock (\n            id_mouvement INT AUTO_INCREMENT PRIMARY KEY,\n            id_article INT NOT NULL,\n            type ENUM('entrée','sortie','ajustement','reception') NOT NULL,\n            origine VARCHAR(60),\n            reference VARCHAR(60),\n            quantite INT NOT NULL,\n            stock_avant INT NOT NULL,\n            stock_apres INT NOT NULL,\n            date_mouvement DATETIME DEFAULT CURRENT_TIMESTAMP,\n            FOREIGN KEY (id_article) REFERENCES log_articles(id_article) ON DELETE RESTRICT\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-        // Alertes de stock
-        "CREATE TABLE IF NOT EXISTS log_alertes_stock (\n            id_alerte INT AUTO_INCREMENT PRIMARY KEY,\n            id_article INT NOT NULL,\n            type ENUM('seuil','rupture','surstock') NOT NULL,\n            message VARCHAR(255) NOT NULL,\n            date_alerte DATETIME DEFAULT CURRENT_TIMESTAMP,\n            traitee TINYINT DEFAULT 0,\n            FOREIGN KEY (id_article) REFERENCES log_articles(id_article) ON DELETE CASCADE\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+        "CREATE TABLE IF NOT EXISTS log_commandes_achat (\n            id_commande INT AUTO_INCREMENT PRIMARY KEY,\n            numero VARCHAR(40) UNIQUE,\n            id_fournisseur INT,\n            date_commande DATE,\n            statut ENUM('brouillon','envoyee','reçue','partielle','annulée') DEFAULT 'brouillon',\n            total_estime DECIMAL(14,2) DEFAULT 0,\n            date_reception_prevue DATE NULL,\n            date_reception_effective DATE NULL\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        "CREATE TABLE IF NOT EXISTS log_commandes_lignes (\n            id_ligne INT AUTO_INCREMENT PRIMARY KEY,\n            id_commande INT NOT NULL,\n            id_article INT NOT NULL,\n            quantite INT NOT NULL,\n            prix_unitaire DECIMAL(12,2) DEFAULT 0\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        "CREATE TABLE IF NOT EXISTS log_mouvements_stock (\n            id_mouvement INT AUTO_INCREMENT PRIMARY KEY,\n            id_article INT NOT NULL,\n            type ENUM('entrée','sortie','ajustement','reception') NOT NULL,\n            origine VARCHAR(60),\n            reference VARCHAR(60),\n            quantite INT NOT NULL,\n            stock_avant INT NOT NULL,\n            stock_apres INT NOT NULL,\n            date_mouvement DATETIME DEFAULT CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        "CREATE TABLE IF NOT EXISTS log_alertes_stock (\n            id_alerte INT AUTO_INCREMENT PRIMARY KEY,\n            id_article INT NOT NULL,\n            type ENUM('seuil','rupture','surstock') NOT NULL,\n            message VARCHAR(255) NOT NULL,\n            date_alerte DATETIME DEFAULT CURRENT_TIMESTAMP,\n            traitee TINYINT DEFAULT 0\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
     ];
-    foreach ($queries as $sql) { $bdd->exec($sql); }
+
+    foreach ($queries as $sql) {
+        logistique_exec_ddl($bdd, $sql);
+    }
+
+    $indexes = [
+        "CREATE INDEX idx_log_commandes_achat_fournisseur ON log_commandes_achat(id_fournisseur)",
+        "CREATE INDEX idx_log_commandes_lignes_commande ON log_commandes_lignes(id_commande)",
+        "CREATE INDEX idx_log_commandes_lignes_article ON log_commandes_lignes(id_article)",
+        "CREATE INDEX idx_log_mouvements_stock_article ON log_mouvements_stock(id_article)",
+        "CREATE INDEX idx_log_alertes_stock_article ON log_alertes_stock(id_article)",
+    ];
+    foreach ($indexes as $sql) {
+        try {
+            $bdd->exec($sql);
+        } catch (PDOException $e) {
+            // 1061 = Duplicate key name
+            if ((int)($e->errorInfo[1] ?? 0) !== 1061) {
+                error_log('[logistique] createTablesLogistique index: ' . $e->getMessage());
+            }
+        }
+    }
 }
 
-createTablesLogistique($bdd);
+try {
+    createTablesLogistique($bdd);
+} catch (Throwable $e) {
+    error_log('[logistique] init: ' . $e->getMessage());
+}
 
 // --- Utilitaires ---
 function logi_sanitize($value) { return htmlspecialchars(trim((string)$value), ENT_QUOTES, 'UTF-8'); }
