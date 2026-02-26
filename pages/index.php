@@ -121,15 +121,6 @@
 										</video>
 									</div>
 								</div>
-								<!-- <div class="col-md-12 col-lg-12 custom-header-bar py-5 pe-5 appear-animation p-relative z-index-1" data-appear-animation="maskRight" data-appear-animation-delay="1200" data-appear-animation-duration="750">
-								  <div class="appear-animation" data-appear-animation="fadeInRightShorter" data-appear-animation-delay="1500">
-									<div class="star-rating-wrap d-flex align-items-center justify-content-center position-relative text-color-dark text-5 py-2 mb-2">
-										<i class="fas fa-star"></i><i class="fas fa-star ms-1"></i><i class="fas fa-star ms-1"></i><i class="fas fa-star ms-1"></i><i class="fas fa-star ms-1"></i>
-									</div>
-									<h4 class="position-relative text-center text-color-light font-weight-bold text-7 line-height-2 negative-ls-1 mt-0 mb-1">Meilleure Clinique Privée</h4>
-									<p class="position-relative text-color-light text-center font-weight-normal opacity-7 mb-1">Ophtalmologique en Guinée</p>
-								</div> 
-							</div> -->
 							</div>
 						</div>
 					</div>

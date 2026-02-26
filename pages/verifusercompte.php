@@ -55,10 +55,10 @@ if (!isset($_SESSION['auth']) || empty($_SESSION['auth'])) {
         json_response([
             'success' => false,
             'errors' => ['Session expirée. Veuillez vous reconnecter.'],
-            'redirectUrl' => 'login.php',
+            'redirectUrl' => 'index.php',
         ], 401);
     }
-    header('Location: login.php');
+    header('Location: index.php');
     exit;
 }
 
@@ -72,7 +72,7 @@ const SESSION_TIMEOUT = 600; // 10 minutes
 // Vérification du timeout de session
 if (isset($_SESSION['otp_start_time']) && (time() - $_SESSION['otp_start_time'] > SESSION_TIMEOUT)) {
     session_destroy();
-    header('Location: login.php?timeout=1');
+    header('Location: index.php?timeout=1');
     exit;
 }
 
@@ -194,7 +194,7 @@ if (isset($_GET['modal']) && (string)$_GET['modal'] === '1') {
                         <?php endif; ?>
                     </div>
                     <div class="input-group">
-                            <input name="code" type="password" class="form-control" required minlength="6" maxlength="20" autocomplete="one-time-code" />
+                            <input name="code" type="password" class="form-control" required minlength="4" maxlength="20" autocomplete="one-time-code" />
                         <button class="input-group-text" type="button" data-toggle-otp aria-label="Afficher le code" aria-pressed="false">
                             <i class="bx bx-show text-4"></i>
                         </button>
@@ -335,8 +335,8 @@ if (isset($_GET['modal']) && (string)$_GET['modal'] === '1') {
                                         <?php endif; ?>
                                     </div>
                                     <div class="input-group">
-                                        <input id="otp-code" name="code" type="password" class="form-control form-control-lg" 
-                                               required minlength="6" maxlength="20"
+                                             <input id="otp-code" name="code" type="password" class="form-control form-control-lg" 
+                                                 required minlength="4" maxlength="20"
                                                autocomplete="one-time-code" />
                                         <button class="input-group-text" type="button" id="toggle-otp-code" aria-label="Afficher le code" aria-pressed="false">
                                             <i class="bx bx-show text-4"></i>

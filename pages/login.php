@@ -24,7 +24,7 @@ function json_response(array $payload, int $statusCode = 200): void {
 
 // Initialisation des variables
 $errors = [];
-$max_attempts = 3;
+$max_attempts = 4;
 $lockout_time = 300; // 5 minutes
 
 // Nettoyage des anciennes tentatives (plus de 5 minutes)
