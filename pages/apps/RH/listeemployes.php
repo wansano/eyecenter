@@ -2173,57 +2173,55 @@ include('../PUBLIC/header.php');
                         var tbody = document.getElementById('employeDocsTbody');
                         if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Chargement...</td></tr>';
 
+                        // Documents virtuels (Badge + Contrat) : ne doivent pas dépendre de la table d'archive.
+                        var t = Date.now();
+                        var virtualItems = [];
+                        var canBadge = isEmployeCompleteForBadge(lastDetailsDataset);
+                        var canContrat = isEmployeCompleteForContrat(lastDetailsDataset);
+                        if (canBadge) {
+                            var badgeUrl = '../impression/_badge_employe_image.php?id_employe=' + encodeURIComponent(String(docsEmployeId)) + '&t=' + t;
+                            virtualItems.push({
+                                id_document: '__badge__',
+                                document_type: 'badge',
+                                document_label: 'Badge',
+                                original_name: 'badge',
+                                mime_type: 'image/png',
+                                file_size: 0,
+                                created_at: '',
+                                inline_url: badgeUrl,
+                                download_url: badgeUrl
+                            });
+                        }
+                        if (canContrat) {
+                            var contratUrl = '../impression/_contrat_travail.php?id_employe=' + encodeURIComponent(String(docsEmployeId)) + '&t=' + t;
+                            virtualItems.push({
+                                id_document: '__contrat__',
+                                document_type: 'contrat_travail',
+                                document_label: 'Contrat de travail',
+                                original_name: 'contrat_travail',
+                                mime_type: 'application/pdf',
+                                file_size: 0,
+                                created_at: '',
+                                inline_url: contratUrl,
+                                download_url: contratUrl
+                            });
+                        }
+
                         var url = docsBaseUrl + '?ajax=employe_docs&id_employe=' + encodeURIComponent(String(docsEmployeId));
                         fetch(url, { credentials: 'same-origin' })
                             .then(function (r) { return r.json(); })
                             .then(function (data) {
-                                if (!data || data.ok !== true) {
-                                    renderDocsTable([]);
-                                    return;
+                                var archived = [];
+                                if (data && data.ok === true && data.items && data.items.length) {
+                                    archived = data.items;
                                 }
-                                var items = data.items || [];
-
-                                // Ajouter Badge + Contrat dans la liste (uniquement si infos employé complètes)
-                                var canBadge = isEmployeCompleteForBadge(lastDetailsDataset);
-                                var canContrat = isEmployeCompleteForContrat(lastDetailsDataset);
-                                if (canBadge || canContrat) {
-                                    var t = Date.now();
-                                    var virtualItems = [];
-                                    if (canBadge) {
-                                        var badgeUrl = '../impression/_badge_employe_image.php?id_employe=' + encodeURIComponent(String(docsEmployeId)) + '&t=' + t;
-                                        virtualItems.push({
-                                            id_document: '__badge__',
-                                            document_type: 'badge',
-                                            document_label: 'Badge',
-                                            original_name: 'badge',
-                                            mime_type: 'image/png',
-                                            file_size: 0,
-                                            created_at: '',
-                                            inline_url: badgeUrl,
-                                            download_url: badgeUrl
-                                        });
-                                    }
-                                    if (canContrat) {
-                                        var contratUrl = '../impression/_contrat_travail.php?id_employe=' + encodeURIComponent(String(docsEmployeId)) + '&t=' + t;
-                                        virtualItems.push({
-                                            id_document: '__contrat__',
-                                            document_type: 'contrat_travail',
-                                            document_label: 'Contrat de travail',
-                                            original_name: 'contrat_travail',
-                                            mime_type: 'application/pdf',
-                                            file_size: 0,
-                                            created_at: '',
-                                            inline_url: contratUrl,
-                                            download_url: contratUrl
-                                        });
-                                    }
-                                    items = virtualItems.concat(items);
-                                }
-
+                                // Toujours afficher les virtuels, même si l'archive est indisponible.
+                                var items = virtualItems.concat(archived);
                                 renderDocsTable(items);
                             })
                             .catch(function () {
-                                renderDocsTable([]);
+                                // En cas d'erreur AJAX: afficher au moins Badge/Contrat.
+                                renderDocsTable(virtualItems);
                             });
                     }
 
