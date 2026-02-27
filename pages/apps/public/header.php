@@ -63,7 +63,7 @@ if (isset($_SESSION['last_activity'])) {
 	if ($elapsed_time > $timeout_duration) {
 		session_unset();
 		session_destroy();
-		header("Location: ../../login.php?r=2");
+		header("Location: ../../index.php?r=2");
 		exit();
 	}
 }
