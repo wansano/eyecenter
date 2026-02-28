@@ -35,23 +35,20 @@ function mp_expected_total(array $p): int {
     return ($b0 * 500) + ($b1 * 1000) + ($b2 * 2000) + ($b5 * 5000) + ($b10 * 10000) + ($b20 * 20000);
 }
 
-function mp_entree_paiements(PDO $bdd, int $compteId, string $dateRapportement): int {
+function mp_entree_paiements(PDO $bdd, int $compteId, string $dateRapportement, ?int $userId = null): int {
     static $cache = [];
     $compteId = (int)$compteId;
     $dateKey = substr((string)$dateRapportement, 0, 10);
-    $cacheKey = $dateKey . '|' . $compteId;
+    $userKey = $userId !== null ? (int)$userId : 0;
+    $cacheKey = $dateKey . '|' . $compteId . '|' . $userKey;
     if (isset($cache[$cacheKey])) return (int)$cache[$cacheKey];
 
     try {
-        $st = $bdd->prepare(
-            'SELECT COALESCE(SUM(COALESCE(montant_paye, montant)), 0) AS entree '
-            . 'FROM paiements '
-            . 'WHERE (remboursement = 0 OR remboursement IS NULL) '
-            . 'AND compte = ? '
-            . 'AND DATE(datepaiement) = DATE(?)'
-        );
-        $st->execute([$compteId, $dateKey]);
-        $val = mp_int($st->fetchColumn());
+        // Couvrir toute la journée (datepaiement peut être DATE ou DATETIME selon les environnements).
+        $debut = $dateKey . ' 00:00:00';
+        $fin = $dateKey . ' 23:59:59';
+
+        $val = mp_int(getEntreePaiements($compteId, $debut, $fin, $bdd, $userId !== null ? (int)$userId : null));
         $cache[$cacheKey] = $val;
         return $val;
     } catch (Throwable $e) {
@@ -317,7 +314,7 @@ include('../PUBLIC/header.php');
                                     $compteLabel = (string)($r['nom_compte'] ?? '');
                                     $montant = mp_int($r['montant'] ?? 0);
                                     $expected = mp_expected_total($r);
-                                    $entree = mp_entree_paiements($bdd, (int)($r['compte'] ?? 0), $dateRap);
+                                    $entree = mp_entree_paiements($bdd, (int)($r['compte'] ?? 0), $dateRap, isset($r['id_user']) ? (int)$r['id_user'] : null);
                                     $conforme = ($montant === $expected) && ($montant === $entree);
                                     ?>
                                     <tr>

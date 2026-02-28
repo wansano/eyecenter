@@ -24,17 +24,13 @@ function mp_expected_total(array $p): int {
     return ($b0 * 500) + ($b1 * 1000) + ($b2 * 2000) + ($b5 * 5000) + ($b10 * 10000) + ($b20 * 20000);
 }
 
-function mp_entree_paiements(PDO $bdd, int $compteId, string $dateRapportement): int {
-    // Total réel encaissé le jour J sur ce compte (prend en compte les paiements partiels)
-    $st = $bdd->prepare(
-        'SELECT COALESCE(SUM(COALESCE(montant_paye, montant)), 0) AS entree '
-        . 'FROM paiements '
-        . 'WHERE (remboursement = 0 OR remboursement IS NULL) '
-        . 'AND compte = ? '
-        . 'AND DATE(datepaiement) = DATE(?)'
-    );
-    $st->execute([$compteId, $dateRapportement]);
-    return mp_int($st->fetchColumn());
+function mp_entree_paiements(PDO $bdd, int $compteId, string $dateRapportement, ?int $userId = null): int {
+    // Total réel encaissé le jour J sur ce compte pour un caissier donné.
+    // Couvrir toute la journée (datepaiement peut être DATE ou DATETIME selon les environnements).
+    $dateKey = substr((string)$dateRapportement, 0, 10);
+    $debut = $dateKey . ' 00:00:00';
+    $fin = $dateKey . ' 23:59:59';
+    return mp_int(getEntreePaiements($compteId, $debut, $fin, $bdd, $userId !== null ? (int)$userId : null));
 }
 
 function mp_fetch_preuve(PDO $bdd, int $id_preuve): ?array {
@@ -72,7 +68,12 @@ if (isset($_GET['ajax_preuve'])) {
 
         $montant = mp_int($p['montant'] ?? 0);
         $expected = mp_expected_total($p);
-        $entreeJour = mp_entree_paiements($bdd, (int)($p['compte'] ?? 0), (string)($p['date_rapportement'] ?? ''));
+        $entreeJour = mp_entree_paiements(
+            $bdd,
+            (int)($p['compte'] ?? 0),
+            (string)($p['date_rapportement'] ?? ''),
+            isset($p['id_user']) ? (int)$p['id_user'] : null
+        );
         $conformeBillets = ($montant === $expected);
         $conformeEntree = ($montant === $entreeJour);
         $conforme = ($conformeBillets && $conformeEntree);
@@ -137,7 +138,12 @@ if (isset($_POST['ajax_update'])) {
 
         $existingMontant = mp_int($existing['montant'] ?? 0);
         $existingExpected = mp_expected_total($existing);
-        $existingEntree = mp_entree_paiements($bdd, (int)($existing['compte'] ?? 0), (string)($existing['date_rapportement'] ?? ''));
+        $existingEntree = mp_entree_paiements(
+            $bdd,
+            (int)($existing['compte'] ?? 0),
+            (string)($existing['date_rapportement'] ?? ''),
+            isset($existing['id_user']) ? (int)$existing['id_user'] : null
+        );
         $existingConforme = ($existingMontant === $existingExpected) && ($existingMontant === $existingEntree);
 
         if ($existingConforme) {
@@ -159,7 +165,12 @@ if (isset($_POST['ajax_update'])) {
         $p = mp_fetch_preuve($bdd, $id);
         $montant2 = mp_int($p['montant'] ?? 0);
         $expected2 = mp_expected_total($p);
-        $entreeJour2 = mp_entree_paiements($bdd, (int)($p['compte'] ?? 0), (string)($p['date_rapportement'] ?? ''));
+        $entreeJour2 = mp_entree_paiements(
+            $bdd,
+            (int)($p['compte'] ?? 0),
+            (string)($p['date_rapportement'] ?? ''),
+            isset($p['id_user']) ? (int)$p['id_user'] : null
+        );
         $conformeBillets2 = ($montant2 === $expected2);
         $conformeEntree2 = ($montant2 === $entreeJour2);
         $conforme2 = ($conformeBillets2 && $conformeEntree2);
