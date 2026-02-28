@@ -16,15 +16,26 @@ function user_can_view_any_rapport_caisse(PDO $bdd, int $userId): bool {
         return false;
     }
 
-    // Autoriser les profils ayant accès au module technologie (admin) ou comptabilité (trésorerie).
-    $allowedModules = ['technologie', 'comptabilite'];
+    // Autoriser les profils ayant accès au module technologie (admin) ou aux modules finance.
+    $allowedModules = ['technologie', 'comptabilite', 'tresorerie'];
+
+    $plage = '';
+    $type = '';
 
     try {
-        $stmt = $bdd->prepare('SELECT plage_connexion FROM users WHERE id = ? LIMIT 1');
+        $stmt = $bdd->prepare('SELECT plage_connexion, type FROM users WHERE id = ? LIMIT 1');
         $stmt->execute([$userId]);
-        $plage = (string)($stmt->fetchColumn() ?: '');
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            $plage = (string)($row['plage_connexion'] ?? '');
+            $type = trim(strtolower((string)($row['type'] ?? '')));
+        }
     } catch (Exception $e) {
         return false;
+    }
+
+    if ($type !== '' && in_array($type, $allowedModules, true)) {
+        return true;
     }
 
     if ($plage === '') {
