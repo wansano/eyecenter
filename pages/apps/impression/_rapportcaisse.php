@@ -90,6 +90,7 @@ if (function_exists('getUserInfo')) {
 
 $dateRapport = (string)($rapport['date_rapportement'] ?? '');
 $compteId = (int)($rapport['compte'] ?? 0);
+$rapportUserId = (int)($rapport['id_user'] ?? 0);
 
 // Affichage sans heure + normalisation pour les requêtes
 $dateRapportKey = $dateRapport;
@@ -109,8 +110,8 @@ if ($dateRapport !== '') {
 $entreePaiements = 0;
 $entreePreuve = 0;
 if ($dateRapportKey !== '' && $compteId > 0) {
-    $entreePaiements = (float)getEntreePaiements($compteId, $dateRapportKey, $dateRapportKey, $bdd);
-    $entreePreuve = (float)getEntreePreuve($compteId, $dateRapportKey, $dateRapportKey, $bdd);
+    $entreePaiements = (float)getEntreePaiements($compteId, $dateRapportKey, $dateRapportKey, $bdd, $rapportUserId > 0 ? $rapportUserId : null);
+    $entreePreuve = (float)getEntreePreuve($compteId, $dateRapportKey, $dateRapportKey, $bdd, $rapportUserId > 0 ? $rapportUserId : null);
 }
 $conforme = ($entreePaiements == $entreePreuve);
 

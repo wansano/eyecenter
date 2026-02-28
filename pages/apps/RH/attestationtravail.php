@@ -325,6 +325,29 @@ $statusCol = $cols['status'] ?? null;
 $attCols = getAttestationColumnMap($bdd);
 $hasTypeAttestation = (bool) ($attCols['type_attestation'] ?? false);
 
+// Filtre liste: attestation vs certificat
+$filtreDoc = trim((string)($_GET['filtre_doc'] ?? ''));
+if ($filtreDoc !== 'attestation' && $filtreDoc !== 'certificat') {
+    $filtreDoc = '';
+}
+
+// Filtre liste: date de délivrance (bornes)
+$dateDelivranceDebut = normalizeDateOrEmpty((string) ($_GET['date_delivrance_debut'] ?? ''));
+$dateDelivranceFin = normalizeDateOrEmpty((string) ($_GET['date_delivrance_fin'] ?? ''));
+if ($dateDelivranceDebut !== '' && $dateDelivranceFin !== '') {
+    try {
+        $d1 = new DateTimeImmutable($dateDelivranceDebut);
+        $d2 = new DateTimeImmutable($dateDelivranceFin);
+        if ($d2 < $d1) {
+            $tmp = $dateDelivranceDebut;
+            $dateDelivranceDebut = $dateDelivranceFin;
+            $dateDelivranceFin = $tmp;
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
+
 // Liste employés (pour le modal)
 $employes = [];
 if (!$error) {
@@ -357,12 +380,39 @@ if (!$error) {
 $attestations = [];
 if (!$error) {
     try {
-    $sql = 'SELECT a.*, e.`' . $nameCol . '` AS employe_nom
+        $whereClauses = [];
+        $params = [];
+
+        // Attestation de travail = pas de date_fin ; Certificat = date_fin renseignée
+        if ($filtreDoc === 'attestation') {
+            $whereClauses[] = "(a.date_fin IS NULL OR a.date_fin = '' OR a.date_fin = '0000-00-00')";
+        } elseif ($filtreDoc === 'certificat') {
+            $whereClauses[] = "(a.date_fin IS NOT NULL AND a.date_fin <> '' AND a.date_fin <> '0000-00-00')";
+        }
+
+        // Filtre par date de délivrance (sur la partie DATE si date_delivrance contient une heure)
+        if ($dateDelivranceDebut !== '') {
+            $whereClauses[] = 'DATE(a.date_delivrance) >= ?';
+            $params[] = $dateDelivranceDebut;
+        }
+        if ($dateDelivranceFin !== '') {
+            $whereClauses[] = 'DATE(a.date_delivrance) <= ?';
+            $params[] = $dateDelivranceFin;
+        }
+
+        $where = '';
+        if (!empty($whereClauses)) {
+            $where = 'WHERE ' . implode(' AND ', $whereClauses);
+        }
+
+        $sql = 'SELECT a.*, e.`' . $nameCol . '` AS employe_nom
                 FROM attestations_travail a
                 JOIN employes e ON e.id_employe = a.id_employe
+                ' . $where . '
                 ORDER BY a.created_at DESC, a.id_attestation DESC
                 LIMIT 200';
-        $st = $bdd->query($sql);
+        $st = $bdd->prepare($sql);
+        $st->execute($params);
         $attestations = $st ? $st->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (PDOException $e) {
         error_log('[attestationtravail] list: ' . $e->getMessage());
@@ -397,7 +447,24 @@ include('../PUBLIC/header.php');
                     <section class="card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div></div>
+                                    <div>
+                                        <form method="GET" class="d-flex align-items-center" style="gap:10px;">
+                                            <label class="mb-0" for="filtre_doc">Filtrer</label>
+                                            <select class="form-select" name="filtre_doc" id="filtre_doc" style="min-width:220px;">
+                                                <option value="" <?php echo $filtreDoc === '' ? 'selected' : ''; ?>>Tous</option>
+                                                <option value="attestation" <?php echo $filtreDoc === 'attestation' ? 'selected' : ''; ?>>Attestation de travail</option>
+                                                <option value="certificat" <?php echo $filtreDoc === 'certificat' ? 'selected' : ''; ?>>Certificat de travail</option>
+                                            </select>
+
+                                            <label class="mb-0" for="date_delivrance_debut">Délivrée du</label>
+                                            <input type="date" class="form-control" name="date_delivrance_debut" id="date_delivrance_debut" value="<?php echo h($dateDelivranceDebut); ?>">
+
+                                            <label class="mb-0" for="date_delivrance_fin">au</label>
+                                            <input type="date" class="form-control" name="date_delivrance_fin" id="date_delivrance_fin" value="<?php echo h($dateDelivranceFin); ?>">
+
+                                            <button type="submit" class="btn btn-primary">Filtrer</button>
+                                        </form>
+                                    </div>
                                 <div>
                                     <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAttestation" onclick="openCreateAttestation()">Nouvelle attestation</button>
                                 </div>
@@ -430,7 +497,7 @@ include('../PUBLIC/header.php');
                                                             $t = (string)($a['type_attestation'] ?? 'travail');
                                                             if ($t !== 'stage') $t = 'travail';
                                                             if ($t === 'stage') {
-                                                                echo h('Stage');
+                                                                echo h('Attestation de stage');
                                                             } else {
                                                                 $fin = trim((string)($a['date_fin'] ?? ''));
                                                                 echo h($fin === '' ? 'Attestation de Travail' : 'Certificat de travail');
@@ -576,8 +643,6 @@ include('../PUBLIC/header.php');
         </div>
     </section>
 
-    <?php include('../PUBLIC/footer.php'); ?>
-
     <script>
         function updateDateFinRequirement() {
             var typeEl = document.getElementById('type_attestation');
@@ -701,6 +766,5 @@ include('../PUBLIC/header.php');
             }
         });
     </script>
-</body>
 
-</html>
+    <?php include('../PUBLIC/footer.php'); ?>

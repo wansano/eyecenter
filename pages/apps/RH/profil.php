@@ -1,8 +1,14 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$id = $_GET['id'] ?? ($_SESSION['auth'] ?? '');
+header('Location: ../public/profil.php?id=' . urlencode((string)$id));
+exit;
+
 require_once('../PUBLIC/connect.php');
 require_once('../PUBLIC/fonction.php');
-
-session_start();
 
 class UserProfile {
     private $bdd;

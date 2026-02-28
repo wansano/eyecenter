@@ -171,8 +171,10 @@ if (!defined('APP_HEADER_INCLUDED')) {
                 <ul class="list-unstyled">
                     <li class="divider"></li>
                     <li>
-                        <a role="menuitem" tabindex="-1" href="../public/deconnexion.php"><i class="bx bx-power-off"></i> Se
-                            deconnecter</a>
+                        <a role="menuitem" tabindex="-1" href="../public/profil.php?id=<?php echo (int)$id_user; ?>"><i class="bx bx-user"></i> Mon Profil</a>
+                    </li>
+                    <li>
+                        <a role="menuitem" tabindex="-1" href="../public/deconnexion.php"><i class="bx bx-power-off"></i> Se déconnecter</a>
                     </li>
                 </ul>
             </div>

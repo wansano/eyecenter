@@ -29,7 +29,7 @@ function build_redirect_url(string $redirection, string $jour): string {
         case 'caisse':
             return 'apps/caisse/homecaisse.php?day=' . rawurlencode($jour);
         case 'ophtalmologue':
-            return 'apps/ophtalmologie/homeophtalmologie.php?day=' . rawurlencode($jour);
+            return 'apps/ophtalmologie/homeophtalmologue.php?day=' . rawurlencode($jour);
         case 'comptabilite':
             return 'apps/comptabilite/homecomptabilite.php?day=' . rawurlencode($jour);
         case 'technologie':

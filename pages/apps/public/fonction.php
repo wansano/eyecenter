@@ -947,27 +947,78 @@ function extrairePremiersMots($texte, $nombre = 10) {
 
  // Fonction pour récupérer la somme des montants de preuvedecaisse pour un compte et une période donnée
 
- function getEntreePreuve($compte, $debut, $fin, $bdd) {
-    $stmt = $bdd->prepare('SELECT SUM(montant) AS entreePreuve FROM preuvedecaisse WHERE compte = ? AND date_rapportement BETWEEN ? AND ?');
-    $stmt->execute([$compte, $debut, $fin]);
+ function getEntreePreuve($compte, $debut, $fin, $bdd, $userId = null) {
+    $sql = 'SELECT SUM(montant) AS entreePreuve FROM preuvedecaisse WHERE compte = ? AND date_rapportement BETWEEN ? AND ?';
+    $params = [$compte, $debut, $fin];
+    if ($userId !== null) {
+        $sql .= ' AND id_user = ?';
+        $params[] = (int)$userId;
+    }
+    $stmt = $bdd->prepare($sql);
+    $stmt->execute($params);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row && isset($row['entreePreuve']) ? $row['entreePreuve'] : 0;
 }
 
  // Fonction pour récupérer la somme des montants de entree compte pour un compte et une période donnée
-function getEntreePaiements($compte, $debut, $fin, $bdd) {
+function getEntreePaiements($compte, $debut, $fin, $bdd, $userId = null) {
     // Utiliser le montant réellement payé (montant_paye) quand disponible.
-    $expr = 'montant';
+    $hasMontantPaye = false;
+    $hasRemboursement = false;
+    $hasIdAffectation = false;
+    $hasRembTable = false;
+    $hasRembMontant = false;
+
     try {
-        if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'paiements', 'montant_paye')) {
-            $expr = 'COALESCE(montant_paye, montant)';
+        if (function_exists('dbTableHasColumn')) {
+            $hasMontantPaye = dbTableHasColumn($bdd, 'paiements', 'montant_paye');
+            $hasRemboursement = dbTableHasColumn($bdd, 'paiements', 'remboursement');
+            $hasIdAffectation = dbTableHasColumn($bdd, 'paiements', 'id_affectation');
+            // La table remboursements est utilisée dans le module Trésorerie
+            $hasRembTable = true;
+            $hasRembMontant = dbTableHasColumn($bdd, 'remboursements', 'montant_remboursse');
         }
     } catch (Throwable $e) {
-        $expr = 'montant';
+        // fallback silencieux
     }
 
-    $stmt = $bdd->prepare('SELECT SUM(' . $expr . ') AS entree FROM paiements WHERE compte = ? AND datepaiement BETWEEN ? AND ?');
-    $stmt->execute([$compte, $debut, $fin]);
+    $baseExpr = $hasMontantPaye ? 'COALESCE(paiements.montant_paye, paiements.montant)' : 'paiements.montant';
+
+    // Si remboursement: reconstituer l'encaissement initial quand nécessaire.
+    $expr = $baseExpr;
+    if ($hasRemboursement && $hasIdAffectation && $hasRembTable && $hasRembMontant) {
+        if ($hasMontantPaye) {
+            $expr = 'CASE '
+                . 'WHEN (paiements.remboursement = 1) AND (paiements.montant_paye IS NULL OR paiements.montant_paye = 0) '
+                . 'THEN (paiements.montant + COALESCE((SELECT SUM(COALESCE(r.montant_remboursse,0)) FROM remboursements r WHERE r.id_affectation = paiements.id_affectation),0)) '
+                . 'ELSE COALESCE(paiements.montant_paye, paiements.montant) '
+                . 'END';
+        } else {
+            $expr = 'CASE '
+                . 'WHEN (paiements.remboursement = 1) '
+                . 'THEN (paiements.montant + COALESCE((SELECT SUM(COALESCE(r.montant_remboursse,0)) FROM remboursements r WHERE r.id_affectation = paiements.id_affectation),0)) '
+                . 'ELSE paiements.montant '
+                . 'END';
+        }
+    }
+
+    $sql = 'SELECT SUM(' . $expr . ') AS entree FROM paiements WHERE compte = ? AND datepaiement BETWEEN ? AND ?';
+    $params = [$compte, $debut, $fin];
+
+    // Preuve de caisse par utilisateur: filtrer par caissier si possible.
+    if ($userId !== null) {
+        try {
+            if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'paiements', 'caisse')) {
+                $sql .= ' AND caisse = ?';
+                $params[] = (int)$userId;
+            }
+        } catch (Throwable $e) {
+            // Si la colonne n'existe pas, on ne peut pas filtrer proprement.
+        }
+    }
+
+    $stmt = $bdd->prepare($sql);
+    $stmt->execute($params);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row && isset($row['entree']) ? $row['entree'] : 0;
 }

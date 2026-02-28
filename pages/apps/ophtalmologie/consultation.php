@@ -236,7 +236,7 @@ include('../public/header.php');
                     <div class="modal-body" style="height: 75vh;">
                         <?php if (!empty($affectation)): ?>
                             <iframe
-                                src="imprimer_consultation.php?affectation=<?php echo urlencode((string)$affectation); ?>"
+                                src="imprimer_consultation.php?affectation=<?php echo urlencode((string)$affectation); ?>&autoprint=0"
                                 style="width:100%;height:100%;border:0;"
                             ></iframe>
                         <?php else: ?>

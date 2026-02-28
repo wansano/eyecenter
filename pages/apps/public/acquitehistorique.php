@@ -111,8 +111,91 @@ function getValue($array, $key, $default = '') {
     <div class="col-md-2">
         <div class="form-group">
             <label class="col-form-label" for="formGroupExampleInput"><?= nom_patient($id_patient);?> </label>
-            <a class="btn btn-info js-open-print" data-title="Historique dossier" href="../impression/_historique_traitements.php?id_patient=<?php echo (int)$id_patient; ?>">voir historique dossier</a>
+            <a class="btn btn-info js-open-historique" data-title="Historique dossier" href="../impression/_historique_traitements.php?id_patient=<?php echo (int)$id_patient; ?>">voir historique dossier</a>
         </div>
     </div>
 </div>
 <hr class="my-4">
+
+<!-- Modal historique dossier (iframe) -->
+<div class="modal fade" id="historiqueDossierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="historiqueDossierTitle">Historique dossier</h5>
+            </div>
+            <div class="modal-body" style="height: 75vh;">
+                <iframe id="historiqueDossierFrame" src="about:blank" style="width:100%;height:100%;border:0;"></iframe>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function withAutoPrintDisabled(url) {
+        if (!url) return url;
+        return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+    }
+
+    function openHistoriqueModal(url, title) {
+        var modalEl = document.getElementById('historiqueDossierModal');
+        var frameEl = document.getElementById('historiqueDossierFrame');
+        var titleEl = document.getElementById('historiqueDossierTitle');
+
+        if (!modalEl || !frameEl) {
+            try { window.open(url, '_blank', 'noopener'); } catch (_) {}
+            return;
+        }
+
+        if (titleEl && title) titleEl.textContent = title;
+        frameEl.setAttribute('src', withAutoPrintDisabled(url));
+
+        try {
+            if (window.bootstrap && window.bootstrap.Modal) {
+                (window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl)).show();
+                return;
+            }
+            if (window.jQuery && typeof jQuery(modalEl).modal === 'function') {
+                jQuery(modalEl).modal('show');
+                return;
+            }
+        } catch (e) {
+            // noop
+        }
+
+        try { window.open(url, '_blank', 'noopener'); } catch (_) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('click', function (e) {
+            var a = e.target && e.target.closest ? e.target.closest('a.js-open-historique') : null;
+            if (!a) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            var url = a.getAttribute('href');
+            var title = a.getAttribute('data-title') || 'Historique dossier';
+            openHistoriqueModal(url, title);
+        }, true);
+
+        var modalEl = document.getElementById('historiqueDossierModal');
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                var frameEl = document.getElementById('historiqueDossierFrame');
+                if (frameEl) frameEl.setAttribute('src', 'about:blank');
+            });
+            if (window.jQuery && typeof jQuery(modalEl).on === 'function') {
+                jQuery(modalEl).on('hidden.bs.modal', function () {
+                    var frameEl = document.getElementById('historiqueDossierFrame');
+                    if (frameEl) frameEl.setAttribute('src', 'about:blank');
+                });
+            }
+        }
+    });
+})();
+</script>

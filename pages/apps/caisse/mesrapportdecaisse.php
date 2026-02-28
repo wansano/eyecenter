@@ -51,8 +51,8 @@ include('../PUBLIC/header.php');
 													while ($donnees1 = $reponse1->fetch(PDO::FETCH_ASSOC)) {
 														$hasRows = true;
 
-														$entree = getEntreePaiements($donnees1['compte'], $donnees1['date_rapportement'], $donnees1['date_rapportement'], $bdd);
-														$entreePreuve = getEntreePreuve($donnees1['compte'], $donnees1['date_rapportement'], $donnees1['date_rapportement'], $bdd);
+														$entree = getEntreePaiements($donnees1['compte'], $donnees1['date_rapportement'], $donnees1['date_rapportement'], $bdd, (int)$donnees1['id_user']);
+														$entreePreuve = getEntreePreuve($donnees1['compte'], $donnees1['date_rapportement'], $donnees1['date_rapportement'], $bdd, (int)$donnees1['id_user']);
 														
 														echo '<tr>';
 														echo '<td>PR_C' . $i++ . '</td>';
@@ -68,12 +68,12 @@ include('../PUBLIC/header.php');
 														echo '<td>' . htmlspecialchars(extrairePremiersMots($donnees1['montant_lettre'])) . '</td>';
 														echo '<td>';
 														if ($entree == $entreePreuve) {
-															echo '<button class="btn btn-sm btn-success">conforme</button>';
+															echo '<a class="text-success">conforme</a>';
 														} else {
-															echo '<button class="btn btn-sm btn-danger">non conforme</button>';
+															echo '<a class="text-danger">non conforme</a>';
 														}
 														echo'</td>';
-														echo '<td><button type="button" class="btn btn-sm btn-primary btn-print-rapport" data-print-url="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '"><i class="fa fa-print"></i> imprimer</button></td>';
+														echo '<td><button type="button" class="btn btn-sm btn-primary btn-print-rapport" data-print-url="imprimer_rapportcaisse.php?id=' . htmlspecialchars($donnees1['id_preuve']) . '"><i class="fa fa-file-pdf"></i> imprimer</button></td>';
 														echo '</tr>';
 													}
 															if (!$hasRows) {
@@ -148,4 +148,8 @@ include('../PUBLIC/header.php');
 										});
 									})();
 								</script>
-            <?php include('../PUBLIC/footer.php');?>
+
+					</section>
+				</div>
+			</section>
+			<?php include('../PUBLIC/footer.php');?>

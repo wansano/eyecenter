@@ -1,220 +1,170 @@
 <?php
-include('../PUBLIC/connect.php');
-include('../PUBLIC/fonction.php');
+require_once('../PUBLIC/connect.php');
+require_once('../PUBLIC/fonction.php');
+
 session_start();
-    $errors = 0; $existe = 0;
-    if (isset($_POST['recherche'])) {
-        $recherche = trim($_POST['recherche']);
-        if ($recherche === '') {
-            $existe = 1;
-        } else {
-            $req1 = $bdd->prepare('SELECT 1 FROM affectations WHERE id_patient=? LIMIT 1');
-            $req1->execute(array($recherche));
-            if (!$req1->fetch()) {
-                $existe = 1;
-            } else {
-                header('Location: reimpressiondocument.php?recherche=' . urlencode($recherche));
-                exit();
-            }
-        }
+
+class DocumentManager {
+    private $bdd;
+    private $errors = [];
+    
+    public function __construct($bdd) {
+        $this->bdd = $bdd;
     }
-
-    $patientSearchId = isset($_GET['recherche']) ? (int)$_GET['recherche'] : 0;
-    $showResultsModal = false;
-    $resultsRows = [];
-
-    // Détecter le "type" de vente lunettes (pour filtrer les reçus lunettes)
-    $venteLunetteTypeId = 0;
-    try {
-        $stType = $bdd->prepare("SELECT id_type FROM traitements WHERE LOWER(nom_type) LIKE '%lunet%' OR LOWER(nom_type) LIKE '%monture%' ORDER BY id_type ASC LIMIT 1");
-        $stType->execute();
-        $venteLunetteTypeId = (int)($stType->fetchColumn() ?: 0);
-    } catch (Throwable $e) {
-        $venteLunetteTypeId = 0;
-    }
-
-    if ($patientSearchId > 0) {
-        $showResultsModal = true;
-
-        // 1) Ordonnance de lunettes (dernière)
+    
+    public function searchPayments($patientId) {
         try {
-            $stOrd = $bdd->prepare('SELECT id_affectation, date_traitement FROM mesures WHERE id_patient = ? ORDER BY date_traitement DESC, id_mesure DESC LIMIT 1');
-            $stOrd->execute([$patientSearchId]);
-            $ord = $stOrd->fetch(PDO::FETCH_ASSOC);
-            if ($ord && (int)$ord['id_affectation'] > 0) {
-                $affId = (int)$ord['id_affectation'];
-                $resultsRows[] = [
-                    'date' => (string)($ord['date_traitement'] ?? ''),
-                    'type' => 'Ordonnance lunettes',
-                    'affectation' => $affId,
-                    'url' => '../optometrie/imprimer_mesure.php?affectation=' . $affId . '&autoprint=0',
-                    'title' => 'Ordonnance des lunettes',
-                ];
-            }
-        } catch (Throwable $e) {
-            // noop
-        }
-
-        // 2) Reçus de paiement lunettes (tous les paiements associés)
-        try {
-            if ($venteLunetteTypeId > 0) {
-                $stPay = $bdd->prepare(
-                    'SELECT p.id_paiement, p.datepaiement, p.id_affectation, p.code '
-                    . 'FROM paiements p INNER JOIN affectations a ON p.id_affectation = a.id_affectation '
-                    . 'WHERE a.id_patient = ? AND a.type = ? '
-                    . 'ORDER BY p.datepaiement DESC, p.id_paiement DESC'
-                );
-                $stPay->execute([$patientSearchId, $venteLunetteTypeId]);
-            } else {
-                // Fallback si le type lunettes n'est pas détectable: on liste tous les paiements du patient
-                $stPay = $bdd->prepare(
-                    'SELECT p.id_paiement, p.datepaiement, p.id_affectation, p.code '
-                    . 'FROM paiements p INNER JOIN affectations a ON p.id_affectation = a.id_affectation '
-                    . 'WHERE a.id_patient = ? '
-                    . 'ORDER BY p.datepaiement DESC, p.id_paiement DESC'
-                );
-                $stPay->execute([$patientSearchId]);
-            }
-
-            while ($pay = $stPay->fetch(PDO::FETCH_ASSOC)) {
-                $paiementId = (int)($pay['id_paiement'] ?? 0);
-                $affId = (int)($pay['id_affectation'] ?? 0);
-                if ($paiementId <= 0 || $affId <= 0) continue;
-                $resultsRows[] = [
-                    'date' => (string)($pay['datepaiement'] ?? ''),
-                    'type' => 'Reçu paiement lunettes',
-                    'affectation' => $affId,
-                    'url' => '../caisse/imprimer_recu.php?affectation=' . $affId . '&paiement=' . $paiementId . '&autoprint=0',
-                    'title' => 'Reçu de paiement lunettes',
-                ];
-            }
-        } catch (Throwable $e) {
-            // noop
+            $stmt = $this->bdd->prepare('SELECT * FROM paiements WHERE patient = ? AND remboursement = 0 ORDER BY datepaiement DESC');
+            $stmt->execute([$patientId]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->errors[] = "Erreur lors de la recherche des paiements : " . $e->getMessage();
+            return [];
         }
     }
+    
+    public function hasErrors() {
+        return !empty($this->errors);
+    }
+    
+    public function getErrors() {
+        return $this->errors;
+    }
+}
 
+// Initialisation
+$documentManager = new DocumentManager($bdd);
+$searchResult = null;
+$message = '';
+
+// Traitement de la recherche
+if (isset($_POST['recherche']) && !empty($_POST['recherche'])) {
+    $patientId = filter_var($_POST['recherche'], FILTER_SANITIZE_STRING);
+    header("Location: reimpressiondocument.php?recherche=" . urlencode($patientId));
+    exit;
+}
 
 include('../PUBLIC/header.php');
 ?>
 
 <body>
     <section class="body">
-
         <?php require('../PUBLIC/navbarmenu.php'); ?>
 
         <div class="inner-wrapper">
             <section role="main" class="content-body">
                 <header class="page-header">
-                    <h2>Recherche documentation d'un patient</h2>
+                    <h2>Recherche de document d'un patient</h2>
                 </header>
 
-                <!-- start: page -->
-
+                <!-- Formulaire de recherche -->
                 <div class="col-md-12">
                     <section class="card">
                         <div class="card-body">
-                            <?php
-                                if ($existe==1) {
-                                echo '
-                                    <div class="alert alert-danger">
-                                        <li>Aucun document trouvé dans le système pour cet identifiant saisie.</li>
-                                    </div>
-                                    ';
-                                    } 
-                            ?>
-                            <form class="form-horizontal" novalidate method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" enctype="multipart/form-data">
+                            <?php if ($documentManager->hasErrors()): ?>
+                                <div class="alert alert-danger">
+                                    <ul>
+                                        <?php foreach ($documentManager->getErrors() as $error): ?>
+                                            <li><?php echo htmlspecialchars($error); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
+                            <form class="form-horizontal" method="POST" action="">
                                 <div class="row form-group pb-3">
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Saisir le n° du dossier du patient</label>
-                                            <input type="text" class="form-control" name="recherche" id="formGroupExampleInput" placeholder="" required>
+                                            <label class="col-form-label">Saisir le n° du dossier patient</label>
+                                            <input type="text" class="form-control" name="recherche" required>
                                         </div>
                                     </div>
                                 </div>
-                                <footer class="card-footer text-end">
-                                    <button class="btn btn-primary" type="submit">Rechercher</button>
-                                </footer>
+                                <div class="card-footer text-end">
+                                    <button type="submit" class="btn btn-primary">Rechercher</button>
+                                </div>
                             </form>
+                        </div>
                     </section>
-                </div> <br>
+                </div>
+                
+                <br>
 
-                <section>
-                    <!-- Les résultats s'affichent désormais dans un modal -->
-                    <!-- end: page -->
-                    </section>
+                <!-- Résultats de la recherche -->
+                <?php if (isset($_GET['recherche'])): ?>
+                    <div class="col-md-12">
+                        <section class="card">
+                            <header class="card-header">
+                                 <h5 class="card-title mb">Documents pour <?php echo htmlspecialchars(nom_patient($_GET['recherche'])); ?></h5>
+                            </header>
+                            <div class="card-body">
+                                <table class="table table-responsive-md table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>DATE</th>
+                                            <th>MOTIF</th>
+                                            <th>DOCUMENT</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php
+                                        // Récupère et affiche les paiements sans filtrage par $types afin d'éviter un blocage d'affichage
+                                        $payments = $documentManager->searchPayments($_GET['recherche']);
+
+                                        if (!empty($payments)) {
+                                            foreach ($payments as $payment) {
+                                                $idAffectation = isset($payment['id_affectation']) ? (int)$payment['id_affectation'] : 0;
+                                                $typeTraitement = isset($payment['types']) ? (int)$payment['types'] : 0;
+                                                $needsConsent = function_exists('consentement') && ((int)consentement($typeTraitement) === 1);
+                                                $printUrl = $needsConsent
+                                                    ? ('imprimer_recu_consentement.php?affectation=' . urlencode((string)$idAffectation))
+                                                    : ('imprimer_recu.php?affectation=' . urlencode((string)$idAffectation));
+                                                ?>
+                                                <tr>
+                                                    <td><?php echo htmlspecialchars($payment['datepaiement']); ?></td>
+                                                    <td><?php echo htmlspecialchars(model($payment['types'])); ?></td>
+                                                    <td>
+                                                        <a href="<?php echo htmlspecialchars($printUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                                           class="btn btn-sm btn-info js-open-recu">
+                                                            <i class="fa fa-file-pdf-o"></i> Reçu
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                                <?php
+                                            }
+                                        } else {
+                                            ?>
+                                            <tr>
+                                                <td colspan="3" class="text-center text-muted">Aucun reçu de paiement trouvé pour ce dossier.</td>
+                                            </tr>
+                                            <?php
+                                        }
+                                        ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                <?php endif; ?>
+            </section>
         </div>
-
     </section>
+    
+    <?php include('../PUBLIC/footer.php'); ?>
 
-    <!-- Modal Document (aperçu + impression) -->
-    <div class="modal fade" id="documentModal" tabindex="-1" aria-hidden="true">
+    <!-- Modal Reçu (aperçu + impression) -->
+    <div class="modal fade" id="recuModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="documentModalTitle">Document</h5>
+                    <h5 class="modal-title">Reçu de paiement</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-0" style="height:80vh;">
-                    <iframe id="documentFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
+                    <iframe id="recuFrame" src="about:blank" style="width:100%; height:100%;" frameborder="0"></iframe>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" id="documentPrintBtn" class="btn btn-primary">Imprimer</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Résultats (liste des documents) -->
-    <div class="modal fade" id="resultsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="resultsModalTitle">Documents</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <?php if ($patientSearchId > 0): ?>
-                        <div class="mb-3">
-                            <?php echo htmlspecialchars((string)nom_patient($patientSearchId)); ?>
-                            <span class="text-muted"></span>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="table-responsive">
-                        <table class="table table-striped mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width:18%">DATE</th>
-                                    <th style="width:22%">TYPE</th>
-                                    <th>DOCUMENT</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if ($showResultsModal && !empty($resultsRows)): ?>
-                                    <?php foreach ($resultsRows as $r): ?>
-                                        <tr>
-                                            <td><?php echo htmlspecialchars((string)$r['date']); ?></td>
-                                            <td><?php echo htmlspecialchars((string)$r['type']); ?></td>
-                                            <td>
-                                                <a href="<?php echo htmlspecialchars((string)$r['url']); ?>"
-                                                   class="btn btn-sm btn-info js-open-document"
-                                                   data-title="<?php echo htmlspecialchars((string)$r['title']); ?>">
-                                                    Ouvrir
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <tr>
-                                        <td colspan="3" class="text-center text-danger">Aucun document trouvé pour ce patient.</td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
+                    <button type="button" id="recuPrintBtn" class="btn btn-primary">Imprimer</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
                 </div>
             </div>
@@ -223,47 +173,39 @@ include('../PUBLIC/header.php');
 
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const resultsModalEl = document.getElementById('resultsModal');
-        const modalEl = document.getElementById('documentModal');
-        const frameEl = document.getElementById('documentFrame');
-        const titleEl = document.getElementById('documentModalTitle');
-        const printBtnEl = document.getElementById('documentPrintBtn');
+        const recuModalEl = document.getElementById('recuModal');
+        const recuFrameEl = document.getElementById('recuFrame');
+        const recuPrintBtnEl = document.getElementById('recuPrintBtn');
 
-        function openDocumentModal(url, title) {
+        function withAutoPrintDisabled(url) {
+            if (!url) return url;
+            return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'autoprint=0';
+        }
+
+        function openReceiptModal(url) {
             if (!url) return;
-            if (!window.bootstrap || !modalEl || !frameEl) {
-                alert('Impossible d\'ouvrir le document: Bootstrap indisponible.');
+            if (!window.bootstrap || !recuModalEl || !recuFrameEl) {
+                alert('Impossible d\'ouvrir le reçu: Bootstrap indisponible.');
                 return;
             }
-            // Fermer le modal de résultats pour éviter l'empilement
-            try {
-                if (resultsModalEl) {
-                    const inst = window.bootstrap.Modal.getInstance(resultsModalEl);
-                    if (inst) inst.hide();
-                }
-            } catch (e) {
-                // noop
-            }
-            if (titleEl) titleEl.textContent = title || 'Document';
-            frameEl.src = url;
-            const instance = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+            recuFrameEl.src = withAutoPrintDisabled(url);
+            const instance = window.bootstrap.Modal.getInstance(recuModalEl) || new window.bootstrap.Modal(recuModalEl);
             instance.show();
         }
 
         document.addEventListener('click', function (e) {
-            const btn = e.target.closest('.js-open-document');
+            const btn = e.target.closest('.js-open-recu');
             if (!btn) return;
             const href = btn.getAttribute('href');
             if (!href || href === '#') return;
             e.preventDefault();
-            const title = btn.getAttribute('data-title') || btn.textContent || 'Document';
-            openDocumentModal(href, title.trim());
+            openReceiptModal(href);
         });
 
-        if (printBtnEl) {
-            printBtnEl.addEventListener('click', function () {
+        if (recuPrintBtnEl) {
+            recuPrintBtnEl.addEventListener('click', function () {
                 try {
-                    const win = frameEl && frameEl.contentWindow ? frameEl.contentWindow : null;
+                    const win = recuFrameEl && recuFrameEl.contentWindow ? recuFrameEl.contentWindow : null;
                     if (win && typeof win.printPdf === 'function') {
                         win.printPdf();
                         return;
@@ -277,24 +219,12 @@ include('../PUBLIC/header.php');
             });
         }
 
-        if (modalEl) {
-            modalEl.addEventListener('hidden.bs.modal', function () {
-                if (frameEl) frameEl.src = 'about:blank';
+        if (recuModalEl) {
+            recuModalEl.addEventListener('hidden.bs.modal', function () {
+                if (recuFrameEl) recuFrameEl.src = 'about:blank';
             });
         }
-
-        // Ouvre automatiquement le modal des résultats après une recherche
-        <?php if ($showResultsModal): ?>
-        try {
-            if (window.bootstrap && resultsModalEl) {
-                const inst = window.bootstrap.Modal.getInstance(resultsModalEl) || new window.bootstrap.Modal(resultsModalEl);
-                inst.show();
-            }
-        } catch (e) {
-            // noop
-        }
-        <?php endif; ?>
     });
     </script>
-
-    <?php include('../PUBLIC/footer.php');?>
+</body>
+</html>

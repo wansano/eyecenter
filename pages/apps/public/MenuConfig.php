@@ -97,7 +97,7 @@ class MenuConfig {
             <a href="#" class="nav-link dropdown-toggle">Traitements</a>
             <ul class="dropdown-menu">
                 <li>
-                    <li><a class="nav-link" href="interocompte.php">Intérogation compte</a></li>
+                    <li><a class="nav-link" href="interocompte.php">Intérogation</a></li>
                 </li>
             </ul>
         </li>
@@ -105,10 +105,10 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle">Caisse</a>
             <ul class="dropdown-menu">
                 <li>
-                    <a class="nav-link" href="annulationpaiementcaisse.php">Annuler paiement caisse</a>
+                    <a class="nav-link" href="annulationpaiementcaisse.php">Annuler paiement</a>
                 </li>
                 <li>
-                    <a class="nav-link" href="listepreuvecaisse.php">Liste des preuves</a>
+                    <a class="nav-link" href="listepreuvecaisse.php">Liste des brouillards</a>
                 </li>
                 <li>
                     <a class="nav-link" href="listepaiementannuler.php">Paiements annulés</a>
@@ -173,8 +173,8 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Situation</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="rapportjournalier.php?rdp=' . $user_data['type'] . '">Proof de caisse</a></li>
-                <li><a class="nav-link" href="mesrapportdecaisse.php?rdp=' . $user_data['type'] . '">Mes proofs du mois</a></li>
+                <li><a class="nav-link" href="rapportjournalier.php?rdp=' . $user_data['type'] . '">Brouillard de caisse</a></li>
+                <li><a class="nav-link" href="mesrapportdecaisse.php?rdp=' . $user_data['type'] . '">Mes brouillards</a></li>
             </ul>
         </li>';
     }
@@ -186,14 +186,14 @@ class MenuConfig {
             <a class="nav-link dropdown-toggle" href="#">Ventes</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="infopatientvente.php">Enregistrer une vente</a></li>
-                <li><a class="nav-link" href="#.php">Modifier une vente</a></li>
+                <li><a class="nav-link" href="modifier_vente_lunette.php">Modifier une vente</a></li>
+                <li><a class="nav-link" href="findingproduct.php">Délivrer une vente</a></li>
             </ul>
         </li>
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Edition</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="findingproduct.php">Délivrer une vente</a></li>
-                <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Reimpression document</a></li>
+                <li><a class="nav-link" href="reimpressiondocument.php?rdp=' . $user_data['type'] . '">Reimpression reçu</a></li>
             </ul>
         </li>
         <li class="dropdown">
@@ -207,8 +207,8 @@ class MenuConfig {
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Situation</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="rapportjournalier.php?rdp=' . $user_data['type'] . '">Proof de caisse</a></li>
-                <li><a class="nav-link" href="mesrapportdecaisse.php?rdp=' . $user_data['type'] . '">Mes proofs du mois</a></li>
+                <li><a class="nav-link" href="rapportjournalier.php?rdp=' . $user_data['type'] . '">Brouillard de caisse</a></li>
+                <li><a class="nav-link" href="mesrapportdecaisse.php?rdp=' . $user_data['type'] . '">Mes brouillards</a></li>
                 <li><a class="nav-link" href="venteslunettes_incompletes.php">Liste des créances</a></li>
             </ul>
         </li>';
@@ -614,14 +614,14 @@ class MenuConfig {
 
         // Menu des demandes pour tous les utilisateurs
 
-         $menu_items .= '
+        /* $menu_items .= '
         <li class="dropdown">
             <a class="nav-link dropdown-toggle" href="#">Profil</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="profil.php?id=' . $user_data['id_user'] . '">Mon Profil</a></li>
+                <li><a class="nav-link" href="../public/profil.php?id=' . $user_data['id_user'] . '">Mon Profil</a></li>
                 <li><a class="nav-link" href="#.php?task=' . $user_data['id_user'] . '">Mes taches</a></li>
             </ul>
-        </li>';
+        </li>'; */
 
         // Demandes : disponible dans les profils (sauf comptabilité)
         if (($user_data['type'] ?? '') !== 'comptabilite') {
