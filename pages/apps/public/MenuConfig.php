@@ -120,6 +120,41 @@ class MenuConfig {
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="bulletinsalaire.php">Bulletin de salaire</a></li>
             </ul>
+        </li>
+        <li class="dropdown">
+            <a href="#" class="nav-link dropdown-toggle">Situation</a>
+            <ul class="dropdown-menu">
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Comptes</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listecomptes.php?accountlist">Liste des comptes</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Budgets</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listedesbudgets.php?addbudgets">Liste des budgets</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Assurances</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listedesassurances.php">Liste des assurances</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Fournisseurs</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listedesfournisseurs.php">Liste des fournisseurs</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown-submenu">
+                    <a class="nav-link" href="#">Taux de remise</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="nav-link" href="listetaux.php?taxlist">Liste des Taux</a></li>
+                    </ul>
+                </li>
+            </ul>
         </li>';
     }
 
@@ -453,21 +488,6 @@ class MenuConfig {
         </li>';
     }
 
-
-    /* private static function getComptabiliteEditionMenu() {
-        return '
-        <li class="dropdown">
-            <a href="#" class="nav-link dropdown-toggle">Edition</a>
-            <ul class="dropdown-menu">
-                <li class="dropdown-submenu">
-                    <a class="nav-link" href="#">Reimpression document</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="nav-link" href="imprimer_bonremboursement.php">Bon de remboursement</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </li>';
-    } */
     
     private static function getComptabiliteStocksMenu() {
         return '
