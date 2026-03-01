@@ -1,4 +1,16 @@
 <?php
+// Génération PDF: éviter tout output parasite (warnings/echo) avant FPDF->Output()
+ob_start();
+if (function_exists('ini_set')) {
+    @ini_set('display_errors', '0');
+    @ini_set('log_errors', '1');
+}
+if (function_exists('session_status') && session_status() === PHP_SESSION_NONE) {
+    @session_start();
+} elseif (!function_exists('session_status')) {
+    @session_start();
+}
+
 require('../PDF/fpdf.php');
 require('../PDF/html_table13.php');
 include('../PUBLIC/connect.php');
@@ -267,10 +279,24 @@ $pdf->SetXY($signX, $signTopY + 10);
 $pdf->Cell($rightW, 7, '', 'B', 1, 'R');
 $pdf->SetXY($signX, $signTopY + 14);
 $pdf->SetFont('CenturyGothic', '', 10);
-$pdf->Cell($rightW, 7, pdf_text_compat(traitant($_SESSION['auth'])), 0, 1, 'R');
+$authId = (isset($_SESSION) && isset($_SESSION['auth'])) ? (int)$_SESSION['auth'] : 0;
+$traitantNom = '';
+if ($authId > 0 && function_exists('traitant')) {
+    try {
+        $traitantNom = (string)traitant($authId);
+    } catch (Throwable $e) {
+        $traitantNom = '';
+    }
+}
+$pdf->Cell($rightW, 7, pdf_text_compat($traitantNom), 0, 1, 'R');
 
 // Repositionner le curseur sous le bloc
 $endY = max($pdf->GetY(), $signTopY + 21);
 $pdf->SetY($endY + 2);
+
+// Nettoyer tout output (BOM, warnings, echo) avant l'envoi du PDF
+while (ob_get_level() > 0) {
+    @ob_end_clean();
+}
 
 $pdf->Output();
