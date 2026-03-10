@@ -168,7 +168,7 @@ html.sticky-header-active #header.header-effect-shrink .header-body {
 	}
 
 	#header .header-nav.header-nav-links:not(.header-nav-light-text) nav > ul > li > a {
-		color: #444;
+		color: #FFF;
 	}
 
 	#header .header-nav.header-nav-links.header-nav-light-text nav > ul > li > a {

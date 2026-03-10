@@ -12,6 +12,8 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 session_start();
 
+$isModal = isset($_GET['modal']) && (string)$_GET['modal'] === '1';
+
 // Vérification rendez-vous (AJAX) : recherche par dossier ou téléphone et retourne les RDV à venir.
 if (isset($_GET['ajax_check_rdv'])) {
     header('Content-Type: application/json; charset=UTF-8');
@@ -434,8 +436,11 @@ if (isset($_POST['ajouter'])) {
         }
     }
 }
-require('../PUBLIC/header.php');
+if (!$isModal) {
+    require('../PUBLIC/header.php');
+}
 ?>
+<?php if (!$isModal): ?>
 <body>
     <section class="body">
         <?php require('../PUBLIC/navbarmenu.php'); ?>
@@ -446,14 +451,17 @@ require('../PUBLIC/header.php');
                 </header>
 
                 <!-- start: page -->
+<?php endif; ?>
                 <div class="col-md-12">
                     <section class="card">
                         <div class="card-body">
-                            <div class="d-flex justify-content-start mb-3">
-                                <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#verificationRdvModal">
-                                    <i class="fa fa-search"></i> Vérifier un RDV
-                                </button>
-                            </div>
+                            <?php if (!$isModal): ?>
+                                <div class="d-flex justify-content-start mb-3">
+                                    <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#verificationRdvModal">
+                                        <i class="fa fa-search"></i> Vérifier un RDV
+                                    </button>
+                                </div>
+                            <?php endif; ?>
                             <?php if ($errors == 4 && $id_patient): ?>
                                 <div class="alert alert-success">
                                     <strong>Succès</strong><br/>  
@@ -500,7 +508,7 @@ require('../PUBLIC/header.php');
                                     <?php endforeach; ?>
                                 </div>
                             <?php endif; ?>
-                            <form class="form-horizontal" novalidate="novalidate" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?ap=default" enctype="multipart/form-data">
+                            <form class="form-horizontal" novalidate="novalidate" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?ap=default<?php echo $isModal ? '&amp;modal=1&amp;embed=1' : ''; ?>" enctype="multipart/form-data">
                                 <input type="hidden" name="ajouter" value="1">
                                 
                                 <div class="row form-group pb-3">
@@ -516,15 +524,15 @@ require('../PUBLIC/header.php');
                                     </div>
                                 </div>
 
-                                <div id="typeRDVFieldInterne" style="display: <?php echo (isset($_POST['estInterne']) && $_POST['estInterne'] == '0') ? 'block' : 'none'; ?>;">
+                                <div id="typeRDVFieldInterne" style="display: <?php echo (!isset($_POST['estInterne']) || $_POST['estInterne'] == '0') ? 'block' : 'none'; ?>;">
                                     <div class="row form-group pb-3">
                                         <div class="col-md-2">
                                             <div class="form-group">
-                                                <label class="col-form-label" for="dossierInput">Saisir le n° dossier du patient</label>
+                                                <label class="col-form-label" for="dossierInput">N° dossier du patient</label>
                                                 <input type="text" id="dossierInput" name="dossier" class="form-control" placeholder="" value="<?php echo isset($_POST['dossier']) ? htmlspecialchars($_POST['dossier']) : ''; ?>" required>
                                             </div>
                                         </div>
-                                        <strong><div id="dossierStatus" class="mt-1 small "></div></strong>
+                                        <strong><div id="dossierStatus" class="mt-1 small"></div></strong>
                                     </div>
                                 </div>
                                 <div id="typeRDVFieldExterne" style="display: <?php echo (isset($_POST['estInterne']) && $_POST['estInterne'] == '1') ? 'block' : 'none'; ?>;">
@@ -587,7 +595,6 @@ require('../PUBLIC/header.php');
                                                 </select>
                                                 <input type="hidden" id="hiddenquartierId" name="quartier_id" value="">
                                             </div>
-                                            <a href="#" onclick="return false;" data-bs-toggle="modal" data-bs-target="#ajoutQuartierModal">Quartier manquant ? ajouter</a>
                                         </div>
                                         <div class="col-md-5">
                                             <div class="form-group">
@@ -596,55 +603,27 @@ require('../PUBLIC/header.php');
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="row form-group pb-3">
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="radio" name="estAssure" value="0" onclick="toggleAssuranceField()" <?php echo (!isset($_POST['estAssure']) || $_POST['estAssure'] == '0') ? 'checked' : ''; ?>> non assuré
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="radio" name="estAssure" value="1" onclick="toggleAssuranceField()" <?php echo (isset($_POST['estAssure']) && $_POST['estAssure'] == '1') ? 'checked' : ''; ?>> assuré
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3 pb-1" id="assuranceField" style="display:none;">
-                                            <div class="form-group">
-                                                <select class="form-control populate" name="entrepriseAssurance" id="entrepriseAssurance">
-                                                    <option value="">-------- Choisir l'assurance --------</option>
-                                                    <?php 
-                                                        $client = $bdd->prepare('SELECT * FROM assurances WHERE status = ? ');
-                                                        $client -> execute([1]);
-                                                        while ($clients = $client->fetch(PDO::FETCH_ASSOC))
-                                                        {
-                                                            $selected = (isset($_POST['entrepriseAssurance']) && $_POST['entrepriseAssurance'] == $clients['id_assurance']) ? 'selected' : '';
-                                                            echo '<option value="'.$clients['id_assurance'].'" '.$selected.'>'.$clients['assurance'].'</option>';
-                                                        } 
-                                                    ?>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                                 <div class="row form-group pb-3">
                                     <div class="col-md-2">
                                         <div class="form-group">
                                             <label class="col-form-label" for="formGroupExampleInput">Département concerné</label>
-                                            <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs(); updateMedecins();">
-                                                <option value=""> ------ choisir ----- </option>';
-                                                    <?php $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?)');
-                                                    $coll -> execute([1, 2, 3]);
-                                                    while ($services = $coll->fetch(PDO::FETCH_ASSOC))
-                                                    {
-                                                        echo '<option value="'.$services['id_organigramme'].'">'.$services['celulle'].'</option>';
-                                                    } ?>
-                                                </option>
+                                            <select name="service" class="form-control populate" id="serviceSelect" onchange="updateMotifs(); updateMedecins(); try{ if(window.apUpdateRdvFlowState) window.apUpdateRdvFlowState(); }catch(e){}" disabled>
+                                                <option value=""> ------ choisir ----- </option>
+                                                <?php
+                                                $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?)');
+                                                $coll->execute([1, 2, 3]);
+                                                while ($services = $coll->fetch(PDO::FETCH_ASSOC)) {
+                                                    echo '<option value="' . $services['id_organigramme'] . '">' . $services['celulle'] . '</option>';
+                                                }
+                                                ?>
                                             </select>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="col-form-label" for="formGroupExampleInput">Motif</label>
-                                            <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice()" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                            <select class="form-control populate" id="motifSelect" name="type" onchange="fetchMotifPrice(); try{ if(window.apUpdateRdvFlowState) window.apUpdateRdvFlowState(); }catch(e){}" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required disabled>
                                                 <option value=""> ------ Choisir un departement ----- </option>
                                             </select>
                                             <input type="hidden" id="hiddenMotifId" name="motif_id" value="">
@@ -653,21 +632,21 @@ require('../PUBLIC/header.php');
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="col-form-label" for="medecinSelect">Médecin disponible</label>
-                                            <select class="form-control populate" id="medecinSelect" name="medecin" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
+                                            <select class="form-control populate" id="medecinSelect" name="medecin" onchange="try{ if(window.apUpdateRdvFlowState) window.apUpdateRdvFlowState(); }catch(e){}" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required disabled>
                                             <option value=""> ------ Choisir un departement ----- </option>
                                             </select>
                                         </div>
                                     </div>
                                     <div class="col-md-2">
                                         <div class="form-group">
-                                            <label class="col-form-label" for="formGroupExampleInput">Date prochain rendez-vous</label>
-                                            <input type="date" class="form-control mb-2" id="dateRdvInput" name="date_rdv" required>
+                                            <label class="col-form-label" for="formGroupExampleInput">Prochain rendez-vous</label>
+                                            <input type="date" class="form-control mb-2" id="dateRdvInput" name="date_rdv" onchange="try{ if(window.apUpdateRdvFlowState) window.apUpdateRdvFlowState(); }catch(e){}" required disabled>
                                         </div>
                                     </div>
                                     <div class="col-md-2">
                                         <div class="form-group">
                                             <label class="col-form-label" for="formGroupExampleInput">Créneau disponible</label>
-                                            <select name="prochain_rdv" class="form-control" id="creneauSelect" required>
+                                            <select name="prochain_rdv" class="form-control" id="creneauSelect" required disabled>
                                                 <option value="">-- Choisir un créneau disponible --</option>
                                             </select>
                                         </div>
@@ -680,10 +659,170 @@ require('../PUBLIC/header.php');
                         </div>
                     </section>
                 </div>
+<?php if (!$isModal): ?>
             </section>
         </div>
+<?php endif; ?>
         <script>
         // Optimisation : robustesse, DRY, initialisation dynamique
+        function apOnReady(fn) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fn);
+            } else {
+                fn();
+            }
+        }
+
+        function apTriggerChange(el) {
+            if (!el) return;
+            try {
+                if (window.jQuery && window.jQuery(el).data('select2')) {
+                    window.jQuery(el).trigger('change');
+                } else {
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            } catch (e) {
+                // noop
+            }
+        }
+
+        function apSetDisabled(el, disabled) {
+            if (!el) return;
+            var nextDisabled = !!disabled;
+            // Éviter les tempêtes d'événements: changer l'état disabled ne doit pas déclencher
+            // de vrais "change" (sinon inline onchange => updateMotifs/updateMedecins en boucle).
+            if (el.disabled === nextDisabled) return;
+            el.disabled = nextDisabled;
+            try {
+                if (window.jQuery) {
+                    // Synchroniser Select2 / wrappers sans déclencher les handlers métier.
+                    var $el = window.jQuery(el);
+                    $el.prop('disabled', nextDisabled);
+                    // Rafraîchir uniquement l'UI Select2 (pas d'event change natif).
+                    $el.trigger('change.select2');
+                }
+            } catch (e) {
+                // noop
+            }
+        }
+
+        function apResetSelect(el, placeholder) {
+            if (!el) return;
+            el.innerHTML = '';
+            var opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = placeholder || '---';
+            el.appendChild(opt);
+            el.value = '';
+            apTriggerChange(el);
+        }
+
+        // Workflow: interne/externe -> département -> motif -> médecin -> date -> créneau
+        window.apUpdateRdvFlowState = function apUpdateRdvFlowState() {
+            // Garde anti-récursion: apUpdate peut déclencher des events 'change' qui rappellent apUpdate
+            if (window.__apRdvFlowUpdating) return;
+            window.__apRdvFlowUpdating = true;
+
+            var serviceSelect = document.getElementById('serviceSelect');
+            var motifSelect = document.getElementById('motifSelect');
+            var medecinSelect = document.getElementById('medecinSelect');
+            var dateInput = document.getElementById('dateRdvInput');
+            var creneauSelect = document.getElementById('creneauSelect');
+
+            if (!serviceSelect || !motifSelect || !medecinSelect || !dateInput || !creneauSelect) {
+                window.__apRdvFlowUpdating = false;
+                return;
+            }
+
+            try {
+
+            var interneRadio = document.querySelector('input[name="estInterne"]:checked');
+            var isInterne = !interneRadio || interneRadio.value === '0';
+
+            var prereqOk = false;
+            if (isInterne) {
+                var dossierInput = document.getElementById('dossierInput');
+                var dossierVal = dossierInput ? String(dossierInput.value || '').trim() : '';
+                // On exige un dossier saisi ET reconnu (flag posé par checkPatient.php)
+                prereqOk = !!(dossierVal && dossierInput && dossierInput.dataset && dossierInput.dataset.apDossierOk === '1');
+            } else {
+                var nom = document.querySelector('input[name="nom_patient"]');
+                var age = document.querySelector('input[name="age"]');
+                var phone = document.querySelector('input[name="phone"]');
+                var profession = document.querySelector('input[name="profession"]');
+                var ville = document.getElementById('villeSelect');
+                var quartier = document.getElementById('quartierSelect');
+                var quartierId = document.getElementById('hiddenquartierId');
+
+                var nomOk = nom && String(nom.value || '').trim() !== '';
+                var ageOk = age && String(age.value || '').trim() !== '';
+                var phoneOk = phone && String(phone.value || '').trim() !== '';
+                var profOk = profession && String(profession.value || '').trim() !== '';
+                var villeOk = ville && String(ville.value || '').trim() !== '';
+                var quartierOk = (quartier && String(quartier.value || '').trim() !== '') || (quartierId && String(quartierId.value || '').trim() !== '');
+
+                prereqOk = !!(nomOk && ageOk && phoneOk && profOk && villeOk && quartierOk);
+            }
+
+            // Étape 1: service (département)
+            apSetDisabled(serviceSelect, !prereqOk);
+            if (!prereqOk) {
+                if (String(serviceSelect.value || '').trim() !== '') {
+                    serviceSelect.value = '';
+                    apTriggerChange(serviceSelect);
+                }
+            }
+
+            // Étape 2: motif
+            var serviceChosen = prereqOk && String(serviceSelect.value || '').trim() !== '';
+            apSetDisabled(motifSelect, !serviceChosen);
+            if (!serviceChosen) {
+                // Ne reset que si nécessaire pour éviter des boucles/rafraîchissements inutiles
+                var needResetMotif = String(motifSelect.value || '').trim() !== '';
+                if (!needResetMotif) {
+                    // si plus d'une option (ou placeholder différent), on reset aussi
+                    try { needResetMotif = (motifSelect.options && motifSelect.options.length > 1); } catch(e) {}
+                }
+                if (needResetMotif) apResetSelect(motifSelect, '------ Choisir un departement -----');
+            }
+
+            // Étape 3: médecin
+            var motifChosen = serviceChosen && String(motifSelect.value || '').trim() !== '';
+            apSetDisabled(medecinSelect, !motifChosen);
+            if (!motifChosen) {
+                if (String(medecinSelect.value || '').trim() !== '') {
+                    medecinSelect.value = '';
+                    apTriggerChange(medecinSelect);
+                }
+            }
+
+            // Étape 4: date
+            var medecinChosen = motifChosen && String(medecinSelect.value || '').trim() !== '';
+            apSetDisabled(dateInput, !medecinChosen);
+            if (!medecinChosen) {
+                dateInput.value = '';
+                try { dateInput.setCustomValidity(''); } catch(e) {}
+            }
+
+            // Étape 5: créneau
+            var dateChosen = medecinChosen && String(dateInput.value || '').trim() !== '';
+            apSetDisabled(creneauSelect, !dateChosen);
+            if (!dateChosen) {
+                // Reset uniquement si la liste n'est pas déjà au placeholder
+                var shouldResetCreneau = true;
+                try {
+                    shouldResetCreneau = !(creneauSelect.options && creneauSelect.options.length === 1 && String(creneauSelect.options[0].value || '') === '');
+                } catch(e) { shouldResetCreneau = true; }
+                if (shouldResetCreneau) {
+                    creneauSelect.innerHTML = '<option value="">-- Choisir un créneau disponible --</option>';
+                    apTriggerChange(creneauSelect);
+                }
+            }
+            } finally {
+                window.__apRdvFlowUpdating = false;
+            }
+        };
+
         function toggleAssuranceField() {
             var assuranceField = document.getElementById("assuranceField");
             var estAssureRadio = document.querySelector('input[name="estAssure"]:checked');
@@ -700,10 +839,69 @@ require('../PUBLIC/header.php');
             typeRDVFieldExterne.style.display = interne === "1" ? "block" : "none";
         }
 
-        // Initialisation dynamique au chargement
-        document.addEventListener('DOMContentLoaded', function() {
+        // Initialisation dynamique au chargement (ou après injection dans un modal)
+        apOnReady(function() {
             toggleAssuranceField();
             toggleTypeRDV();
+
+            // Mettre un état initial strict
+            try {
+                var dossierInput = document.getElementById('dossierInput');
+                if (dossierInput && dossierInput.dataset) dossierInput.dataset.apDossierOk = '0';
+            } catch(e) {}
+
+            if (typeof window.apUpdateRdvFlowState === 'function') {
+                window.apUpdateRdvFlowState();
+            }
+
+            // Écouteurs (interne/externe + champs identité + chaîne RDV)
+            var radios = document.querySelectorAll('input[name="estInterne"]');
+            radios.forEach(function(r){
+                r.addEventListener('change', function(){
+                    if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState();
+                });
+            });
+
+            var watchedSelectors = [
+                '#dossierInput',
+                'input[name="nom_patient"]',
+                'input[name="age"]',
+                'input[name="phone"]',
+                'input[name="profession"]',
+                '#villeSelect',
+                '#quartierSelect',
+                '#serviceSelect',
+                '#motifSelect',
+                '#medecinSelect',
+                '#dateRdvInput'
+            ];
+
+            watchedSelectors.forEach(function(sel){
+                var el = document.querySelector(sel);
+                if (!el) return;
+                el.addEventListener('change', function(){
+                    if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState();
+                });
+                el.addEventListener('input', function(){
+                    if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState();
+                });
+            });
+
+            // Support Select2: certains choix ne déclenchent pas toujours 'change' selon config
+            try {
+                if (window.jQuery) {
+                    var $ = window.jQuery;
+                    ['#serviceSelect', '#motifSelect', '#medecinSelect', '#villeSelect', '#quartierSelect'].forEach(function(sel){
+                        var el = document.querySelector(sel);
+                        if (!el) return;
+                        if (el.dataset && el.dataset.apSelect2Wired === '1') return;
+                        if (el.dataset) el.dataset.apSelect2Wired = '1';
+                        $(el).on('select2:select select2:clear', function(){
+                            if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState();
+                        });
+                    });
+                }
+            } catch(e) {}
         });
 
     
@@ -715,9 +913,11 @@ require('../PUBLIC/header.php');
     opt.textContent = placeholder || '---';
     selectEl.appendChild(opt);
     // Si tu utilises Select2, déclenche l’update :
-    if ($(selectEl).data('select2')) {
-        $(selectEl).val('').trigger('change');
+    try {
+        if (window.jQuery && window.jQuery(selectEl).data('select2')) {
+            window.jQuery(selectEl).val('').trigger('change');
         }
+    } catch(e) {}
     }
 
 function updateMedecins() {
@@ -726,6 +926,7 @@ function updateMedecins() {
 
     if (!serviceId) {
         resetSelect(medecinSelect, '------ Choisir un département -----');
+        try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
         return;
     }
 
@@ -745,19 +946,23 @@ function updateMedecins() {
                     opt.textContent = m.pseudo;    // libellé affiché
                     medecinSelect.appendChild(opt);
                 }
-                if ($(medecinSelect).data('select2')) {
-                    $(medecinSelect).trigger('change');
-                }
+                try {
+                    if (window.jQuery && window.jQuery(medecinSelect).data('select2')) {
+                        window.jQuery(medecinSelect).trigger('change');
+                    }
+                } catch(e) {}
             }
+            try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
         })
         .catch(err => {
             console.error('Erreur chargement médecins:', err);
             resetSelect(medecinSelect, 'Erreur de chargement');
+            try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
         });
 }
 
 // Si besoin d’initialiser au chargement (en cas de postback avec service déjà choisi)
-document.addEventListener('DOMContentLoaded', function () {
+apOnReady(function () {
     const serviceId = document.getElementById('serviceSelect').value;
     if (serviceId) updateMedecins();
 });
@@ -792,8 +997,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
             async function checkDossier(value){
                 if (!value){
+                    try { if (input.dataset) input.dataset.apDossierOk = '0'; } catch(e) {}
                     setStatus('', null);
                     setSubmitEnabled(true);
+                    try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
                     return;
                 }
                 try {
@@ -804,6 +1011,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     const data = await resp.json();
                     if (data && data.success){
+                        try { if (input.dataset) input.dataset.apDossierOk = '1'; } catch(e) {}
                         const nom = (data.patient && data.patient.nom) ? `: ${data.patient.nom}` : '';
 
                         let rdvInfo = '';
@@ -820,22 +1028,28 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         setSubmitEnabled(true);
                     } else {
+                        try { if (input.dataset) input.dataset.apDossierOk = '0'; } catch(e) {}
                         setStatus('Dossier introuvable', 'err');
                         // Bloquer l’envoi uniquement si RDV interne
                         setSubmitEnabled(!isInterneSelected() ? true : false);
                     }
                 } catch(e){
+                    try { if (input.dataset) input.dataset.apDossierOk = '0'; } catch(e) {}
                     console.error('Erreur vérification dossier:', e);
                     setStatus('Erreur de vérification', 'err');
                     setSubmitEnabled(!isInterneSelected() ? true : false);
+                } finally {
+                    try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
                 }
             }
 
             function debouncedCheck(){
                 if (!isInterneSelected()){
                     // Si RDV externe, ne pas bloquer
+                    try { if (input.dataset) input.dataset.apDossierOk = '0'; } catch(e) {}
                     setStatus('', null);
                     setSubmitEnabled(true);
+                    try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
                     return;
                 }
                 clearTimeout(debounceTimer);
@@ -895,6 +1109,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <script>
         // Chargement des quartiers selon ville (sécurise le cas où updateQuartier n'était pas défini ailleurs)
+        function apOnReady(fn) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fn);
+            } else {
+                fn();
+            }
+        }
+
         function updateQuartier() {
             const villeId = document.getElementById('villeSelect') ? document.getElementById('villeSelect').value : '';
             const quartierSelect = document.getElementById('quartierSelect');
@@ -905,6 +1127,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 quartierSelect.innerHTML = '<option value="">-- vous devez choisir une ville --</option>';
                 if (hiddenId) hiddenId.value = '';
                 if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).val('').trigger('change');
+                try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
                 return;
             }
 
@@ -934,13 +1157,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (hiddenId) hiddenId.value = quartierSelect.value || '';
                         if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).trigger('change');
                     }
+
+                    try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
                 })
                 .catch(() => {
                     quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                    try { if (typeof window.apUpdateRdvFlowState === 'function') window.apUpdateRdvFlowState(); } catch(e) {}
                 });
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
+        apOnReady(function () {
             const quartierSelect = document.getElementById('quartierSelect');
             const hiddenId = document.getElementById('hiddenquartierId');
             if (quartierSelect && hiddenId) {
@@ -1022,6 +1248,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         </script>
 
+        <?php if (!$isModal): ?>
         <!-- Modal: Vérification rendez-vous -->
         <div class="modal fade" id="verificationRdvModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -1078,7 +1305,15 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
 
         <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        function apOnReady(fn) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fn);
+            } else {
+                fn();
+            }
+        }
+
+        apOnReady(function () {
             const modeEl = document.getElementById('rdvCheckMode');
             const labelEl = document.getElementById('rdvCheckLabel');
             const queryEl = document.getElementById('rdvCheckQuery');
@@ -1184,3 +1419,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         </script>
         <?php include('../public/footer.php');?>
+        <?php endif; ?>
+
+        <?php if ($isModal) { exit; } ?>

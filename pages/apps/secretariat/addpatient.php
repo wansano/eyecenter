@@ -5,6 +5,72 @@ session_start();
 
 $isModal = isset($_GET['modal']) && (string)$_GET['modal'] === '1';
 
+// Ajout ville (AJAX) : renvoie JSON et stoppe l'exécution pour ne pas afficher toute la page.
+if (isset($_POST['ajax_add_ville'])) {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $ville = isset($_POST['ville']) ? trim((string)$_POST['ville']) : '';
+    $region = isset($_POST['region']) ? trim((string)$_POST['region']) : '';
+    if ($ville === '') {
+        echo json_encode(['success' => false, 'message' => 'Le nom de la ville est requis.']);
+        exit;
+    }
+    if ($region === '') {
+        echo json_encode(['success' => false, 'message' => 'La région est requise.']);
+        exit;
+    }
+
+    $allowedRegions = ['Basse Guinée', 'Moyenne Guinée', 'Haute Guinée', 'Guinée Forestière'];
+    if (!in_array($region, $allowedRegions, true)) {
+        echo json_encode(['success' => false, 'message' => 'Région invalide.']);
+        exit;
+    }
+
+    try {
+        // Vérifier doublon (nom)
+        $stExists = $bdd->prepare('SELECT id_ville, nom, region FROM adresses_villes WHERE nom = ? LIMIT 1');
+        $stExists->execute([$ville]);
+        $existing = $stExists->fetch(PDO::FETCH_ASSOC);
+        if ($existing) {
+            echo json_encode([
+                'success' => true,
+                'already_exists' => true,
+                'id' => (int)$existing['id_ville'],
+                'nom' => (string)$existing['nom'],
+                'region' => (string)($existing['region'] ?? ''),
+                'message' => 'Cette ville existe déjà.'
+            ]);
+            exit;
+        }
+
+        $cols = ['nom', 'region'];
+        $vals = [$ville, $region];
+        if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'adresses_villes', 'status')) {
+            $cols[] = 'status';
+            $vals[] = 1;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($cols), '?'));
+        $sql = 'INSERT INTO adresses_villes (' . implode(',', $cols) . ') VALUES (' . $placeholders . ')';
+        $stIns = $bdd->prepare($sql);
+        $stIns->execute($vals);
+        $newId = (int)$bdd->lastInsertId();
+
+        echo json_encode([
+            'success' => true,
+            'already_exists' => false,
+            'id' => $newId,
+            'nom' => $ville,
+            'message' => 'Ville ajoutée.'
+        ]);
+        exit;
+    } catch (Exception $e) {
+        error_log('[AJOUT VILLE] ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => "Erreur lors de l'ajout de la ville."]);
+        exit;
+    }
+}
+
 // Ajout quartier (AJAX) : renvoie JSON et stoppe l'exécution pour ne pas afficher toute la page.
 if (isset($_POST['ajax_add_quartier'])) {
     header('Content-Type: application/json; charset=UTF-8');
@@ -265,6 +331,9 @@ if ($isModal) {
                                         ?>
                                     </option>
                                 </select>
+                                <div class="mt-1">
+                                    <a href="#" class="small" id="apAddVilleLink">Ajouter une ville</a>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -273,6 +342,9 @@ if ($isModal) {
                                 <select name="adresse" class="form-control populate" id="quartierSelect" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
                                     <option value="">-- vous devez choisir une ville --</option>
                                 </select>
+                                <div class="mt-1">
+                                    <a href="#" class="small" id="apAddQuartierLink">Ajouter un quartier</a>
+                                </div>
                                 <input type="hidden" id="hiddenquartierId" name="quartier_id" value="">
                             </div>
                         </div>
@@ -344,6 +416,72 @@ if ($isModal) {
                 </form>
             </div>
         </section>
+    </div>
+
+    <!-- Modal: Ajout ville (dans l'app, pas prompt OS) -->
+    <div class="modal fade" id="apAjoutVilleModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Ajouter une ville</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="apVilleModalAlert" class="alert d-none" role="alert"></div>
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="col-form-label">Nom de la ville</label>
+                            <input type="text" class="form-control" id="apVilleNomModal" placeholder="Ex: Pita" autocomplete="off">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="col-form-label">Région</label>
+                            <select class="form-control" id="apVilleRegionModal" required>
+                                <option value="">--- Choisir la région ---</option>
+                                <option value="Basse Guinée">Basse Guinée</option>
+                                <option value="Moyenne Guinée">Moyenne Guinée</option>
+                                <option value="Haute Guinée">Haute Guinée</option>
+                                <option value="Guinée Forestière">Guinée Forestière</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    <button type="button" class="btn btn-primary" id="apBtnSaveVille">Ajouter</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Ajout quartier (dans l'app, pas prompt OS) -->
+    <div class="modal fade" id="apAjoutQuartierModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Ajouter un quartier</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="apQuartierModalAlert" class="alert d-none" role="alert"></div>
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="col-form-label">Ville</label>
+                            <select class="form-control" id="apVilleQuartierModal" required>
+                                <option value="">--- Choisir la ville ---</option>
+                            </select>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="col-form-label">Nom du quartier</label>
+                            <input type="text" class="form-control" id="apQuartierNomModal" placeholder="Ex: Wansan" autocomplete="off" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    <button type="button" class="btn btn-primary" id="apBtnSaveQuartier">Ajouter</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -499,7 +637,9 @@ if ($isModal) {
             }
         })();
 
-        window.updateQuartier = window.updateQuartier || function () {
+        var apSelf = <?php echo json_encode($_SERVER['PHP_SELF']); ?>;
+
+        window.updateQuartier = function () {
             const villeId = document.getElementById('villeSelect') ? document.getElementById('villeSelect').value : '';
             const quartierSelect = document.getElementById('quartierSelect');
             const hiddenId = document.getElementById('hiddenquartierId');
@@ -508,6 +648,9 @@ if ($isModal) {
             if (!villeId) {
                 quartierSelect.innerHTML = '<option value="">-- vous devez choisir une ville --</option>';
                 if (hiddenId) hiddenId.value = '';
+                try {
+                    if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).val('').trigger('change');
+                } catch (e0) {}
                 return;
             }
 
@@ -526,7 +669,20 @@ if ($isModal) {
                         opt.textContent = q.nom;
                         quartierSelect.appendChild(opt);
                     }
-                    if (hiddenId) hiddenId.value = quartierSelect.value || '';
+
+                    if (window.__pendingQuartierSelectId) {
+                        quartierSelect.value = String(window.__pendingQuartierSelectId);
+                        if (hiddenId) hiddenId.value = String(window.__pendingQuartierSelectId);
+                        try {
+                            if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).val(String(window.__pendingQuartierSelectId)).trigger('change');
+                        } catch (e1) {}
+                        window.__pendingQuartierSelectId = null;
+                    } else {
+                        if (hiddenId) hiddenId.value = quartierSelect.value || '';
+                        try {
+                            if (window.$ && $(quartierSelect).data('select2')) $(quartierSelect).trigger('change');
+                        } catch (e2) {}
+                    }
                 })
                 .catch(() => {
                     quartierSelect.innerHTML = '<option value="">Erreur de chargement</option>';
@@ -542,6 +698,272 @@ if ($isModal) {
                     hiddenId.value = quartierSelect.value || '';
                 });
             }
+
+            function apShowInlineAlert(msg) {
+                try {
+                    if (!msg) return;
+                    var form = document.getElementById('apAddPatientForm');
+                    if (!form) return;
+
+                    var existing = document.getElementById('apInlineAlert');
+                    if (!existing) {
+                        existing = document.createElement('div');
+                        existing.id = 'apInlineAlert';
+                        existing.className = 'alert alert-danger';
+                        form.prepend(existing);
+                    }
+                    existing.className = 'alert alert-danger';
+                    existing.textContent = String(msg);
+                } catch (e) {}
+            }
+
+            function apModalAlert(alertEl, type, msg) {
+                try {
+                    if (!alertEl) return;
+                    if (!msg) {
+                        alertEl.className = 'alert d-none';
+                        alertEl.textContent = '';
+                        return;
+                    }
+                    var t = String(type || 'danger');
+                    alertEl.className = 'alert alert-' + t;
+                    alertEl.textContent = String(msg);
+                    alertEl.classList.remove('d-none');
+                } catch (e) {}
+            }
+
+            function apGetModal(id) {
+                try {
+                    if (typeof window.bootstrap === 'undefined') return null;
+                    var el = document.getElementById(id);
+                    if (!el) return null;
+                    return window.bootstrap.Modal.getOrCreateInstance(el);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function apFillVilleOptionsInto(selectEl) {
+                try {
+                    if (!selectEl) return;
+                    var main = document.getElementById('villeSelect');
+                    if (!main) return;
+                    var current = String(selectEl.value || '');
+                    selectEl.innerHTML = '';
+                    selectEl.appendChild(new Option('--- Choisir la ville ---', ''));
+                    for (var i = 0; i < main.options.length; i++) {
+                        var opt = main.options[i];
+                        if (!opt) continue;
+                        var val = String(opt.value || '');
+                        if (val === '') continue;
+                        selectEl.appendChild(new Option(String(opt.text || ''), val));
+                    }
+                    if (current) selectEl.value = current;
+                } catch (e) {}
+            }
+
+            function apEnsureVilleOption(id, label) {
+                var villeSelect = document.getElementById('villeSelect');
+                if (!villeSelect) return;
+                var exists = false;
+                for (var i = 0; i < villeSelect.options.length; i++) {
+                    if (String(villeSelect.options[i].value) === String(id)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    var opt = document.createElement('option');
+                    opt.value = String(id);
+                    opt.textContent = String(label || id);
+                    villeSelect.appendChild(opt);
+                }
+            }
+
+            async function apSubmitAddVille() {
+                var btn = document.getElementById('apBtnSaveVille');
+                var input = document.getElementById('apVilleNomModal');
+                var regionSelect = document.getElementById('apVilleRegionModal');
+                var alertEl = document.getElementById('apVilleModalAlert');
+                var villeSelect = document.getElementById('villeSelect');
+                if (!input || !regionSelect || !villeSelect) return;
+                var nom = String(input.value || '').trim();
+                var region = String(regionSelect.value || '').trim();
+                if (!nom) {
+                    apModalAlert(alertEl, 'danger', 'Veuillez saisir le nom de la ville.');
+                    return;
+                }
+                if (!region) {
+                    apModalAlert(alertEl, 'danger', 'Veuillez choisir la région.');
+                    return;
+                }
+
+                try {
+                    apModalAlert(alertEl, null, '');
+                    if (btn) btn.disabled = true;
+                    var fd = new FormData();
+                    fd.append('ajax_add_ville', '1');
+                    fd.append('ville', nom);
+                    fd.append('region', region);
+                    var resp = await fetch(apSelf, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
+                    var data = await resp.json();
+                    if (!data || !data.success) {
+                        apModalAlert(alertEl, 'danger', (data && data.message) ? data.message : "Erreur lors de l'ajout de la ville.");
+                        return;
+                    }
+
+                    var id = String(data.id || '');
+                    var label = String(data.nom || nom);
+                    if (!id) return;
+                    apEnsureVilleOption(id, label);
+
+                    villeSelect.value = id;
+                    try {
+                        if (window.$ && $(villeSelect).data('select2')) $(villeSelect).val(id).trigger('change');
+                    } catch (e1) {}
+                    try { window.updateQuartier(); } catch (e2) {}
+
+                    var m = apGetModal('apAjoutVilleModal');
+                    if (m) m.hide();
+                } catch (e3) {
+                    apModalAlert(alertEl, 'danger', "Erreur lors de l'ajout de la ville.");
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            }
+
+            async function apSubmitAddQuartier() {
+                var btn = document.getElementById('apBtnSaveQuartier');
+                var villeModal = document.getElementById('apVilleQuartierModal');
+                var input = document.getElementById('apQuartierNomModal');
+                var alertEl = document.getElementById('apQuartierModalAlert');
+                var villeSelect = document.getElementById('villeSelect');
+                if (!villeModal || !input || !villeSelect) return;
+
+                var villeId = String(villeModal.value || '').trim();
+                var nom = String(input.value || '').trim();
+                if (!villeId) {
+                    apModalAlert(alertEl, 'danger', 'Veuillez choisir une ville.');
+                    return;
+                }
+                if (!nom) {
+                    apModalAlert(alertEl, 'danger', 'Veuillez saisir le nom du quartier.');
+                    return;
+                }
+
+                try {
+                    apModalAlert(alertEl, null, '');
+                    if (btn) btn.disabled = true;
+                    var fd = new FormData();
+                    fd.append('ajax_add_quartier', '1');
+                    fd.append('ville_id', villeId);
+                    fd.append('quartier', nom);
+                    var resp = await fetch(apSelf, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
+                    var data = await resp.json();
+                    if (!data || !data.success) {
+                        apModalAlert(alertEl, 'danger', (data && data.message) ? data.message : "Erreur lors de l'ajout du quartier.");
+                        return;
+                    }
+
+                    villeSelect.value = villeId;
+                    try {
+                        if (window.$ && $(villeSelect).data('select2')) $(villeSelect).val(villeId).trigger('change');
+                    } catch (e1) {}
+
+                    window.__pendingQuartierSelectId = data.id;
+                    try { window.updateQuartier(); } catch (e2) {}
+
+                    var m = apGetModal('apAjoutQuartierModal');
+                    if (m) m.hide();
+                } catch (e3) {
+                    apModalAlert(alertEl, 'danger', "Erreur lors de l'ajout du quartier.");
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            }
+
+            var addVilleLink = document.getElementById('apAddVilleLink');
+            if (addVilleLink) {
+                addVilleLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    if (addVilleLink.getAttribute('aria-disabled') === 'true') return;
+                    var alertEl = document.getElementById('apVilleModalAlert');
+                    apModalAlert(alertEl, null, '');
+                    var input = document.getElementById('apVilleNomModal');
+                    if (input) input.value = '';
+                    var regionSelect = document.getElementById('apVilleRegionModal');
+                    if (regionSelect) regionSelect.value = '';
+                    var m = apGetModal('apAjoutVilleModal');
+                    if (m) {
+                        m.show();
+                        setTimeout(function () { try { if (input) input.focus(); } catch (e2) {} }, 50);
+                    }
+                });
+            }
+
+            var addQuartierLink = document.getElementById('apAddQuartierLink');
+            if (addQuartierLink) {
+                addQuartierLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    if (addQuartierLink.getAttribute('aria-disabled') === 'true') return;
+                    var villeSelect = document.getElementById('villeSelect');
+                    var villeId = villeSelect ? String(villeSelect.value || '').trim() : '';
+                    if (!villeId) {
+                        apShowInlineAlert('Veuillez d\'abord choisir une ville.');
+                        return;
+                    }
+                    var alertEl = document.getElementById('apQuartierModalAlert');
+                    apModalAlert(alertEl, null, '');
+                    var villeModal = document.getElementById('apVilleQuartierModal');
+                    apFillVilleOptionsInto(villeModal);
+                    if (villeModal) villeModal.value = villeId;
+                    var input = document.getElementById('apQuartierNomModal');
+                    if (input) input.value = '';
+                    var m = apGetModal('apAjoutQuartierModal');
+                    if (m) {
+                        m.show();
+                        setTimeout(function () { try { if (input) input.focus(); } catch (e2) {} }, 50);
+                    }
+                });
+            }
+
+            var btnSaveVille = document.getElementById('apBtnSaveVille');
+            if (btnSaveVille) {
+                btnSaveVille.addEventListener('click', function () {
+                    apSubmitAddVille();
+                });
+            }
+
+            var btnSaveQuartier = document.getElementById('apBtnSaveQuartier');
+            if (btnSaveQuartier) {
+                btnSaveQuartier.addEventListener('click', function () {
+                    apSubmitAddQuartier();
+                });
+            }
+
+            // Entrée: valider au Enter dans les champs
+            try {
+                var vInput = document.getElementById('apVilleNomModal');
+                if (vInput) {
+                    vInput.addEventListener('keydown', function (ev) {
+                        if (ev && ev.key === 'Enter') {
+                            ev.preventDefault();
+                            apSubmitAddVille();
+                        }
+                    });
+                }
+            } catch (e) {}
+            try {
+                var qInput = document.getElementById('apQuartierNomModal');
+                if (qInput) {
+                    qInput.addEventListener('keydown', function (ev) {
+                        if (ev && ev.key === 'Enter') {
+                            ev.preventDefault();
+                            apSubmitAddQuartier();
+                        }
+                    });
+                }
+            } catch (e2) {}
         })();
     </script>
     <?php

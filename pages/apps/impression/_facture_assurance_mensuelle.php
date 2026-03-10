@@ -69,6 +69,7 @@ $devise = 'GNF';
 try {
     if (!empty($dataProfil['devise'])) {
         $devise = trim((string)$dataProfil['devise']);
+        $denomination = trim((string)$dataProfil['denomination']);
     }
 } catch (Throwable $e) {
     $devise = 'GNF';
@@ -252,7 +253,7 @@ $pdf->SetXY($marginX, $y);
 $pdf->Cell($leftW, 6, pdf_text_compat('Conditions de paiement :'), 0, 0, 'L');
 $pdf->SetFont('CenturyGothic', '', 11);
 $pdf->SetXY($marginX + $leftW, $y);
-$pdf->Cell($rightW, 6, pdf_text_compat('Le comptable'), 0, 1, 'R');
+$pdf->Cell($rightW, 6, pdf_text_compat('La trésorerie'), 0, 1, 'R');
 
 $lineH = 7;
 $box = 4;
@@ -266,17 +267,15 @@ $drawOption = function (string $label) use ($pdf, $marginX, $lineH) {
 };
 
 $pdf->SetY($optY);
-$drawOption('Espèce');
-$drawOption('Chèque');
-$drawOption('Virement');
-
+$drawOption('Espèce, Chèque, Virement.');
+$drawOption('Les chèques sont à l\'ordre de : ' . ($denomination ?? '__________'));
 // Zone signature (alignée à droite)
 $signX = $marginX + $leftW;
 $signTopY = $optY;
 $pdf->SetXY($signX, $signTopY + 6);
 $pdf->Cell($rightW, 7, '', 0, 1, 'R');
 $pdf->SetXY($signX, $signTopY + 10);
-$pdf->Cell($rightW, 7, '', 'B', 1, 'R');
+$pdf->Cell($rightW, 7, '', 0, 1, 'R');
 $pdf->SetXY($signX, $signTopY + 14);
 $pdf->SetFont('CenturyGothic', '', 10);
 $authId = (isset($_SESSION) && isset($_SESSION['auth'])) ? (int)$_SESSION['auth'] : 0;

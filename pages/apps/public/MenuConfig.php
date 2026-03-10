@@ -176,7 +176,7 @@ class MenuConfig {
         <li class="dropdown">
             <a href="#" class="nav-link dropdown-toggle">Rendez-vous</a>
             <ul class="dropdown-menu">
-                <li><a class="nav-link" href="ajoutrdv.php">Ajouter un rendez-vous</a></li>
+                <!-- <li><a class="nav-link" href="ajoutrdv.php">Ajouter un rendez-vous</a></li> -->
                 <li><a class="nav-link" href="convocation.php">Liste des rendez-vous</a></li>
             </ul>
         </li>';

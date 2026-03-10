@@ -104,6 +104,24 @@
                         motifSelect.appendChild(option);
                     });
                 }
+
+                // Si Select2 est utilisé, rafraîchir l'affichage
+                try {
+                    if (window.jQuery && jQuery(motifSelect).data('select2')) {
+                        jQuery(motifSelect).trigger('change');
+                    }
+                } catch (e) {
+                    // noop
+                }
+
+                // Workflow RDV (si présent sur la page)
+                try {
+                    if (typeof window.apUpdateRdvFlowState === 'function') {
+                        window.apUpdateRdvFlowState();
+                    }
+                } catch (e) {
+                    // noop
+                }
             })
             .catch(error => {
                 console.error("Erreur lors de la récupération des motifs :", error);
@@ -151,32 +169,42 @@
 
     // Fonction pour récupérer le prix du motif sélectionné
     function fetchMotifPrice() {
-    const motifId = document.getElementById("motifSelect").value;
-    console.log("Motif sélectionné :", motifId); // Vérifier l'ID sélectionné
+    var motifSelect = document.getElementById('motifSelect');
+    if (!motifSelect) return;
 
-        const assurancePriceEl = document.getElementById("productPriceAssurance");
+    var motifId = motifSelect.value;
+
+    // Ces champs n'existent pas sur toutes les pages (ex: ajout RDV)
+    var priceEl = document.getElementById('productPrice');
+    var assurancePriceEl = document.getElementById('productPriceAssurance');
+    var hiddenMotifEl = document.getElementById('hiddenMotifId');
 
     if (!motifId) {
-        document.getElementById("productPrice").value = "";
-        if (assurancePriceEl) assurancePriceEl.value = "";
-        document.getElementById("hiddenMotifId").value = "";
+        if (priceEl) priceEl.value = '';
+        if (assurancePriceEl) assurancePriceEl.value = '';
+        if (hiddenMotifEl) hiddenMotifEl.value = '';
         return;
     }
 
-    fetch(`../PUBLIC/getMotifPrice.php?motif=${motifId}`)
+    // Si la page ne gère pas les prix, on ne bloque pas le workflow.
+    // On se contente de synchroniser le champ caché si présent.
+    if (!priceEl && !assurancePriceEl) {
+        if (hiddenMotifEl) hiddenMotifEl.value = motifId;
+        return;
+    }
+
+    fetch(`../PUBLIC/getMotifPrice.php?motif=${encodeURIComponent(motifId)}`)
         .then(response => {
-            console.log("Réponse brute :", response); // Debug : Vérifier la réponse brute
             if (!response.ok) {
                 throw new Error("Erreur HTTP : " + response.status);
             }
             return response.json(); // Parse la réponse JSON
         })
         .then(data => {
-            console.log("Données reçues :", data); // Debug : Afficher les données reçues
             if (data.success) {
                 // Affiche le prix et met à jour le champ caché
                 const formattedPrice = Number(data.montant).toLocaleString('en-US');
-                document.getElementById("productPrice").value = formattedPrice;
+                if (priceEl) priceEl.value = formattedPrice;
 
                 if (assurancePriceEl) {
                     const pa = (data.prix_assurance !== undefined && data.prix_assurance !== null && String(data.prix_assurance).trim() !== '')
@@ -185,18 +213,18 @@
                     assurancePriceEl.value = Number.isFinite(pa) ? pa.toLocaleString('en-US') : '—';
                 }
 
-                document.getElementById("hiddenMotifId").value = motifId; // Enregistre l'ID du motif pour l'envoi
+                if (hiddenMotifEl) hiddenMotifEl.value = motifId; // Enregistre l'ID du motif pour l'envoi
             } else {
-                document.getElementById("productPrice").value = "Non disponible";
+                if (priceEl) priceEl.value = "Non disponible";
                 if (assurancePriceEl) assurancePriceEl.value = "—";
-                document.getElementById("hiddenMotifId").value = "";
+                if (hiddenMotifEl) hiddenMotifEl.value = "";
             }
         })
         .catch(error => {
             console.error("Erreur lors de la récupération du prix :", error);
-            document.getElementById("productPrice").value = "Erreur";
+            if (priceEl) priceEl.value = "Erreur";
             if (assurancePriceEl) assurancePriceEl.value = "—";
-            document.getElementById("hiddenMotifId").value = "";
+            if (hiddenMotifEl) hiddenMotifEl.value = "";
         });
 }
 
@@ -295,8 +323,14 @@ function updateQuartier() {
 }
 
 // Mettre à jour hiddenquartierId lorsqu'un quartier est sélectionné
-document.getElementById("quartierSelect").addEventListener("change", function () {
-    document.getElementById("hiddenquartierId").value = this.value;
+// (certaines pages n'ont pas ces champs, donc on protège)
+document.addEventListener('DOMContentLoaded', function () {
+    var quartierSelect = document.getElementById('quartierSelect');
+    var hiddenQuartierId = document.getElementById('hiddenquartierId');
+    if (!quartierSelect || !hiddenQuartierId) return;
+    quartierSelect.addEventListener('change', function () {
+        hiddenQuartierId.value = this.value;
+    });
 });
 
 // fonction pour recuperer et afficher la quantité du bon de livraison

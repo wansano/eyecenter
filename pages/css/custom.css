@@ -1,1 +1,11 @@
 /* Add here all your CSS customizations */
+
+/* Header dropdowns dark: texte en blanc */
+#header .header-nav.header-nav-dropdowns-dark nav > ul > li.dropdown .dropdown-menu > li > a,
+#header .header-nav.header-nav-dropdowns-dark nav > ul > li.dropdown li a {
+	color: #FFF;
+}
+
+#header .header-nav.header-nav-dropdowns-dark nav > ul > li.dropdown.dropdown-mega .dropdown-mega-sub-title {
+	color: #FFF;
+}
