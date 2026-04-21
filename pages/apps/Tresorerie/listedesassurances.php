@@ -212,6 +212,244 @@ if (isset($_GET['ajax_details'])) {
 	}
 }
 
+// Endpoint AJAX: liste des assurés d'un assureur pour modal
+if (isset($_GET['ajax_assures'])) {
+	header('Content-Type: application/json; charset=UTF-8');
+	$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+	if ($id <= 0) {
+		echo json_encode(['success' => false, 'message' => 'ID invalide.']);
+		exit;
+	}
+
+	try {
+		if (!function_exists('dbTableHasColumn') || !dbTableHasColumn($bdd, 'patients', 'assurance')) {
+			echo json_encode([
+				'success' => true,
+				'message' => 'La colonne patients.assurance est indisponible.',
+				'patients' => [],
+			], JSON_UNESCAPED_UNICODE);
+			exit;
+		}
+
+		$selectCols = [];
+		$candidates = ['id_patient', 'nom_patient', 'phone', 'sexe', 'age'];
+		foreach ($candidates as $col) {
+			if (dbTableHasColumn($bdd, 'patients', $col)) {
+				$selectCols[] = $col;
+			}
+		}
+
+		$carteCol = null;
+		$expirationCol = null;
+		$tauxCol = null;
+		if (dbTableHasColumn($bdd, 'patients', 'carteAdhesion')) $carteCol = 'carteAdhesion';
+		elseif (dbTableHasColumn($bdd, 'patients', 'carte_adhesion')) $carteCol = 'carte_adhesion';
+
+		if (dbTableHasColumn($bdd, 'patients', 'dateExpiration')) $expirationCol = 'dateExpiration';
+		elseif (dbTableHasColumn($bdd, 'patients', 'date_expiration')) $expirationCol = 'date_expiration';
+
+		if (dbTableHasColumn($bdd, 'patients', 'tauxPrisecharge')) $tauxCol = 'tauxPrisecharge';
+		elseif (dbTableHasColumn($bdd, 'patients', 'TauxPrisecharge')) $tauxCol = 'TauxPrisecharge';
+		elseif (dbTableHasColumn($bdd, 'patients', 'taux_prisecharge')) $tauxCol = 'taux_prisecharge';
+
+		if ($carteCol) $selectCols[] = $carteCol;
+		if ($expirationCol) $selectCols[] = $expirationCol;
+		if ($tauxCol) $selectCols[] = $tauxCol;
+		$selectCols = array_values(array_unique($selectCols));
+
+		if (empty($selectCols)) {
+			echo json_encode([
+				'success' => true,
+				'patients' => [],
+			], JSON_UNESCAPED_UNICODE);
+			exit;
+		}
+
+		$sql = 'SELECT ' . implode(', ', $selectCols) . ' FROM patients WHERE assurance = ?';
+		$params = [$id];
+		if (dbTableHasColumn($bdd, 'patients', 'assure')) {
+			$sql .= ' AND assure = 1';
+		}
+		$sql .= ' ORDER BY id_patient DESC LIMIT 500';
+
+		$st = $bdd->prepare($sql);
+		$st->execute($params);
+		$rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+		$patients = [];
+		foreach ($rows as $r) {
+			$idPatient = isset($r['id_patient']) ? (int)$r['id_patient'] : 0;
+			$nom = isset($r['nom_patient']) ? (string)$r['nom_patient'] : '';
+			if ($nom === '' && $idPatient > 0 && function_exists('nom_patient')) {
+				$nom = (string)nom_patient($idPatient);
+			}
+
+			$patients[] = [
+				'id_patient' => $idPatient,
+				'nom_patient' => $nom,
+				'phone' => (string)($r['phone'] ?? ''),
+				'sexe' => (string)($r['sexe'] ?? ''),
+				'age' => (string)($r['age'] ?? ''),
+				'carte_adhesion' => $carteCol ? (string)($r[$carteCol] ?? '') : '',
+				'date_expiration' => $expirationCol ? (string)($r[$expirationCol] ?? '') : '',
+				'taux' => $tauxCol ? (string)($r[$tauxCol] ?? '') : '',
+			];
+		}
+
+		echo json_encode([
+			'success' => true,
+			'count' => count($patients),
+			'patients' => $patients,
+		], JSON_UNESCAPED_UNICODE);
+		exit;
+	} catch (Throwable $e) {
+		error_log('[ASSURES LIST] ' . $e->getMessage());
+		echo json_encode(['success' => false, 'message' => 'Erreur lors du chargement des assurés.']);
+		exit;
+	}
+}
+
+// Vue imprimable: liste des assurés d'un assureur (prévue pour impression PDF)
+if (isset($_GET['pdf_assures'])) {
+	$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+	if ($id <= 0) {
+		header('Content-Type: text/html; charset=UTF-8');
+		echo '<!doctype html><html><head><meta charset="UTF-8"><title>Liste des patients pris en charge</title></head><body><p>ID invalide.</p></body></html>';
+		exit;
+	}
+
+	$assuranceNom = '';
+	try {
+		$idCol = appec_getAssuranceIdColumn($bdd) ?: 'id_assurance';
+		$stAss = $bdd->prepare('SELECT assurance FROM assurances WHERE ' . $idCol . ' = ? LIMIT 1');
+		$stAss->execute([$id]);
+		$assuranceNom = (string)($stAss->fetchColumn() ?: '');
+	} catch (Throwable $e) {
+		$assuranceNom = '';
+	}
+
+	$rows = [];
+	if (function_exists('dbTableHasColumn') && dbTableHasColumn($bdd, 'patients', 'assurance')) {
+		$selectCols = [];
+		$candidates = ['id_patient', 'nom_patient', 'phone', 'sexe', 'age'];
+		foreach ($candidates as $col) {
+			if (dbTableHasColumn($bdd, 'patients', $col)) {
+				$selectCols[] = $col;
+			}
+		}
+
+		$carteCol = null;
+		$expirationCol = null;
+		$tauxCol = null;
+		if (dbTableHasColumn($bdd, 'patients', 'carteAdhesion')) $carteCol = 'carteAdhesion';
+		elseif (dbTableHasColumn($bdd, 'patients', 'carte_adhesion')) $carteCol = 'carte_adhesion';
+
+		if (dbTableHasColumn($bdd, 'patients', 'dateExpiration')) $expirationCol = 'dateExpiration';
+		elseif (dbTableHasColumn($bdd, 'patients', 'date_expiration')) $expirationCol = 'date_expiration';
+
+		if (dbTableHasColumn($bdd, 'patients', 'tauxPrisecharge')) $tauxCol = 'tauxPrisecharge';
+		elseif (dbTableHasColumn($bdd, 'patients', 'TauxPrisecharge')) $tauxCol = 'TauxPrisecharge';
+		elseif (dbTableHasColumn($bdd, 'patients', 'taux_prisecharge')) $tauxCol = 'taux_prisecharge';
+
+		if ($carteCol) $selectCols[] = $carteCol;
+		if ($expirationCol) $selectCols[] = $expirationCol;
+		if ($tauxCol) $selectCols[] = $tauxCol;
+		$selectCols = array_values(array_unique($selectCols));
+
+		if (!empty($selectCols)) {
+			$sql = 'SELECT ' . implode(', ', $selectCols) . ' FROM patients WHERE assurance = ?';
+			if (dbTableHasColumn($bdd, 'patients', 'assure')) {
+				$sql .= ' AND assure = 1';
+			}
+			$sql .= ' ORDER BY id_patient DESC LIMIT 1000';
+
+			$st = $bdd->prepare($sql);
+			$st->execute([$id]);
+			$rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+		}
+	}
+
+	header('Content-Type: text/html; charset=UTF-8');
+	?>
+<!doctype html>
+<html lang="fr">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Liste des patients pris en charge</title>
+	<style>
+		body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+		h2 { margin: 0 0 6px 0; font-size: 20px; }
+		.meta { margin: 0 0 14px 0; color: #444; font-size: 13px; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { border: 1px solid #aaa; padding: 8px; font-size: 12px; text-align: left; vertical-align: top; }
+		thead th { background: #f5f5f5; }
+		.empty { text-align: center; color: #666; }
+		@media print {
+			body { margin: 10mm; }
+		}
+	</style>
+</head>
+<body>
+	<h2>Liste des patients pris en charge</h2>
+	<p class="meta">
+		Assureur : <?php echo htmlspecialchars($assuranceNom !== '' ? $assuranceNom : ('ASEC' . $id), ENT_QUOTES, 'UTF-8'); ?>
+		<br>
+		Date : <?php echo date('d/m/Y H:i'); ?>
+	</p>
+
+	<table>
+		<thead>
+			<tr>
+				<th>Dossier</th>
+				<th>Nom</th>
+				<th>N° carte adhésion</th>
+				<th>Date expiration</th>
+				<th>Taux</th>
+				<th>Téléphone</th>
+				<th>Sexe</th>
+				<th>Âge</th>
+			</tr>
+		</thead>
+		<tbody>
+		<?php if (empty($rows)): ?>
+			<tr><td colspan="8" class="empty">Aucun assuré trouvé.</td></tr>
+		<?php else: ?>
+			<?php foreach ($rows as $r): ?>
+				<?php
+					$carte = '';
+					if (isset($r['carteAdhesion'])) $carte = (string)$r['carteAdhesion'];
+					elseif (isset($r['carte_adhesion'])) $carte = (string)$r['carte_adhesion'];
+
+					$expiration = '';
+					if (isset($r['dateExpiration'])) $expiration = (string)$r['dateExpiration'];
+					elseif (isset($r['date_expiration'])) $expiration = (string)$r['date_expiration'];
+
+					$tauxVal = '';
+					if (isset($r['tauxPrisecharge'])) $tauxVal = (string)$r['tauxPrisecharge'];
+					elseif (isset($r['TauxPrisecharge'])) $tauxVal = (string)$r['TauxPrisecharge'];
+					elseif (isset($r['taux_prisecharge'])) $tauxVal = (string)$r['taux_prisecharge'];
+				?>
+				<tr>
+					<td><?php echo !empty($r['id_patient']) ? ('PAT-' . (int)$r['id_patient']) : '-'; ?></td>
+					<td><?php echo htmlspecialchars((string)($r['nom_patient'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+					<td><?php echo htmlspecialchars($carte, ENT_QUOTES, 'UTF-8'); ?></td>
+					<td><?php echo htmlspecialchars($expiration, ENT_QUOTES, 'UTF-8'); ?></td>
+					<td><?php echo htmlspecialchars($tauxVal !== '' ? ($tauxVal . '%') : '', ENT_QUOTES, 'UTF-8'); ?></td>
+					<td><?php echo htmlspecialchars((string)($r['phone'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+					<td><?php echo htmlspecialchars((string)($r['sexe'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+					<td><?php echo htmlspecialchars((string)($r['age'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+				</tr>
+			<?php endforeach; ?>
+		<?php endif; ?>
+		</tbody>
+	</table>
+</body>
+</html>
+	<?php
+	exit;
+}
+
 include('../PUBLIC/header.php');
 ?>
 	<body>
@@ -365,12 +603,79 @@ include('../PUBLIC/header.php');
 												<tr><th>Status</th><td id="ad_status">-</td></tr>
 												<tr><th colspan="2" class="table-light">Situation</th></tr>
 												<tr><th>Patients assurés</th><td id="ad_patients">-</td></tr>
+												<tr>
+													<th>Liste des patients</th>
+													<td>
+														<button type="button" class="btn btn-sm btn-outline-primary disabled" id="btnShowAssuresList" aria-disabled="true" tabindex="-1">
+															<i class="fa fa-users"></i> Voir la liste des assurés
+														</button>
+														<button type="button" class="btn btn-sm btn-outline-dark disabled" id="btnShowAssuresPdf" aria-disabled="true" tabindex="-1">
+															<i class="fa fa-file-pdf-o"></i> Voir en PDF
+														</button>
+													</td>
+												</tr>
 											</tbody>
 										</table>
 									</div>
 								</div>
 								<div class="modal-footer">
 									<a class="btn btn-primary" id="btnFacturationFromDetails" href="facturationassurance.php" role="button"><i class="fa fa-file-text-o"></i>Facturation</a>
+									<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal: Liste des assurés d'un assureur -->
+					<div class="modal fade" id="assuresListModal" tabindex="-1" aria-hidden="true">
+						<div class="modal-dialog modal-lg modal-dialog-scrollable">
+							<div class="modal-content">
+								<div class="modal-header">
+									<h5 class="modal-title" id="assuresListTitle">Liste des assurés</h5>
+									<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+								</div>
+								<div class="modal-body">
+									<div id="assuresListAlert" class="alert d-none" role="alert"></div>
+									<div class="table-responsive">
+										<table class="table table-bordered table-striped mb-0">
+											<thead>
+												<tr>
+													<th>Dossier</th>
+													<th>Nom</th>
+													<th>N° carte adhésion</th>
+													<th>Date expiration</th>
+													<th>Taux</th>
+													<th>Téléphone</th>
+													<th>Sexe</th>
+													<th>Âge</th>
+												</tr>
+											</thead>
+											<tbody id="assuresListBody">
+												<tr><td colspan="8" class="text-center text-muted">Aucune donnée</td></tr>
+											</tbody>
+										</table>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal: Aperçu PDF des assurés -->
+					<div class="modal fade" id="assuresPdfModal" tabindex="-1" aria-hidden="true">
+						<div class="modal-dialog modal-xl modal-dialog-scrollable">
+							<div class="modal-content">
+								<div class="modal-header">
+									<h5 class="modal-title" id="assuresPdfTitle">Aperçu PDF des assurés</h5>
+									<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+								</div>
+								<div class="modal-body p-0">
+									<iframe id="assuresPdfFrame" title="Aperçu PDF assurés" style="width:100%; height:70vh; border:0;" src="about:blank"></iframe>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-primary" id="btnPrintAssuresPdf"><i class="fa fa-print"></i> Imprimer en PDF</button>
 									<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
 								</div>
 							</div>
@@ -427,11 +732,22 @@ include('../PUBLIC/header.php');
 							const modalEl = document.getElementById('addAssuranceModal');
 							const modalBody = document.getElementById('addAssuranceModalBody');
 							const detailsModalEl = document.getElementById('assuranceDetailsModal');
+							const assuresListModalEl = document.getElementById('assuresListModal');
+							const assuresPdfModalEl = document.getElementById('assuresPdfModal');
 							const editModalEl = document.getElementById('editAssuranceModal');
 							const detailsAlertEl = document.getElementById('assuranceDetailsAlert');
+							const assuresListAlertEl = document.getElementById('assuresListAlert');
+							const assuresListBodyEl = document.getElementById('assuresListBody');
+							const assuresListTitleEl = document.getElementById('assuresListTitle');
+							const btnShowAssuresList = document.getElementById('btnShowAssuresList');
+							const btnShowAssuresPdf = document.getElementById('btnShowAssuresPdf');
+							const assuresPdfTitleEl = document.getElementById('assuresPdfTitle');
+							const assuresPdfFrameEl = document.getElementById('assuresPdfFrame');
+							const btnPrintAssuresPdf = document.getElementById('btnPrintAssuresPdf');
 							const btnFacturationDetails = document.getElementById('btnFacturationFromDetails');
 							const devise = <?php echo json_encode($devise, JSON_UNESCAPED_UNICODE); ?>;
 							let pendingReload = false;
+							let currentDetailsAssurance = { id: null, nom: '' };
 
 							function showModal(modalElToShow) {
 								if (!modalElToShow) return;
@@ -455,6 +771,16 @@ include('../PUBLIC/header.php');
 								return window.bootstrap.Modal.getInstance(detailsModalEl) || new window.bootstrap.Modal(detailsModalEl);
 							}
 
+							function getAssuresListModalInstance() {
+								if (!window.bootstrap || !window.bootstrap.Modal) return null;
+								return window.bootstrap.Modal.getInstance(assuresListModalEl) || new window.bootstrap.Modal(assuresListModalEl);
+							}
+
+							function getAssuresPdfModalInstance() {
+								if (!window.bootstrap || !window.bootstrap.Modal) return null;
+								return window.bootstrap.Modal.getInstance(assuresPdfModalEl) || new window.bootstrap.Modal(assuresPdfModalEl);
+							}
+
 							function setDetailsAlert(type, msg) {
 								if (!detailsAlertEl) return;
 								if (!msg) {
@@ -471,6 +797,54 @@ include('../PUBLIC/header.php');
 								const el = document.getElementById(id);
 								if (!el) return;
 								el.textContent = (val === null || val === undefined || val === '') ? '-' : String(val);
+							}
+
+							function setAssuresAlert(type, msg) {
+								if (!assuresListAlertEl) return;
+								if (!msg) {
+									assuresListAlertEl.className = 'alert d-none';
+									assuresListAlertEl.textContent = '';
+									return;
+								}
+								assuresListAlertEl.className = 'alert alert-' + type;
+								assuresListAlertEl.textContent = msg;
+								assuresListAlertEl.classList.remove('d-none');
+							}
+
+							function escapeHtml(value) {
+								return String(value ?? '')
+									.replace(/&/g, '&amp;')
+									.replace(/</g, '&lt;')
+									.replace(/>/g, '&gt;')
+									.replace(/"/g, '&quot;')
+									.replace(/'/g, '&#39;');
+							}
+
+							function setAssuresButtonEnabled(enabled) {
+								if (!btnShowAssuresList) return;
+								if (enabled) {
+									btnShowAssuresList.classList.remove('disabled');
+									btnShowAssuresList.removeAttribute('aria-disabled');
+									btnShowAssuresList.removeAttribute('tabindex');
+									if (btnShowAssuresPdf) {
+										btnShowAssuresPdf.classList.remove('disabled');
+										btnShowAssuresPdf.removeAttribute('aria-disabled');
+										btnShowAssuresPdf.removeAttribute('tabindex');
+									}
+									return;
+								}
+								btnShowAssuresList.classList.add('disabled');
+								btnShowAssuresList.setAttribute('aria-disabled', 'true');
+								btnShowAssuresList.setAttribute('tabindex', '-1');
+								if (btnShowAssuresPdf) {
+									btnShowAssuresPdf.classList.add('disabled');
+									btnShowAssuresPdf.setAttribute('aria-disabled', 'true');
+									btnShowAssuresPdf.setAttribute('tabindex', '-1');
+								}
+							}
+
+							function buildAssuresPdfUrl(assuranceId) {
+								return 'listedesassurances.php?pdf_assures=1&id=' + encodeURIComponent(String(assuranceId));
 							}
 
 							function formatMoneyMaybe(v) {
@@ -496,6 +870,8 @@ include('../PUBLIC/header.php');
 
 							async function loadAssuranceDetails(id) {
 								setDetailsAlert(null, '');
+								currentDetailsAssurance = { id: null, nom: '' };
+								setAssuresButtonEnabled(false);
 								setText('ad_id', '-');
 								setText('ad_nom', '-');
 								setText('ad_contrat', '-');
@@ -537,6 +913,12 @@ include('../PUBLIC/header.php');
 									setText('ad_credit', formatMoneyWithCurrency(sit.credit));
 									setText('ad_solde', formatMoneyWithCurrency(sit.solde));
 
+									currentDetailsAssurance = {
+										id: assuranceId,
+										nom: String(a.nom || '')
+									};
+									setAssuresButtonEnabled(true);
+
 									if (btnFacturationDetails) {
 										btnFacturationDetails.href = 'facturationassurance.php?assurance_id=' + encodeURIComponent(String(assuranceId));
 										btnFacturationDetails.classList.remove('disabled');
@@ -545,6 +927,66 @@ include('../PUBLIC/header.php');
 									}
 								} catch (e) {
 									setDetailsAlert('danger', 'Erreur lors du chargement des détails.');
+								}
+							}
+
+							async function loadAssuresList(assuranceId, assuranceNom) {
+								setAssuresAlert(null, '');
+								if (assuresListTitleEl) {
+									assuresListTitleEl.textContent = 'Liste des assurés - ' + (assuranceNom ? assuranceNom : ('ASEC' + String(assuranceId)));
+								}
+								if (assuresListBodyEl) {
+									assuresListBodyEl.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Chargement...</td></tr>';
+								}
+
+								try {
+									const res = await fetch('listedesassurances.php?ajax_assures=1&id=' + encodeURIComponent(String(assuranceId)), { headers: { 'Accept': 'application/json' } });
+									const json = await res.json();
+									if (!json || !json.success) {
+										setAssuresAlert('warning', (json && json.message) ? json.message : 'Impossible de charger la liste des assurés.');
+										if (assuresListBodyEl) {
+											assuresListBodyEl.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Aucune donnée</td></tr>';
+										}
+										return;
+									}
+
+									const patients = Array.isArray(json.patients) ? json.patients : [];
+									if (!patients.length) {
+										if (assuresListBodyEl) {
+											assuresListBodyEl.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Aucun assuré trouvé pour cet assureur.</td></tr>';
+										}
+										return;
+									}
+
+									const rowsHtml = patients.map(function (p) {
+										const idPatient = (p && p.id_patient !== null && p.id_patient !== undefined && String(p.id_patient) !== '') ? ('PAT-' + String(p.id_patient)) : '-';
+										const nom = (p && p.nom_patient) ? String(p.nom_patient) : '-';
+										const carte = (p && p.carte_adhesion) ? String(p.carte_adhesion) : '-';
+										const expiration = (p && p.date_expiration) ? String(p.date_expiration) : '-';
+										const taux = (p && p.taux !== null && p.taux !== undefined && String(p.taux) !== '') ? (String(p.taux) + '%') : '-';
+										const phone = (p && p.phone) ? String(p.phone) : '-';
+										const sexe = (p && p.sexe) ? String(p.sexe) : '-';
+										const age = (p && p.age) ? String(p.age) : '-';
+										return '<tr>'
+											+ '<td>' + escapeHtml(idPatient) + '</td>'
+											+ '<td>' + escapeHtml(nom) + '</td>'
+											+ '<td>' + escapeHtml(carte) + '</td>'
+											+ '<td>' + escapeHtml(expiration) + '</td>'
+											+ '<td>' + escapeHtml(taux) + '</td>'
+											+ '<td>' + escapeHtml(phone) + '</td>'
+											+ '<td>' + escapeHtml(sexe) + '</td>'
+											+ '<td>' + escapeHtml(age) + '</td>'
+											+ '</tr>';
+									}).join('');
+
+									if (assuresListBodyEl) {
+										assuresListBodyEl.innerHTML = rowsHtml;
+									}
+								} catch (e) {
+									setAssuresAlert('danger', 'Erreur lors du chargement de la liste des assurés.');
+									if (assuresListBodyEl) {
+										assuresListBodyEl.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Aucune donnée</td></tr>';
+									}
 								}
 							}
 
@@ -628,6 +1070,59 @@ include('../PUBLIC/header.php');
 								const inst = getDetailsModalInstance();
 								if (inst) inst.show();
 							});
+
+							document.addEventListener('click', async function (e) {
+								const btn = e.target && e.target.closest ? e.target.closest('#btnShowAssuresList') : null;
+								if (!btn) return;
+								e.preventDefault();
+								if (btn.classList.contains('disabled') || !currentDetailsAssurance.id) {
+									setDetailsAlert('warning', 'Chargez d\'abord les détails de l\'assurance.');
+									return;
+								}
+								await loadAssuresList(currentDetailsAssurance.id, currentDetailsAssurance.nom);
+								const inst = getAssuresListModalInstance();
+								if (inst) inst.show();
+							});
+
+							document.addEventListener('click', function (e) {
+								const btn = e.target && e.target.closest ? e.target.closest('#btnShowAssuresPdf') : null;
+								if (!btn) return;
+								e.preventDefault();
+								if (btn.classList.contains('disabled') || !currentDetailsAssurance.id) {
+									setDetailsAlert('warning', 'Chargez d\'abord les détails de l\'assurance.');
+									return;
+								}
+
+								if (assuresPdfTitleEl) {
+									assuresPdfTitleEl.textContent = 'Aperçu PDF des assurés - ' + (currentDetailsAssurance.nom || ('ASEC' + String(currentDetailsAssurance.id)));
+								}
+								if (assuresPdfFrameEl) {
+									assuresPdfFrameEl.src = buildAssuresPdfUrl(currentDetailsAssurance.id);
+								}
+
+								const inst = getAssuresPdfModalInstance();
+								if (inst) inst.show();
+							});
+
+							if (btnPrintAssuresPdf) {
+								btnPrintAssuresPdf.addEventListener('click', function () {
+									if (!assuresPdfFrameEl || !assuresPdfFrameEl.contentWindow) return;
+									try {
+										assuresPdfFrameEl.contentWindow.focus();
+										assuresPdfFrameEl.contentWindow.print();
+									} catch (e) {
+										window.print();
+									}
+								});
+							}
+
+							if (assuresPdfModalEl) {
+								assuresPdfModalEl.addEventListener('hidden.bs.modal', function () {
+									if (assuresPdfFrameEl) {
+										assuresPdfFrameEl.src = 'about:blank';
+									}
+								});
+							}
 
 							document.addEventListener('click', function (e) {
 								const btn = e.target && e.target.closest ? e.target.closest('.js-edit-assurance') : null;

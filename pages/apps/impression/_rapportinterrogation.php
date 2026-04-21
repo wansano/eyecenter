@@ -160,6 +160,60 @@ $pdf->WriteHTML($html);
         $entreeTotal = 0;
     }
 
+    // Calcul des frais de retrait selon le taux du compte électronique utilisé (table comptes)
+    $entreeElectroniqueTotal = 0;
+    $fraisRetrait = 0;
+    $entreeNetteApresFrais = 0;
+    try {
+        if (isset($_GET['compte']) && (int)$_GET['compte'] !== 0) {
+            $compteId = (int)$_GET['compte'];
+            $stElec = $bdd->prepare(
+                'SELECT '
+                . 'COALESCE(SUM(p.montant),0) AS total_elec, '
+                . 'COALESCE(SUM(p.montant * (COALESCE(c.taux,0) / 100)),0) AS frais '
+                . 'FROM paiements p '
+                . 'INNER JOIN comptes c ON c.id_compte = p.compte '
+                . 'WHERE c.id_compte = :compte '
+                . 'AND c.electronique = 1 '
+                . 'AND (p.remboursement = 0 OR p.remboursement IS NULL) '
+                . 'AND p.datepaiement BETWEEN :debut AND :fin'
+            );
+            $stElec->execute([
+                ':compte' => $compteId,
+                ':debut' => $_GET['debut'],
+                ':fin' => $_GET['fin'],
+            ]);
+            $rowElec = $stElec->fetch(PDO::FETCH_ASSOC);
+            $entreeElectroniqueTotal = max(0, (float)($rowElec['total_elec'] ?? 0));
+            $fraisRetrait = max(0, (float)($rowElec['frais'] ?? 0));
+        } else {
+            // Tous les comptes: somme des paiements électroniques avec leur taux propre
+            $stElec = $bdd->prepare(
+                'SELECT '
+                . 'COALESCE(SUM(p.montant),0) AS total_elec, '
+                . 'COALESCE(SUM(p.montant * (COALESCE(c.taux,0) / 100)),0) AS frais '
+                . 'FROM paiements p '
+                . 'INNER JOIN comptes c ON c.id_compte = p.compte '
+                . 'WHERE c.electronique = 1 '
+                . 'AND (p.remboursement = 0 OR p.remboursement IS NULL) '
+                . 'AND p.datepaiement BETWEEN :debut AND :fin'
+            );
+            $stElec->execute([
+                ':debut' => $_GET['debut'],
+                ':fin' => $_GET['fin'],
+            ]);
+            $rowElec = $stElec->fetch(PDO::FETCH_ASSOC);
+            $entreeElectroniqueTotal = max(0, (float)($rowElec['total_elec'] ?? 0));
+            $fraisRetrait = max(0, (float)($rowElec['frais'] ?? 0));
+        }
+
+        $entreeNetteApresFrais = max(0, (float)$entreeTotal - (float)$fraisRetrait);
+    } catch (Throwable $e) {
+        $entreeElectroniqueTotal = 0;
+        $fraisRetrait = 0;
+        $entreeNetteApresFrais = max(0, (float)$entreeTotal);
+    }
+
     $totalGlobal = (float)$entreeTotal + (float)$remboursementTotal;
     $differenceGlobal = $totalGlobal - (float)$rapportCaissierParam;
     addSection($pdf, 'Entrée total :', number_format($totalGlobal < 0 ? 0 : $totalGlobal, 0, '', ' '));
@@ -219,32 +273,32 @@ $pdf->WriteHTML($html);
     $pdf->SetFont('CenturyGothic','B',11);
     // Montant total (ENTREE) - Fusion Prestation + Prix Unitaire
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total des entrées'), 1, 0, 'R');
-    $pdf->Cell($wNb,8, '', 0, 0, 'C');
+    $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$totalNb), 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalGlobal, 0, '', ' ')), 1, 1, 'R');
 
     // Remboursement
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Montant remboursé'), 1, 0, 'R');
-    $pdf->Cell($wNb,8, '', 0, 0, 'C');
+    $pdf->Cell($wNb,8, '', 1, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($remboursementTotal, 0, '', ' ')), 1, 1, 'R');
 
-    // Total = Entrée + Remboursement
+    // Total après retrait des frais électroniques
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Total après remboursement'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
-    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeTotal, 0, '', ' ')), 1, 1, 'R');
+    $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($entreeNetteApresFrais, 0, '', ' ')), 1, 1, 'R');
     
-    // Frais de retrait = Entrée - Total général (planché à 0)
-    // (ne pas inclure les remboursements, car calculé sur les paiements électroniques uniquement)
-    $fraisRetrait = max(0, (float)$entreeTotal - (float)$totalMontant);
-    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Frais de retrait'), 1, 0, 'R');
+    // Frais de retrait: 1% des paiements électroniques (hors remboursements)
+    $fraisRetrait = max(0, (float)$fraisRetrait);
+    $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Frais de retrait inclus'), 1, 0, 'R');
     $pdf->Cell($wNb,8, '', 0, 0, 'C');
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($fraisRetrait, 0, '', ' ')), 1, 1, 'R');
 
-    // Ligne Total Général
+    /* Ligne Total Général
     $pdf->SetFont('CenturyGothic','B',11);
     $pdf->Cell($wType + $wPrix,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', 'Solde'), 1, 0, 'R');
     $pdf->Cell($wNb,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string)$totalNb), 1, 0, 'C', true);
     $pdf->SetFillColor(255,255,255); // Retour à blanc
     $pdf->Cell($wMontant,8, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', number_format($totalMontant, 0, '', ' ')), 1, 1, 'R');
+    */
 
     // Signature
     $pdf->Ln(4);
