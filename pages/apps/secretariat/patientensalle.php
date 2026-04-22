@@ -84,7 +84,8 @@ include('../public/header.php');
                                                     <td>';
                                                 
                                                 if ($status == 6 ) {
-                                                    echo '<button class="btn btn-sm btn-danger">à la caisse</button>';
+                                                    echo '<button type="button" class="btn btn-sm btn-danger">à la caisse</button>
+                                                    <button type="button" class="btn btn-sm btn-info" onclick="gpOpenEditAffectation(' . (int)$donnees1['id_affectation'] . ')">modifier l\'affectation</button>';
                                                 }
                                                  elseif ($status == 2) {
                                                     echo '<button class="btn btn-sm btn-info">en traitement</button>';
@@ -484,6 +485,31 @@ include('../public/header.php');
                 }
             }
 
+            async function gpOpenEditAffectation(idAffectation) {
+                var modal = gpShowModal('Modifier l\'affectation');
+                var els = gpGetModalEls();
+                if (!modal || !els.bodyEl) return;
+                modal.show();
+                try {
+                    var resp = await fetch('modifier-affectation.php?ajax_modal=1&id_affectation=' + encodeURIComponent(idAffectation), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    var data = await resp.json();
+                    if (!data || !data.success || !data.html) {
+                        els.bodyEl.innerHTML = '<div class="alert alert-danger">' + ((data && data.message) ? data.message : 'Erreur lors du chargement.') + '</div>';
+                        return;
+                    }
+                    els.bodyEl.innerHTML = data.html;
+                    gpExecuteScripts(els.bodyEl);
+                    gpInitPlugins(els.bodyEl);
+                    gpInjectCloseButtons(els.bodyEl);
+                } catch (e) {
+                    els.bodyEl.innerHTML = '<div class="alert alert-danger">Erreur lors du chargement.</div>';
+                }
+            }
+
+            window.gpOpenEditAffectation = gpOpenEditAffectation;
+
             function openGestionPatientsModal(action) {
                 var a = String(action || '').trim();
                 if (!a) return;
@@ -534,8 +560,8 @@ include('../public/header.php');
                         // noop
                     }
 
-                    // Affectation: endpoint JSON
-                    if (fd.has('ajax_transmettre')) {
+                    // Affectation / modification d'affectation: endpoint JSON
+                    if (fd.has('ajax_transmettre') || fd.has('ajax_edit_affectation')) {
                         try {
                             var r = await fetch(action, {
                                 method: method,
@@ -548,11 +574,15 @@ include('../public/header.php');
                                 gpExecuteScripts(els.bodyEl);
                                 gpInitPlugins(els.bodyEl);
                                 gpInjectCloseButtons(els.bodyEl);
+                                if (data && data.success && data.reload) {
+                                    setTimeout(function () { location.reload(); }, 700);
+                                }
                             } else {
-                                els.bodyEl.insertAdjacentHTML('afterbegin', '<div class="alert alert-danger">Erreur lors de la transmission.</div>');
+                                var msg = (data && data.message) ? String(data.message) : 'Erreur lors de l\'opération.';
+                                els.bodyEl.insertAdjacentHTML('afterbegin', '<div class="alert alert-danger">' + msg + '</div>');
                             }
                         } catch (err2) {
-                            els.bodyEl.insertAdjacentHTML('afterbegin', '<div class="alert alert-danger">Erreur lors de la transmission.</div>');
+                            els.bodyEl.insertAdjacentHTML('afterbegin', '<div class="alert alert-danger">Erreur lors de l\'opération.</div>');
                         }
                         return;
                     }

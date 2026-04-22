@@ -91,7 +91,12 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
     $rdvDuJour = $state['rdvDuJour'] ?? null;
     $heuresRestantes = (int)($state['heuresRestantes'] ?? 0);
     $minutesRestantes = (int)($state['minutesRestantes'] ?? 0);
-    $selectedType = $state['selectedType'] ?? null;
+    $selectedType = (int)($state['selectedType'] ?? 0);
+    $selectedService = (int)($state['selectedService'] ?? 0);
+    $selectedMotifId = (int)($state['selectedMotifId'] ?? 0);
+    if ($selectedMotifId <= 0) {
+        $selectedMotifId = $selectedType;
+    }
     $bypassCaisse = (int)($state['bypassCaisse'] ?? 0);
     $needsConsultation = (int)($state['needsConsultation'] ?? 0);
     $proposeConsultation = (int)($state['proposeConsultation'] ?? 0);
@@ -176,7 +181,7 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                         <li>Il est recommandé de l'affecter d'abord en <strong>consultation</strong>.</li>
                         <div class="mt-2">
                             <button type="button" class="btn btn-sm btn-primary" onclick="tcSetConsultationAndSubmit(<?php echo (int)$consultationServiceId; ?>, <?php echo (int)$consultationTypeId; ?>)">Affecter en consultation</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="tcContinueDespiteSuggestion()">Continuer quand même</button>
+                            <button type="button" class="btn btn-sm btn-danger" onclick="tcContinueDespiteSuggestion()">Continuer quand même</button>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -221,7 +226,9 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                                         $coll = $bdd->prepare('SELECT * FROM organigramme WHERE id_organigramme IN (?, ?, ?, ?)');
                                         $coll->execute([1, 2, 3, 4]);
                                         while ($services = $coll->fetch(PDO::FETCH_ASSOC)) {
-                                            echo '<option value="' . htmlspecialchars($services['id_organigramme'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($services['celulle'], ENT_QUOTES, 'UTF-8') . '</option>';
+                                            $sid = (int)($services['id_organigramme'] ?? 0);
+                                            $selectedAttr = ($selectedService > 0 && $selectedService === $sid) ? ' selected' : '';
+                                            echo '<option value="' . htmlspecialchars((string)$sid, ENT_QUOTES, 'UTF-8') . '"' . $selectedAttr . '>' . htmlspecialchars($services['celulle'], ENT_QUOTES, 'UTF-8') . '</option>';
                                         }
                                         ?>
                                     </select>
@@ -235,9 +242,26 @@ function tc_buildAffectationHtml(PDO $bdd, $id_patient, array $state = []) {
                                     <input type="text" class="form-control" value="Consultation" disabled>
                                 <?php else: ?>
                                     <select class="form-control populate" id="tcMotifSelect" name="type" onchange="tcOnMotifChange(this)" data-plugin-selectTwo data-plugin-options='{ "minimumInputLength": 0 }' required>
-                                        <option value=""> ------ Choisir un service d'abord----- </option>
+                                        <?php if ($selectedService > 0): ?>
+                                            <option value=""> ------ Choisir le motif ----- </option>
+                                            <?php
+                                            try {
+                                                $stm = $bdd->prepare('SELECT id_type, nom_type FROM traitements WHERE id_organigramme = ? ORDER BY nom_type ASC');
+                                                $stm->execute([$selectedService]);
+                                                while ($m = $stm->fetch(PDO::FETCH_ASSOC)) {
+                                                    $mid = (int)($m['id_type'] ?? 0);
+                                                    $mSelected = ($selectedMotifId > 0 && $mid === $selectedMotifId) ? ' selected' : '';
+                                                    echo '<option value="' . htmlspecialchars((string)$mid, ENT_QUOTES, 'UTF-8') . '"' . $mSelected . '>' . htmlspecialchars((string)($m['nom_type'] ?? ''), ENT_QUOTES, 'UTF-8') . '</option>';
+                                                }
+                                            } catch (Throwable $e) {
+                                                // noop
+                                            }
+                                            ?>
+                                        <?php else: ?>
+                                            <option value=""> ------ Choisir un service d'abord----- </option>
+                                        <?php endif; ?>
                                     </select>
-                                    <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="">
+                                    <input type="hidden" id="tcHiddenMotifId" name="motif_id" value="<?php echo htmlspecialchars((string)$selectedMotifId, ENT_QUOTES, 'UTF-8'); ?>">
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -263,7 +287,9 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
         'rdvBloquant' => 0,
         'heuresRestantes' => 0,
         'minutesRestantes' => 0,
-        'selectedType' => $post['type'] ?? null,
+        'selectedType' => (int)($post['type'] ?? 0),
+        'selectedService' => (int)($post['service'] ?? 0),
+        'selectedMotifId' => (int)($post['motif_id'] ?? 0),
     ];
 
     $id_patient = (string)$id_patient;
@@ -341,7 +367,7 @@ function tc_handleTransmission(PDO $bdd, $id_patient, array $post) {
     try {
         // Vérifier s'il existe une affectation récente (moins de 24h) pour ce type de traitement
         $req1 = $bdd->prepare('SELECT * FROM affectations WHERE id_patient=? AND type=? AND status IN (?, ?, ?) ORDER BY date DESC LIMIT 1');
-        $req1->execute([$id_patient, $post['type'], 6, 1, 2]);
+        $req1->execute([$id_patient, $traitementId, 6, 1, 2]);
         if ($req1->rowCount() > 0) {
             $affectationRecente = $req1->fetch(PDO::FETCH_ASSOC);
             if (!empty($affectationRecente['date'])) {
