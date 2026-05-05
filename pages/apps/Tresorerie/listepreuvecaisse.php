@@ -230,6 +230,55 @@ try {
     $errors = 5;
 }
 
+$exportParams = [
+    'export' => 'excel',
+    'caissier' => $filterUser > 0 ? (string)$filterUser : '0',
+];
+if ($dateDebut !== '') $exportParams['datedebut'] = $dateDebut;
+if ($dateFin !== '') $exportParams['datefin'] = $dateFin;
+$excelExportUrl = $_SERVER['PHP_SELF'] . '?' . http_build_query($exportParams);
+
+if (isset($_GET['export']) && (string)$_GET['export'] === 'excel') {
+    $filename = 'preuves_caisse_' . date('Ymd_His') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    
+    $output = fopen('php://output', 'w');
+    if (!$output) die('Erreur création sortie');
+    
+    // En-têtes
+    $headers = ['ID', 'DATE', 'CAISSIER', 'COMPTE', 'MONTANT DECLARE', 'TOTAL BILLETS', 'TOTAL ENTREES', 'CONFORMITE'];
+    fputcsv($output, $headers, ';', '"');
+    
+    // Données
+    foreach ($rows as $r) {
+        $idPreuve = (int)($r['id_preuve'] ?? 0);
+        $dateRap = (string)($r['date_rapportement'] ?? '');
+        $pseudo = (string)($r['caissier_pseudo'] ?? '');
+        $compteLabel = (string)($r['nom_compte'] ?? '');
+        $montant = mp_int($r['montant'] ?? 0);
+        $expected = mp_expected_total($r);
+        $entree = mp_entree_paiements($bdd, (int)($r['compte'] ?? 0), $dateRap, isset($r['id_user']) ? (int)$r['id_user'] : null);
+        $conforme = ($montant === $expected) && ($montant === $entree);
+        
+        fputcsv($output, [
+            $idPreuve,
+            $dateRap,
+            $pseudo,
+            $compteLabel,
+            $montant,
+            $expected,
+            $entree,
+            $conforme ? 'Oui' : 'Non',
+        ], ';', '"');
+    }
+    
+    fclose($output);
+    exit;
+}
+
 include('../PUBLIC/header.php');
 ?>
 <body>
@@ -253,6 +302,9 @@ include('../PUBLIC/header.php');
                             <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addPreuveModal">
                                 <i class="fa fa-plus"></i> Ajouter une preuve de caisse
                             </button>
+                            <a href="<?php echo h($excelExportUrl); ?>" class="btn btn-sm btn-success">
+                                <i class="fa fa-file-excel-o"></i> Exporter Excel
+                            </a>
                         </div>
 
                         <?php if ($errors === 1): ?>

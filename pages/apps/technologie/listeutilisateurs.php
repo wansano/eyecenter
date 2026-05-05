@@ -1,6 +1,6 @@
 <?php
-include('../PUBLIC/connect.php');
-include('../PUBLIC/fonction.php');
+include('../public/connect.php');
+include('../public/fonction.php');
 session_start();
 
 // Feedback après POST (PRG pattern)
@@ -33,6 +33,7 @@ try {
         $responsable = isset($_POST['responsable']) ? (int) $_POST['responsable'] : 0;
         $plageConnexion = isset($_POST['plage_connexion']) ? normalize_plage_connexion($_POST['plage_connexion']) : '';
         $newPassword = isset($_POST['mdp']) ? (string) $_POST['mdp'] : '';
+        $newOtpCode = isset($_POST['token']) ? (string) $_POST['token'] : '';
 
         if ($editId <= 0 || $pseudo === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             header('Location: ' . $_SERVER['PHP_SELF'] . '?ok=6');
@@ -104,6 +105,11 @@ try {
         if (trim($newPassword) !== '') {
             $stmt = $bdd->prepare('UPDATE users SET mdp = ? WHERE id = ?');
             $stmt->execute([password_hash($newPassword, PASSWORD_DEFAULT), $editId]);
+        }
+
+        if (trim($newOtpCode) !== '') {
+            $stmt = $bdd->prepare('UPDATE users SET token = ? WHERE id = ?');
+            $stmt->execute([password_hash(trim($newOtpCode), PASSWORD_DEFAULT), $editId]);
         }
 
         $bdd->commit();
@@ -569,13 +575,13 @@ try {
                                                                         <input type="email" class="form-control" name="email" id="edit_email" required>
                                                                     </div>
                                                                 </div>
-                                                                <div class="col-md-6">
+                                                                <div class="col-md-3">
                                                                     <div class="form-group pb-3">
                                                                         <label class="col-form-label" for="edit_date_engagement">Date engagement</label>
                                                                         <input type="date" class="form-control" name="date_engagement" id="edit_date_engagement" required>
                                                                     </div>
                                                                 </div>
-                                                                <div class="col-md-6">
+                                                                <div class="col-md-9">
                                                                     <div class="form-group pb-3">
                                                                         <label class="col-form-label" for="edit_id_service">Affecté au service</label>
                                                                         <select class="form-control populate" name="id_service" id="edit_id_service" required>
@@ -584,7 +590,7 @@ try {
                                                                     </div>
                                                                 </div>
 
-                                                                <div class="col-md-6">
+                                                                <div class="col-md-4">
                                                                     <div class="form-group pb-3">
                                                                         <label class="col-form-label" for="edit_responsable">Responsable</label>
                                                                         <select class="form-control populate" name="responsable" id="edit_responsable" required>
@@ -592,10 +598,27 @@ try {
                                                                         </select>
                                                                     </div>
                                                                 </div>
-                                                                <div class="col-md-6">
+                                                                <div class="col-md-4">
                                                                     <div class="form-group pb-3">
                                                                         <label class="col-form-label" for="edit_mdp">Nouveau mot de passe (optionnel)</label>
-                                                                        <input type="password" class="form-control" name="mdp" id="edit_mdp" placeholder="Laisser vide pour ne pas changer">
+                                                                        <div class="input-group">
+                                                                            <input type="password" class="form-control" name="mdp" id="edit_mdp" placeholder="Laisser vide pour ne pas changer">
+                                                                            <button type="button" class="input-group-text" id="toggle-edit-otp-code" aria-label="Afficher le mot de passe" aria-pressed="false">
+                                                                                <i class="bx bx-show text-4"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="col-md-4">
+                                                                    <div class="form-group pb-3">
+                                                                        <label class="col-form-label" for="edit_token">Code OTP (optionnel)</label>
+                                                                        <div class="input-group">
+                                                                            <input type="password" class="form-control" name="token" id="edit_token" placeholder="Laisser vide pour ne pas changer" autocomplete="one-time-code">
+                                                                            <button type="button" class="input-group-text" id="toggle-edit-otp-code" aria-label="Afficher le code" aria-pressed="false">
+                                                                                <i class="bx bx-show text-4"></i>
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
 
@@ -714,6 +737,24 @@ try {
                             el.value = (value === undefined || value === null) ? '' : value;
                         }
 
+                        function toggleInputVisibility(buttonId, inputId) {
+                            var btn = document.getElementById(buttonId);
+                            var input = document.getElementById(inputId);
+                            if (!btn || !input) return;
+
+                            btn.addEventListener('click', function () {
+                                var isHidden = input.getAttribute('type') === 'password';
+                                input.setAttribute('type', isHidden ? 'text' : 'password');
+                                btn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+                                btn.setAttribute('aria-label', isHidden ? 'Masquer le code' : 'Afficher le code');
+                                var icon = btn.querySelector('i');
+                                if (icon) {
+                                    icon.classList.toggle('bx-show', !isHidden);
+                                    icon.classList.toggle('bx-hide', isHidden);
+                                }
+                            });
+                        }
+
                         function clearAddModal() {
                             setValue('add_pseudo', '');
                             setValue('add_email', '');
@@ -746,6 +787,7 @@ try {
 						// Init valeurs par défaut au chargement
 						try {
 							applyPlage('add', 'lundi:aucun;mardi:aucun;mercredi:aucun;jeudi:aucun;vendredi:aucun;samedi:aucun;dimanche:aucun');
+                            toggleInputVisibility('toggle-edit-otp-code', 'edit_token');
 						} catch (e) {}
                     })();
                     </script>

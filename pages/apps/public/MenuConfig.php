@@ -65,6 +65,13 @@ class MenuConfig {
             </ul>
         </li>
         <li class="dropdown">
+            <a class="nav-link dropdown-toggle">Statistiques</a>
+            <ul class="dropdown-menu">
+                <li><a class="nav-link" href="prestationclinique.php">Prestation clinique</a></li>
+                <li><a class="nav-link" href="prestationboutique.php">Prestation boutique</a></li>
+            </ul>
+        </li>
+        <li class="dropdown">
             <a class="nav-link dropdown-toggle">Attestations</a>
             <ul class="dropdown-menu">
                 <li><a class="nav-link" href="attestationtravail.php">Attestation ou Certificat</a></li>
