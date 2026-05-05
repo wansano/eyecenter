@@ -1516,4 +1516,89 @@ if (!function_exists('appecEnsurePartAssurancesTable')) {
     }
 }
 
+// Fonction bulletin de salaire
+
+function bulletin_table_exists(PDO $bdd, string $table): bool
+{
+    try {
+        $st = $bdd->prepare('SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
+        $st->execute([$table]);
+        return (bool) $st->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('[bulletinsalaire] tableExists ' . $table . ': ' . $e->getMessage());
+        return false;
+    }
+}
+
+function bulletin_get_employes_column_map(PDO $bdd): array
+{
+    $fields = [];
+    try {
+        $stmt = $bdd->query('SHOW COLUMNS FROM employes');
+        $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        foreach ($rows as $r) {
+            $f = (string) ($r['Field'] ?? '');
+            if ($f !== '') {
+                $fields[$f] = true;
+            }
+        }
+    } catch (Throwable $e) {
+        $fields = [];
+    }
+
+    $nameCol = isset($fields['nomEmploye']) ? 'nomEmploye' : (isset($fields['nom_employe']) ? 'nom_employe' : 'nomEmploye');
+    $salaryCol = isset($fields['salaireBase']) ? 'salaireBase' : (isset($fields['salaire']) ? 'salaire' : 'salaireBase');
+
+    return [
+        'name' => $nameCol,
+        'salary' => $salaryCol,
+        'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
+        'prime_logement' => isset($fields['PrimeLogement']) ? 'PrimeLogement' : null,
+        'prime_vie' => isset($fields['PrimeVie']) ? 'PrimeVie' : null,
+    ];
+}
+
+function bulletin_to_float($value): float
+{
+    if ($value === null) return 0.0;
+    if (is_int($value) || is_float($value)) return (float) $value;
+    $s = trim((string) $value);
+    if ($s === '') return 0.0;
+    $s = str_replace(["\xC2\xA0", ' '], '', $s);
+    $s = str_replace(',', '.', $s);
+    if (substr_count($s, '.') > 1) {
+        $s = str_replace('.', '', $s);
+    }
+    return is_numeric($s) ? (float) $s : 0.0;
+}
+
+function bulletin_fmt_money(float $n, string $devise = ''): string
+{
+    $out = number_format($n, (abs($n - round($n)) > 0 ? 2 : 0), ',', ' ');
+    return trim($out . ($devise !== '' ? (' ' . $devise) : ''));
+}
+
+function bulletin_get_paid_employe_ids_for_period(PDO $bdd, string $periodeMonth): array
+{
+    if (!preg_match('/^\d{4}-\d{2}$/', $periodeMonth)) {
+        return [];
+    }
+
+    try {
+        $periode = $periodeMonth . '-01';
+        $st = $bdd->prepare('SELECT DISTINCT id_employe FROM bulletins_salaire WHERE periode = ? AND paye = 1');
+        $st->execute([$periode]);
+        $ids = [];
+        while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+            $id = (int) ($r['id_employe'] ?? 0);
+            if ($id > 0) $ids[] = $id;
+        }
+        return $ids;
+    } catch (Throwable $e) {
+        error_log('[bulletinsalaire] paid_employes: ' . $e->getMessage());
+        return [];
+    }
+}
+
+
 ?>

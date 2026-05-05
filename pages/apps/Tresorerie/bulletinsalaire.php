@@ -13,88 +13,6 @@ function h($value)
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-function bulletin_table_exists(PDO $bdd, string $table): bool
-{
-    try {
-        $st = $bdd->prepare('SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
-        $st->execute([$table]);
-        return (bool) $st->fetchColumn();
-    } catch (Throwable $e) {
-        error_log('[bulletinsalaire] tableExists ' . $table . ': ' . $e->getMessage());
-        return false;
-    }
-}
-
-function bulletin_get_employes_column_map(PDO $bdd): array
-{
-    $fields = [];
-    try {
-        $stmt = $bdd->query('SHOW COLUMNS FROM employes');
-        $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-        foreach ($rows as $r) {
-            $f = (string) ($r['Field'] ?? '');
-            if ($f !== '') {
-                $fields[$f] = true;
-            }
-        }
-    } catch (Throwable $e) {
-        $fields = [];
-    }
-
-    $nameCol = isset($fields['nomEmploye']) ? 'nomEmploye' : (isset($fields['nom_employe']) ? 'nom_employe' : 'nomEmploye');
-    $salaryCol = isset($fields['salaireBase']) ? 'salaireBase' : (isset($fields['salaire']) ? 'salaire' : 'salaireBase');
-
-    return [
-        'name' => $nameCol,
-        'salary' => $salaryCol,
-        'prime_transport' => isset($fields['PrimeTransport']) ? 'PrimeTransport' : null,
-        'prime_logement' => isset($fields['PrimeLogement']) ? 'PrimeLogement' : null,
-        'prime_vie' => isset($fields['PrimeVie']) ? 'PrimeVie' : null,
-    ];
-}
-
-function bulletin_to_float($value): float
-{
-    if ($value === null) return 0.0;
-    if (is_int($value) || is_float($value)) return (float) $value;
-    $s = trim((string) $value);
-    if ($s === '') return 0.0;
-    $s = str_replace(["\xC2\xA0", ' '], '', $s);
-    $s = str_replace(',', '.', $s);
-    if (substr_count($s, '.') > 1) {
-        $s = str_replace('.', '', $s);
-    }
-    return is_numeric($s) ? (float) $s : 0.0;
-}
-
-function bulletin_fmt_money(float $n, string $devise = ''): string
-{
-    $out = number_format($n, (abs($n - round($n)) > 0 ? 2 : 0), ',', ' ');
-    return trim($out . ($devise !== '' ? (' ' . $devise) : ''));
-}
-
-function bulletin_get_paid_employe_ids_for_period(PDO $bdd, string $periodeMonth): array
-{
-    if (!preg_match('/^\d{4}-\d{2}$/', $periodeMonth)) {
-        return [];
-    }
-
-    try {
-        $periode = $periodeMonth . '-01';
-        $st = $bdd->prepare('SELECT DISTINCT id_employe FROM bulletins_salaire WHERE periode = ? AND paye = 1');
-        $st->execute([$periode]);
-        $ids = [];
-        while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-            $id = (int) ($r['id_employe'] ?? 0);
-            if ($id > 0) $ids[] = $id;
-        }
-        return $ids;
-    } catch (Throwable $e) {
-        error_log('[bulletinsalaire] paid_employes: ' . $e->getMessage());
-        return [];
-    }
-}
-
 $alert = null;
 $error = null;
 
@@ -334,7 +252,7 @@ if (!$error) {
         } else {
             $select .= ', 0 AS prime_vie';
         }
-        $select .= ' FROM employes ORDER BY `' . $nameCol . '` ASC';
+        $select .= ' FROM employes WHERE status = 1 ORDER BY `' . $nameCol . '` ASC';
 
         $stEmp = $bdd->query($select);
         $employes = $stEmp ? $stEmp->fetchAll(PDO::FETCH_ASSOC) : [];
@@ -343,6 +261,26 @@ if (!$error) {
         $employes = [];
     }
 }
+
+// Récupérer tous les employés ayant déjà un bulletin pour la période (payés ou non)
+$employesWithBulletinThisPeriod = [];
+if (!$error) {
+    try {
+        $stExisting = $bdd->prepare('SELECT DISTINCT id_employe FROM bulletins_salaire WHERE periode = ?');
+        $stExisting->execute([$periode]);
+        $employesWithBulletinThisPeriod = array_map(function($row) {
+            return (int)($row['id_employe'] ?? 0);
+        }, $stExisting->fetchAll(PDO::FETCH_ASSOC));
+    } catch (PDOException $e) {
+        error_log('[bulletinsalaire] existing bulletins: ' . $e->getMessage());
+        $employesWithBulletinThisPeriod = [];
+    }
+}
+
+// Filtrer les employés: exclure ceux qui ont déjà un bulletin pour cette période
+$employes = array_filter($employes, function($e) use ($employesWithBulletinThisPeriod) {
+    return !in_array((int)($e['id_employe'] ?? 0), $employesWithBulletinThisPeriod, true);
+});
 
 $paidEmployeIdsCurrentPeriod = [];
 if (!$error) {
@@ -455,9 +393,11 @@ include('../PUBLIC/header.php');
                                                     <td><span class="badge bg-<?php echo h($badge); ?>"><?php echo h($label); ?></span></td>
                                                     <td><?php echo h($b['date_paiement'] ?? '—'); ?></td>
                                                     <td>
-                                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalBulletin"
-                                                            data-bulletin='<?php echo h(json_encode($b, JSON_UNESCAPED_UNICODE)); ?>'
-                                                            onclick="openEditBulletin(this)">Modifier</button>
+                                                        <?php if (!$isPaid): ?>
+                                                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalBulletin"
+                                                                data-bulletin='<?php echo h(json_encode($b, JSON_UNESCAPED_UNICODE)); ?>'
+                                                                onclick="openEditBulletin(this)">Modifier</button>
+                                                        <?php endif; ?>
                                                         <?php if ($isPaid): ?>
                                                             <button type="button" class="btn btn-sm btn-default" data-bs-toggle="modal" data-bs-target="#modalPrintBulletin" onclick="openPrintBulletin(<?php echo (int)($b['id_bulletin'] ?? 0); ?>)">Imprimer</button>
                                                         <?php endif; ?>
@@ -572,7 +512,7 @@ include('../PUBLIC/header.php');
 
                                         <div class="col-md-4">
                                             <label class="form-label">Salaire de base</label>
-                                            <input type="text" class="form-control" name="salaire_base" id="salaire_base" value="0">
+                                            <input type="text" class="form-control" name="salaire_base" id="salaire_base" value="0" readonly>
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label">Prime transport</label>
