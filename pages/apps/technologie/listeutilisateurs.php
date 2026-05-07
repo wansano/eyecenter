@@ -1,6 +1,6 @@
 <?php
-include('../public/connect.php');
-include('../public/fonction.php');
+include('../PUBLIC/connect.php');
+include('../PUBLIC/fonction.php');
 session_start();
 
 // Feedback après POST (PRG pattern)

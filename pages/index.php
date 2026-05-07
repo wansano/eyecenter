@@ -56,7 +56,7 @@
 
 		<div class="body">
 			<header id="header" class="header header-nav-links header-nav-menu bg-color-light-scale-1" data-plugin-options="{'stickyEnabled': true, 'stickyEffect': 'shrink', 'stickyEnableOnBoxed': false, 'stickyEnableOnMobile': true, 'stickyStartAt': 70, 'stickyChangeLogo': false, 'stickyHeaderContainerHeight': 70}">
-				<div class="header-body border-top-0 bg-light box-shadow-none">
+				<div class="header-body border-top-0 bg-dark box-shadow-none">
 					<div class="header-container container h-100">
 						<div class="header-row h-100">
 							<div class="header-column">

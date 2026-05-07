@@ -215,7 +215,7 @@ if (isset($_GET['modal']) && (string)$_GET['modal'] === '1') {
 ?>
 
 <!doctype html>
-<html class="landing simple-sticky-header-enabled">
+<html class="landing simple-sticky-header-enabled appec-auth">
 	<head>
 
 		<!-- Basic -->
@@ -261,7 +261,7 @@ if (isset($_GET['modal']) && (string)$_GET['modal'] === '1') {
 
 	</head>
 
-	<body class="alternative-font-4 loading-overlay-showing" data-plugin-page-transition data-loading-overlay data-plugin-options="{'hideDelay': 100}">
+    <body class="alternative-font-4 loading-overlay-showing appec-auth-body" data-plugin-page-transition data-loading-overlay data-plugin-options="{'hideDelay': 100}">
 		<div class="loading-overlay">
 			<div class="bounce-loader">
 				<div class="bounce1"></div>
