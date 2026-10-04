@@ -261,7 +261,7 @@ try {
         $texte1 .= '.';
     } else {
         if ($isOngoingWork) {
-            $texte1 .= ' travaille au s                                       ein de notre établissement depuis le ' . fmtDateFr($dtDebut) . ' à ce jour';
+            $texte1 .= ' travaille au sein de notre établissement depuis le ' . fmtDateFr($dtDebut) . ' à ce jour';
             if ($poste !== '') {
                 $texte1 .= ', en qualité de ' . $poste;
             }
