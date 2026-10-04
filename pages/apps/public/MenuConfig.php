@@ -106,6 +106,12 @@ class MenuConfig {
                 <li>
                     <li><a class="nav-link" href="interocompte.php">Intérogation</a></li>
                 </li>
+                <li>
+                    <li><a class="nav-link" href="addcommandproduct.php">Faire une commande</a></li>
+                </li>
+                <li>
+                    <li><a class="nav-link" href="findingcommand.php">Ajouter une livraison</a></li>
+                </li>
             </ul>
         </li>
         <li class="dropdown">
